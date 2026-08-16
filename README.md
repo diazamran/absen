@@ -125,7 +125,62 @@ docker compose up -d --build
 # Frontend: http://localhost  ·  API: http://localhost:4000
 ```
 
-Service: `postgres`, `redis`, `backend`, `frontend`, `nginx`.
+Service: `postgres`, `redis`, `backend`, `frontend` (nginx di dalam image frontend menangani proxy `/api` & `/socket.io`).
+
+---
+
+## Deploy ke VPS Ubuntu 24.04
+
+### 1. Upload ke GitHub (sekali)
+
+```bash
+# dari folder proyek (sudah di-commit)
+git remote add origin https://github.com/USERNAME/presensiku.git
+git branch -M main
+git push -u origin main
+```
+
+> Buat repo dulu di github.com (tanpa README agar tidak bentrok), lalu jalankan perintah di atas.
+
+### 2. Setup otomatis di VPS (sekali)
+
+Masuk VPS via SSH, lalu jalankan script bawaan:
+
+```bash
+ssh user@IP_VPS
+sudo apt update && sudo apt install -y curl git
+curl -sL -o /tmp/vps-setup.sh https://raw.githubusercontent.com/USERNAME/presensiku/main/deploy/vps-setup.sh
+sudo bash /tmp/vps-setup.sh https://github.com/USERNAME/presensiku.git absen.sch.id
+```
+
+- Tanpa domain: `sudo bash /tmp/vps-setup.sh https://github.com/USERNAME/presensiku.git` → akses via `http://IP_VPS`
+- Dengan domain: tambahkan argumen kedua → HTTPS otomatis (Let's Encrypt via Caddy). Arahkan DNS A domain ke IP VPS terlebih dahulu, dan buka port 80/443 di firewall provider.
+
+Script otomatis: install Docker, clone repo ke `/opt/presensiku`, buat `.env` dengan **secret acak**, build & start container, jalankan seed data, dan buka firewall.
+
+### 3. Update aplikasi (setiap ada perubahan)
+
+**Di komputer** — setelah mengubah kode:
+```bash
+git add -A && git commit -m "fitur baru" && git push
+```
+
+**Di VPS** — satu perintah:
+```bash
+cd /opt/presensiku && git pull && docker compose up -d --build
+```
+
+> Migrasi database (`prisma migrate deploy`) dan seed berjalan otomatis saat container backend start. Data tersimpan di volume Docker (`pgdata`), jadi aman saat rebuild.
+
+### Berguna di VPS
+
+```bash
+cd /opt/presensiku
+docker compose ps                          # status container
+docker compose logs -f backend             # log API
+docker compose logs -f frontend            # log web
+docker compose exec backend npm run db:seed   # isi ulang data contoh
+```
 
 ---
 
