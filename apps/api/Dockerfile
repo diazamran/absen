@@ -1,5 +1,15 @@
-FROM node:20-alpine AS base
+# ============================================================
+# PresensiKu API — Dockerfile
+# Base: node:20-bookworm-slim (Debian), bukan Alpine.
+# Alasan: engine Prisma gagal mendeteksi libssl/OpenSSL di Alpine
+# (error "Could not parse schema engine response"), sehingga
+# `prisma migrate deploy` crash dan container restart-loop.
+# Debian slim menyertakan libssl3 yang benar untuk Prisma.
+# ============================================================
+FROM node:20-bookworm-slim AS base
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Semua dependency (termasuk prisma CLI untuk migrate deploy saat startup)
 FROM base AS deps
