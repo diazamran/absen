@@ -29,7 +29,7 @@ android {
 
     signingConfigs {
         release {
-            storeFile file(keystoreProperties.getProperty("storeFile", "presensiku-release.keystore"))
+            storeFile rootProject.file(keystoreProperties.getProperty("storeFile", "presensiku-release.keystore"))
             storePassword keystoreProperties.getProperty("storePassword", "PASSWORD_PLACEHOLDER")
             keyAlias keystoreProperties.getProperty("keyAlias", "presensiku")
             keyPassword keystoreProperties.getProperty("keyPassword", "PASSWORD_PLACEHOLDER")

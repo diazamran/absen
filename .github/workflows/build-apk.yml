@@ -77,6 +77,15 @@ jobs:
           path: deploy/android/webview/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
 
+      # Cadangan kunci tanda tangan: SIMPAN file ini baik-baik.
+      # Kalau hilang, HP yang sudah terpasang tidak bisa update ke versi baru.
+      - name: Unggah cadangan keystore
+        uses: actions/upload-artifact@v4
+        with:
+          name: presensiku-release-keystore
+          path: deploy/android/webview/presensiku-release.keystore
+          if-no-files-found: error
+
       - name: Salin APK ke folder publik website
         run: |
           mkdir -p apps/web/public/apk
