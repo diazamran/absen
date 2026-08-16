@@ -35,7 +35,11 @@ COPY package.json ./
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=deps /app/prisma ./prisma
+# src + scripts diperlukan oleh seed (tsx prisma/seed.ts mengimpor helper dari ../src)
+# dan oleh start.sh (bootstrap: migrasi + seed otomatis + start server)
+COPY --from=build /app/src ./src
+COPY scripts ./scripts
+RUN chmod +x scripts/start.sh
 RUN mkdir -p uploads
 EXPOSE 4000
-# Migration otomatis saat container pertama kali jalan, lalu jalankan server
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
+CMD ["sh", "/app/scripts/start.sh"]
