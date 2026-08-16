@@ -26,6 +26,8 @@ export const config = {
   // Aturan absensi
   lateAfterHour: num(process.env.LATE_AFTER_HOUR, 7),
   lateAfterMinute: num(process.env.LATE_AFTER_MINUTE, 0),
+  checkOutAfterHour: num(process.env.CHECK_OUT_AFTER_HOUR, 15),
+  checkOutAfterMinute: num(process.env.CHECK_OUT_AFTER_MINUTE, 30),
   locationEnabled: process.env.LOCATION_ENABLED === 'true',
   locationRadiusMeters: num(process.env.LOCATION_RADIUS_METERS, 100),
   schoolLatitude: num(process.env.SCHOOL_LATITUDE, -6.2088),

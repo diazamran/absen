@@ -161,6 +161,8 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
     throw ApiError.conflict('ALREADY_ATTENDANCE', `${prefix} pada ${timeStr}.`);
   }
 
+  // ===== Jam pulang & pulang awal =====
+  let earlyLeave = false;
   if (type === 'CHECK_OUT' && rules.checkOutAllowed === false) {
     throw ApiError.badRequest('CHECK_OUT_DISABLED', 'Absensi pulang dinonaktifkan oleh sekolah.');
   }
@@ -170,6 +172,12 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
     });
     if (!checkIn) {
       throw ApiError.badRequest('NO_CHECK_IN', 'Absensi pulang hanya bisa dilakukan setelah absensi datang.');
+    }
+    // Pulang sebelum jam pulang sekolah → ditandai "pulang awal"
+    const jamPulang = rules.checkOutAfterHour * 60 + rules.checkOutAfterMinute;
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    if (nowMinutes < jamPulang) {
+      earlyLeave = true;
     }
   }
 
@@ -231,6 +239,7 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
         longitude: input.longitude,
         accuracy: input.accuracy,
         locationVerified,
+        earlyLeave,
         faceVerified,
         livenessVerified,
         qrVerified,

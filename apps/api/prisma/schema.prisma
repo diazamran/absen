@@ -368,6 +368,7 @@ model Attendance {
   qrVerified       Boolean          @default(false)
   cardVerified     Boolean          @default(false)
   lateMinutes      Int              @default(0)
+  earlyLeave       Boolean          @default(false) // pulang sebelum jam pulang sekolah
   notes            String?
   createdById      String? // untuk absensi manual oleh guru/admin
   createdAt        DateTime         @default(now())

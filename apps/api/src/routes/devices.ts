@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { validate } from '../utils/validate.js';
 import { setDeviceStatus } from '../services/auth.js';
+import { audit } from '../lib/audit.js';
 import { PERMISSION_KEYS } from '../rbac/permissions.js';
 
 export async function deviceRoutes(app: FastifyInstance) {
@@ -84,5 +85,19 @@ export async function deviceRoutes(app: FastifyInstance) {
     const { deviceId } = request.params as { deviceId: string };
     await setDeviceStatus(deviceId, 'ONLINE', request.user!.id, request);
     return reply.send({ success: true, message: 'Perangkat diaktifkan kembali.' });
+  });
+
+  // Hapus/reset perangkat: record dihapus → perangkat terdaftar ulang saat login berikutnya
+  app.delete('/devices/:deviceId', { preHandler: app.requirePermission(PERMISSION_KEYS.devicesManage) }, async (request, reply) => {
+    const { deviceId } = request.params as { deviceId: string };
+    await prisma.device.deleteMany({ where: { deviceId } });
+    await audit({
+      userId: request.user!.id,
+      action: 'DEVICE_DELETED',
+      entity: 'Device',
+      newValue: { deviceId },
+      request,
+    });
+    return reply.send({ success: true, message: 'Perangkat dihapus.' });
   });
 }

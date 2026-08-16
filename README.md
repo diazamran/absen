@@ -141,7 +141,9 @@ npm run dev
   - Data wajah bisa di-**Reset** kapan saja (mis. ada masalah).
 - **Siswa**: identitas memakai **NISN** + **Tanggal Lahir** (dipakai login), tambah/edit lengkap, hapus per siswa, **checkbox hapus massal**, **Import & Export CSV + template** (format sama: NISN, Nama, Kelas, Jurusan, Jenis Kelamin, Tanggal Lahir, No HP, Orang Tua, Card UID).
 - **Guru & Staff**: tambah/edit (termasuk ubah **username**) /nonaktifkan akun, **checkbox hapus massal**, **Import & Export CSV + template**, dan role **Petugas Piket** yang terpisah dari Guru.
-- **Kelas & Jadwal** (menu **Kelas**): tab **Kelas** (tambah/edit/hapus + **Import/Export CSV** + template, kolom Nama Kelas/Tingkat/Jurusan/Ruang), tab **Jurusan** (TKJ/TKR/TPTUP/KULINER), tab **Mapel** (tambah/edit/hapus + **Import/Export CSV** + template), tab **Jadwal**.
+- **Kelas & Jadwal** (menu **Kelas**): tab **Kelas** (tambah/edit/hapus + **checkbox hapus massal** + **Import/Export CSV** + template, kolom Nama Kelas/Tingkat/Jurusan/Ruang), tab **Jurusan** (TKJ/TKR/TPTUP/KULINER), tab **Mapel** (tambah/edit/hapus + **checkbox hapus massal** + **Import/Export CSV** + template), tab **Jadwal**.
+- **Pengaturan → Aturan Absensi**: selain jam batas terlambat, kini ada **Jam Pulang Sekolah**. Siswa yang absen pulang **sebelum jam itu** otomatis ditandai **"Pulang Awal"** di riwayat absensi (badge kuning) — mis. izin lebih awal karena sakit/keperluan.
+- **Perangkat**: daftar HP/komputer yang pernah login (terdaftar otomatis, 1000+ perangkat tidak memperlambat server). Tersedia **cari**, **filter status**, **blokir/aktifkan**, **hapus (reset)** per perangkat, dan **hapus massal** via checkbox.
 - **Siswa** login sebagai siswa: beranda menampilkan menu **Registrasi Wajah** langsung (juga di halaman **Absen** dan drawer ☰) — daftar wajah sendiri → menunggu persetujuan admin.
 - **Pengaturan → Aturan Absensi & Lokasi**: set **titik absensi GPS** (latitude/longitude + radius) dan aktifkan "Wajib GPS di area sekolah" — siswa hanya bisa absen di dalam radius itu (diverifikasi server).
 - **Izin**: pengajuan bisa menyertakan **bukti/lampiran** (surat/dokter) — admin melihat tombol **Lihat Bukti**.

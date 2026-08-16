@@ -93,11 +93,16 @@ export default function Settings() {
           <div className="grid grid-cols-2 gap-3">
             <Field label="Jam batas terlambat"><Input type="number" value={Number(r.lateAfterHour ?? 7)} onChange={(e) => setR('lateAfterHour', Number(e.target.value))} /></Field>
             <Field label="Menit"><Input type="number" value={Number(r.lateAfterMinute ?? 0)} onChange={(e) => setR('lateAfterMinute', Number(e.target.value))} /></Field>
+            <Field label="Jam pulang sekolah"><Input type="number" value={Number(r.checkOutAfterHour ?? 15)} onChange={(e) => setR('checkOutAfterHour', Number(e.target.value))} /></Field>
+            <Field label="Menit"><Input type="number" value={Number(r.checkOutAfterMinute ?? 30)} onChange={(e) => setR('checkOutAfterMinute', Number(e.target.value))} /></Field>
             <label className="flex items-center gap-2 pt-5 text-sm font-medium text-ink">
               <input type="checkbox" checked={r.duplicatePrevention !== false} onChange={(e) => setR('duplicatePrevention', e.target.checked)} className="h-4 w-4 accent-teal-600" />
               Cegah absen ganda
             </label>
           </div>
+          <p className="mt-2 text-xs leading-relaxed text-muted">
+            Siswa yang absen pulang <b>sebelum jam pulang sekolah</b> otomatis ditandai <b>"Pulang Awal"</b> di riwayat absensi (mis. izin lebih awal).
+          </p>
           <div className="mt-4 rounded-2xl border border-line/70 bg-slate-50/60 p-3 dark:bg-slate-900/40">
             <p className="mb-2 text-sm font-semibold text-ink">📍 Titik Absensi (GPS)</p>
             <div className="grid grid-cols-2 gap-3">

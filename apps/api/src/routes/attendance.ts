@@ -60,6 +60,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         time: localTime(result.attendance.checkIn ?? new Date()),
         status: result.attendance.status,
         lateMinutes: result.attendance.lateMinutes,
+        earlyLeave: result.attendance.earlyLeave,
         method: result.attendance.method,
       },
     });
@@ -85,6 +86,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         fullName: result.fullName,
         time: localTime(result.attendance.checkOut ?? new Date()),
         status: result.attendance.status,
+        earlyLeave: result.attendance.earlyLeave,
       },
     });
   });
@@ -125,6 +127,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         time: localTime(result.attendance.checkIn ?? result.attendance.checkOut ?? new Date()),
         status: result.attendance.status,
         lateMinutes: result.attendance.lateMinutes,
+        earlyLeave: result.attendance.earlyLeave,
         faceVerified: true,
         livenessVerified: true,
       },
@@ -157,6 +160,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         className: result.className,
         time: localTime(result.attendance.checkIn ?? result.attendance.checkOut ?? new Date()),
         status: result.attendance.status,
+        earlyLeave: result.attendance.earlyLeave,
         qrVerified: true,
       },
     });
@@ -188,6 +192,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         className: result.className,
         time: localTime(result.attendance.checkIn ?? result.attendance.checkOut ?? new Date()),
         status: result.attendance.status,
+        earlyLeave: result.attendance.earlyLeave,
         cardVerified: true,
       },
     });
@@ -217,6 +222,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         time: localTime(result.attendance.checkIn ?? new Date()),
         status: result.attendance.status,
         lateMinutes: result.attendance.lateMinutes,
+        earlyLeave: result.attendance.earlyLeave,
         method: result.attendance.method,
       },
     });
@@ -293,6 +299,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         status: r.status,
         method: r.method,
         lateMinutes: r.lateMinutes,
+        earlyLeave: r.earlyLeave,
       })),
     });
   });

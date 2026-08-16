@@ -4,6 +4,8 @@ import { config } from '../config.js';
 export interface AttendanceRules {
   lateAfterHour: number;
   lateAfterMinute: number;
+  checkOutAfterHour: number; // jam pulang (jam)
+  checkOutAfterMinute: number; // jam pulang (menit)
   duplicatePrevention: boolean;
   locationEnabled: boolean;
   radiusMeters: number;
@@ -29,6 +31,8 @@ export async function getAttendanceRules(): Promise<AttendanceRules> {
   return {
     lateAfterHour: Number(v.lateAfterHour ?? config.lateAfterHour),
     lateAfterMinute: Number(v.lateAfterMinute ?? config.lateAfterMinute),
+    checkOutAfterHour: Number(v.checkOutAfterHour ?? config.checkOutAfterHour),
+    checkOutAfterMinute: Number(v.checkOutAfterMinute ?? config.checkOutAfterMinute),
     duplicatePrevention: v.duplicatePrevention !== false,
     locationEnabled: v.locationEnabled === true || (v.locationEnabled === undefined && config.locationEnabled),
     radiusMeters: Number(v.radiusMeters ?? config.locationRadiusMeters),

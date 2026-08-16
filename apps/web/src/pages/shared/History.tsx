@@ -9,7 +9,7 @@ import { STATUS_LABELS, STATUS_COLORS, currentMonthKey, timeLabel } from '../../
 
 interface AttRow {
   id: string; date: string; dayKey: string; checkIn?: string | null; checkOut?: string | null;
-  status: string; method: string; lateMinutes: number;
+  status: string; method: string; lateMinutes: number; earlyLeave?: boolean;
 }
 
 export default function History() {
@@ -92,9 +92,10 @@ export default function History() {
                   <span className="text-[10px] uppercase text-muted">{r.dayKey.slice(5, 7)}</span>
                 </div>
                 <div className="flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono text-sm font-semibold text-ink">Masuk {timeLabel(r.checkIn)}</span>
                     {r.checkOut && <span className="text-xs text-muted">Pulang {timeLabel(r.checkOut)}</span>}
+                    {r.earlyLeave && <Badge status="LATE" label="Pulang Awal" />}
                   </div>
                   <p className="text-xs text-muted">Metode: {r.method}</p>
                 </div>

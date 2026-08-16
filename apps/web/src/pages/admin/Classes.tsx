@@ -54,6 +54,7 @@ function ClassesTab() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ClassRow | null>(null);
   const [showImport, setShowImport] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data: classes } = useQuery({
     queryKey: ['classes'],
@@ -70,9 +71,33 @@ function ClassesTab() {
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'),
   });
 
+  const bulkDelete = useMutation({
+    mutationFn: async () => {
+      for (const id of selected) await api(`/classes/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      toast('success', `${selected.size} kelas dinonaktifkan.`);
+      setSelected(new Set());
+      qc.invalidateQueries({ queryKey: ['classes'] });
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'),
+  });
+
+  const toggle = (id: string) => setSelected((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const toggleAll = () => setSelected((prev) => (classes && prev.size === classes.length ? new Set() : new Set((classes || []).map((c) => c.id))));
+
   return (
     <div>
-      <div className="mb-3 flex flex-wrap justify-end gap-2">
+      <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+        {selected.size > 0 && (
+          <Button variant="danger" className="px-3 py-2 text-sm" onClick={() => window.confirm(`Nonaktifkan ${selected.size} kelas terpilih?`) && bulkDelete.mutate()} disabled={bulkDelete.isPending}>
+            {bulkDelete.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Hapus Terpilih ({selected.size})
+          </Button>
+        )}
         <Button variant="outline" className="px-3 py-2 text-sm" onClick={async () => {
           try { await downloadCsv('/export/classes', 'kelas.csv'); toast('success', 'Export CSV berhasil diunduh.'); }
           catch (e) { toast('error', e instanceof ApiError ? e.message : 'Gagal export.'); }
@@ -80,10 +105,19 @@ function ClassesTab() {
         <Button variant="outline" className="px-3 py-2 text-sm" onClick={() => setShowImport(true)}><Upload className="h-4 w-4" /> Import</Button>
         <Button className="px-3 py-2 text-sm" onClick={() => setFormOpen(true)}><Plus className="h-4 w-4" /> Kelas Baru</Button>
       </div>
+      {classes && classes.length > 0 && (
+        <label className="mb-3 flex w-fit items-center gap-2 text-sm text-muted">
+          <input type="checkbox" checked={selected.size === classes.length} onChange={toggleAll} className="h-4 w-4 accent-[var(--primary)]" />
+          Pilih semua ({classes.length})
+        </label>
+      )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {classes?.map((c) => (
-          <Card key={c.id}>
+          <Card key={c.id} className={selected.has(c.id) ? 'border-primary ring-2 ring-primary/20' : ''}>
             <div className="flex items-start justify-between gap-2">
+              <div className="flex items-start gap-2">
+                <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} className="mt-1 h-4 w-4 shrink-0 accent-[var(--primary)]" />
+              </div>
               <div className="min-w-0">
                 <p className="text-lg font-extrabold text-ink">{c.name}</p>
                 <p className="text-xs text-muted">{c.majorName || '—'} · {c.homeroomTeacher || 'Tanpa wali kelas'}{c.room ? ` · ${c.room}` : ''}</p>
@@ -316,11 +350,30 @@ function SubjectsTab() {
   const [editing, setEditing] = useState<SubjectRow | null>(null);
   const [preview, setPreview] = useState<{ line: number; name: string; code: string; errors: string[]; valid: boolean }[] | null>(null);
   const [meta, setMeta] = useState<{ total: number; valid: number; invalid: number } | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data: subjects } = useQuery({
     queryKey: ['subjects'],
     queryFn: () => api<{ success: boolean; data: SubjectRow[] }>('/subjects').then((r) => r.data),
   });
+
+  const bulkDelete = useMutation({
+    mutationFn: async () => {
+      for (const id of selected) await api(`/subjects/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      toast('success', `${selected.size} mapel dinonaktifkan.`);
+      setSelected(new Set());
+      qc.invalidateQueries({ queryKey: ['subjects'] });
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'),
+  });
+  const toggle = (id: string) => setSelected((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const toggleAll = () => setSelected((prev) => (subjects && prev.size === subjects.length ? new Set() : new Set((subjects || []).map((s) => s.id))));
 
   const mutation = useMutation({
     mutationFn: () => api('/subjects', { method: 'POST', body: { name, code } }),
@@ -415,9 +468,23 @@ function SubjectsTab() {
             </div>
           </Card>
         )}
+        {subjects && subjects.length > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <label className="flex w-fit items-center gap-2 text-sm text-muted">
+              <input type="checkbox" checked={selected.size === subjects.length} onChange={toggleAll} className="h-4 w-4 accent-[var(--primary)]" />
+              Pilih semua ({subjects.length})
+            </label>
+            {selected.size > 0 && (
+              <Button variant="danger" className="!px-3 !py-1.5 text-xs" onClick={() => window.confirm(`Nonaktifkan ${selected.size} mapel terpilih?`) && bulkDelete.mutate()} disabled={bulkDelete.isPending}>
+                {bulkDelete.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Hapus Terpilih ({selected.size})
+              </Button>
+            )}
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {subjects?.map((s) => (
-            <Card key={s.id} className="flex items-center gap-3">
+            <Card key={s.id} className={`flex items-center gap-3 ${selected.has(s.id) ? 'border-primary ring-2 ring-primary/20' : ''}`}>
+              <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} className="h-4 w-4 shrink-0 accent-[var(--primary)]" />
               <div className="h-10 w-10 shrink-0 rounded-xl" style={{ backgroundColor: s.color || '#0d9488' }} />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-bold text-ink">{s.name}</p>
