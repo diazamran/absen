@@ -235,6 +235,20 @@ Cakupan tes: autentikasi, rotasi refresh token, RBAC (forbidden untuk role lain)
 
 ---
 
+## Aplikasi Android (APK)
+
+Aplikasi ini bisa dijadikan **aplikasi Android (APK)** dengan teknik TWA (Trusted Web Activity):
+APK tipis yang membuka aplikasi langsung dari server — **update di VPS otomatis tampil di HP tanpa build ulang APK**.
+
+- **Kompatibel semua Android** 5.0+ (API 21), termasuk HP lama/RAM kecil.
+- Panduan lengkap: [`deploy/android/README-ANDROID.md`](deploy/android/README-ANDROID.md)
+- Build: `bash deploy/android/build-apk.sh` (butuh Java JDK 17+ & Android SDK, sekali install).
+- Aktifkan mode fullscreen via `/.well-known/assetlinks.json` (fingerprint dari keystore).
+
+Tanpa APK pun siswa bisa install langsung dari Chrome: buka aplikasi → menu ⋮ → **Install aplikasi**.
+
+---
+
 ## Environment Variables
 
 Lihat `.env.example` untuk daftar lengkap. Yang utama:

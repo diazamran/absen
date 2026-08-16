@@ -1,0 +1,32 @@
+{
+  "packageId": "id.sch.smkn1kras.presensiku",
+  "host": "absen.smkn1kras.sch.id",
+  "name": "PresensiKu",
+  "launcherName": "PresensiKu",
+  "display": "standalone",
+  "themeColor": "#0d9488",
+  "backgroundColor": "#f0fdfa",
+  "startUrl": "/",
+  "orientation": "portrait",
+  "appVersion": "1.0.0",
+  "appVersionCode": 1,
+  "splashScreenFadeOutDuration": 300,
+  "iconUrl": "https://absen.smkn1kras.sch.id/icons/icon-512.png",
+  "maskableIconUrl": "https://absen.smkn1kras.sch.id/icons/maskable-512.png",
+  "webManifestUrl": "https://absen.smkn1kras.sch.id/manifest.webmanifest",
+  "enableNotifications": true,
+  "signingKey": {
+    "path": "presensiku-release.keystore",
+    "alias": "presensiku",
+    "password": "PASSWORD_PLACEHOLDER",
+    "keyPassword": "PASSWORD_PLACEHOLDER"
+  },
+  "features": {
+    "locationDelegation": {
+      "enabled": true
+    },
+    "playBilling": {
+      "enabled": false
+    }
+  }
+}

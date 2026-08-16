@@ -9,3 +9,11 @@ uploads/
 .DS_Store
 coverage/
 .freebuff/
+
+# Android (TWA) — artefak build & rahasia tanda tangan
+*.keystore
+keystore.properties
+local.properties
+.gradle/
+build/
+deploy/android/*.apk

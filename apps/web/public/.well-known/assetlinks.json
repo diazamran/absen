@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "id.sch.smkn1kras.presensiku",
+      "sha256_cert_fingerprints": [
+        "GANTI_DENGAN_SHA256_FINGERPRINT_ANDA"
+      ]
+    }
+  }
+]
