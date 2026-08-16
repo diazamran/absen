@@ -30,6 +30,26 @@ const ADMIN_MENU: NavItem[] = [
   { to: '/app/settings', label: 'Pengaturan', icon: <Settings className="h-5 w-5" /> },
 ];
 
+/** Menu untuk role non-admin — sama untuk sidebar desktop & drawer mobile. */
+function roleMenu(role?: string): NavItem[] {
+  const items: NavItem[] = [{ to: '/app/home', label: 'Beranda', icon: <Home className="h-5 w-5" /> }];
+  if (role === 'STUDENT') {
+    items.push({ to: '/app/face-me', label: 'Registrasi Wajah', icon: <ScanFace className="h-5 w-5" /> });
+  }
+  items.push({ to: '/app/history', label: 'Riwayat', icon: <History className="h-5 w-5" /> });
+  items.push({ to: '/app/leave', label: 'Ajukan Izin', icon: <FilePlus2 className="h-5 w-5" /> });
+  if (role === 'PIKET') {
+    items.push({ to: '/app/gate', label: 'Scan Gerbang', icon: <ScanLine className="h-5 w-5" /> });
+    items.push({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
+    items.push({ to: '/app/reports', label: 'Laporan & Cetak', icon: <BarChart3 className="h-5 w-5" /> });
+  } else {
+    items.push({ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-5 w-5" /> });
+  }
+  items.push({ to: '/app/notifications', label: 'Notifikasi', icon: <Bell className="h-5 w-5" /> });
+  items.push({ to: '/app/profile', label: 'Profil', icon: <UserRound className="h-5 w-5" /> });
+  return items;
+}
+
 const BOTTOM_NAV: Record<string, NavItem[]> = {
   ADMIN: [
     { to: '/app/dashboard', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
@@ -126,8 +146,8 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
   const { user, logout } = useAuth();
   const { branding } = useTheme();
   const navigate = useNavigate();
-  const isAdmin = user?.roleKey === 'ADMIN' || user?.roleKey === 'SUPER_ADMIN';
-  const menu = isAdmin ? ADMIN_MENU : [];
+  const isAdmin = user?.roleKey === 'ADMIN' || user?.roleKey === 'SUPER_ADMIN' || user?.roleKey === 'HEADMASTER';
+  const menu = isAdmin ? ADMIN_MENU : roleMenu(user?.roleKey);
 
   const doLogout = async () => {
     onClose?.();
@@ -159,19 +179,21 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
             {item.icon}
             {item.label}
           </NavLink>
-        ))}
-        <NavLink
-          to="/app/profile"
-          className={({ isActive }) =>
-            cn(
-              'flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors',
-              isActive ? 'bg-primary-soft text-primary-dark' : 'text-muted hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-ink',
-            )
-          }
-        >
-          <UserRound className="h-5 w-5" />
-          Profil
-        </NavLink>
+        )        )}
+        {isAdmin && (
+          <NavLink
+            to="/app/profile"
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors',
+                isActive ? 'bg-primary-soft text-primary-dark' : 'text-muted hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-ink',
+              )
+            }
+          >
+            <UserRound className="h-5 w-5" />
+            Profil
+          </NavLink>
+        )}
       </nav>
       <div className="border-t border-line p-4">
         <div className="flex items-center gap-3">
@@ -287,25 +309,7 @@ export function AppShell() {
                   </NavLink>
                 ))
               ) : (
-                [
-                  { to: '/app/home', label: 'Beranda', icon: <Home className="h-5 w-5" /> },
-                  ...(user?.roleKey === 'STUDENT'
-                    ? [{ to: '/app/face-me', label: 'Registrasi Wajah', icon: <ScanFace className="h-5 w-5" /> }]
-                    : []),
-                  { to: '/app/history', label: 'Riwayat', icon: <History className="h-5 w-5" /> },
-                  { to: '/app/leave', label: 'Ajukan Izin', icon: <FilePlus2 className="h-5 w-5" /> },
-                  ...(user?.roleKey === 'PIKET'
-                    ? [{ to: '/app/gate', label: 'Scan Gerbang', icon: <ScanLine className="h-5 w-5" /> }]
-                    : [{ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-5 w-5" /> }]),
-                  ...(user?.roleKey === 'PIKET'
-                    ? [
-                        { to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> },
-                        { to: '/app/reports', label: 'Laporan & Cetak', icon: <BarChart3 className="h-5 w-5" /> },
-                      ]
-                    : []),
-                  { to: '/app/notifications', label: 'Notifikasi', icon: <Bell className="h-5 w-5" /> },
-                  { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-5 w-5" /> },
-                ].map((item) => (
+                roleMenu(user?.roleKey).map((item) => (
                   <NavLink
                     key={item.to}
                     to={item.to}
