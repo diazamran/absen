@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -35,9 +35,12 @@ jobs:
       - name: Install SDK Platform 36
         run: |
           if command -v sdkmanager >/dev/null 2>&1; then
-            sdkmanager "platforms;android-36" "build-tools;36.0.0"
+            sdkmanager "platforms;android-36" "build-tools;35.0.0" "build-tools;36.0.0"
+          elif [ -n "$ANDROID_HOME" ] && [ -f "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;35.0.0" "build-tools;36.0.0"
           else
-            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
+            echo "sdkmanager tidak ditemukan (ANDROID_HOME=$ANDROID_HOME)"
+            exit 1
           fi
 
       # Keystore disimpan di cache agar tanda tangan APK stabil antar build
@@ -63,7 +66,9 @@ jobs:
 
       - name: Build APK release
         working-directory: deploy/android/webview
-        run: ./gradlew assembleRelease --no-daemon
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
 
       - name: Unggah APK sebagai artefak
         uses: actions/upload-artifact@v4
