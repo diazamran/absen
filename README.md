@@ -3,7 +3,7 @@
 Platform absensi sekolah modern, mobile-first, realtime, dan siap di-install sebagai **PWA** di HP.
 Nama aplikasi, sekolah, warna, logo, dan aturan absensi **sepenuhnya dapat dikonfigurasi** tanpa mengubah kode.
 
-> Nama default: **PresensiKu** · Sekolah contoh: **SMA Negeri 1 Nusantara** · Warna: teal `#0d9488`
+> Nama default: **PresensiKu** · Sekolah contoh: **SMK Negeri 1 Kras** (jurusan: TKJ, TKR, TPTUP, KULINER) · Warna: teal `#0d9488`
 
 ---
 
@@ -17,7 +17,7 @@ Nama aplikasi, sekolah, warna, logo, dan aturan absensi **sepenuhnya dapat dikon
 | **Orang Tua** | Login WhatsApp + OTP, pantau kehadiran anak, jam datang/pulang, keterlambatan, rekap bulanan |
 | **Izin** | Pengajuan (sakit/izin/cuti/dinas), persetujuan/penolakan + alasan, notifikasi |
 | **Guru** | Dashboard sesi mengajar, validasi kehadiran kelas (bottom sheet), jurnal mengajar |
-| **Admin** | CRUD siswa/guru/kelas/jadwal, **registrasi wajah** (kamera + sampel + consent + reset), import CSV dengan preview + error per baris, export CSV, laporan, perangkat, audit log, pengaturan branding |
+| **Admin** | CRUD siswa/guru/kelas/jadwal, **registrasi wajah** (kamera + sampel + consent + reset/persetujuan), import CSV siswa **& guru/staff** + template, hapus massal siswa, **guru piket**, upload **bukti izin**, export CSV, laporan, perangkat, audit log, pengaturan branding |
 | **Keamanan** | JWT + refresh rotation, OTP di-hash, password bcrypt, rate limiting, helment/CORS, Zod, audit log, anti-duplikat, waktu server, GPS opsional |
 | **PWA** | Installable, offline cache, manifest, splash, service worker |
 
@@ -127,7 +127,8 @@ npm run dev
 - Bottom nav **Riwayat** (riwayat absensi) dan **Izin** (ajukan izin).
 
 **Guru / Staff / Wali Kelas** (login `guru` / `guru123`)
-- Bottom nav **Absen** → halaman **Scan Gerbang**: kamera otomatis, scan wajah/QR beruntun untuk siswa yang lewat gerbang.
+- **Guru piket** (diatur admin di menu Guru & Staff): dashboard guru menampilkan kartu **"Kamu guru piket hari ini"** → tombol **Buka Gerbang** — kamera otomatis, scan wajah/QR/kartu untuk mencatat absen siswa di gerbang.
+- Bottom nav **Absen** → **Scan Gerbang** juga bisa dibuka semua guru/staff.
 - **Kelas** → pilih kelas → validasi kehadiran (bottom sheet ubah status siswa).
 - **Jurnal Mengajar** & menu lain lewat drawer ☰ (kiri atas).
 
@@ -136,8 +137,10 @@ npm run dev
   - **Menunggu Persetujuan** (bagian atas): daftar siswa yang mendaftar wajah dari HP-nya sendiri → tombol **Setujui** (wajah langsung aktif) atau **Reset** (tolak/hapus data).
   - **Daftarkan manual**: pilih siswa → kamera aktif → ambil 1–4 sampel → centang persetujuan → **Simpan Registrasi** (langsung aktif karena dilakukan admin).
   - Data wajah bisa di-**Reset** kapan saja (mis. ada masalah).
-- **Siswa**: tambah/edit siswa; isi **No WhatsApp Orang Tua** → akun orang tua dibuat otomatis (login via WhatsApp + OTP).
-- **Guru & Staff**: tambah akun dengan role Guru / Wali Kelas / Staff / Admin & TU / Kepala Sekolah.
+- **Siswa**: tambah/edit/hapus per siswa, **checkbox hapus massal**, **Import CSV + template** (menu Import), isi **No WhatsApp Orang Tua** → akun orang tua dibuat otomatis.
+- **Guru & Staff**: tambah akun, **Import CSV massal + template**, dan **toggle Guru Piket** (guru yang menjaga gerbang).
+- **Kelas**: tab **Jurusan** untuk kelola jurusan (TKJ/TKR/TPTUP/KULINER) + kelas + mapel + jadwal.
+- **Izin**: pengajuan bisa menyertakan **bukti/lampiran** (surat/dokter) — admin melihat tombol **Lihat Bukti**.
 - **Absensi**: monitoring realtime hari ini + tombol **Absen Manual** (fallback, tercatat di audit log).
 - **Pengaturan**: nama aplikasi/sekolah, warna tema, aturan absensi (jam terlambat, anti-duplikat, GPS).
 

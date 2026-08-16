@@ -75,6 +75,7 @@ export async function studentRoutes(app: FastifyInstance) {
         fullName: s.user?.fullName ?? '-',
         gender: s.gender,
         birthDate: s.birthDate,
+        classId: s.classId,
         className: s.class?.name ?? null,
         majorName: s.major?.name ?? null,
         faceRegistered: s.faceRegistered,

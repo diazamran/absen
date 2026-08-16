@@ -236,6 +236,7 @@ model Teacher {
   nip       String?
   position  String?
   subjectId String?
+  isPiket   Boolean  @default(false) // guru piket: menjaga gerbang, HP bisa dipakai absen siswa
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

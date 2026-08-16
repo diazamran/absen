@@ -74,7 +74,7 @@ export async function authRoutes(app: FastifyInstance) {
           roleName: ROLE_LABELS[user.role.key] || user.role.name,
           avatarUrl: user.avatarUrl,
           student: user.student ? { id: user.student.id, nis: user.student.nis, className: user.student.classId } : null,
-          teacher: user.teacher ? { id: user.teacher.id, nip: user.teacher.nip } : null,
+          teacher: user.teacher ? { id: user.teacher.id, nip: user.teacher.nip, isPiket: user.teacher.isPiket } : null,
           staff: user.staff ? { id: user.staff.id, nip: user.staff.nip } : null,
         },
       },
@@ -216,7 +216,7 @@ export async function authRoutes(app: FastifyInstance) {
               major: user.student.major?.name ?? null,
             }
           : null,
-        teacher: user.teacher ? { id: user.teacher.id, nip: user.teacher.nip, position: user.teacher.position } : null,
+        teacher: user.teacher ? { id: user.teacher.id, nip: user.teacher.nip, position: user.teacher.position, isPiket: user.teacher.isPiket } : null,
         staff: user.staff ? { id: user.staff.id, nip: user.staff.nip, position: user.staff.position } : null,
         parent: user.parent
           ? {

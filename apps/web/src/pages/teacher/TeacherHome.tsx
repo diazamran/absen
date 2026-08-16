@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  FilePlus2, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, XCircle, CalendarDays, MapPin,
+  FilePlus2, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, XCircle, CalendarDays, MapPin, ShieldCheck,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -87,6 +87,24 @@ export default function TeacherHome() {
           </div>
         )}
       </div>
+
+      {/* Guru piket */}
+      {!isStudent && !isParent && user?.teacher?.isPiket && (
+        <Card className="flex items-center justify-between gap-3 border-amber-200 bg-amber-50/70 dark:bg-amber-500/10">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+              <ShieldCheck className="h-6 w-6" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-bold text-ink">Kamu guru piket hari ini</p>
+              <p className="text-sm text-muted">Buka Scan Gerbang untuk mencatat absen siswa (wajah / QR / kartu) di gerbang.</p>
+            </div>
+          </div>
+          <Button className="shrink-0" onClick={() => navigate('/app/gate')}>
+            <ScanLine className="h-4 w-4" /> Buka Gerbang
+          </Button>
+        </Card>
+      )}
 
       {/* Kehadiran saya */}
       <Card className="flex items-center justify-between">

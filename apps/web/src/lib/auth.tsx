@@ -12,7 +12,7 @@ export interface MeData {
   roleName: string;
   preferences?: Record<string, unknown> | null;
   student?: { id: string; nis: string; className?: string | null; grade?: string | null; major?: string | null } | null;
-  teacher?: { id: string; nip?: string | null; position?: string | null } | null;
+  teacher?: { id: string; nip?: string | null; position?: string | null; isPiket?: boolean } | null;
   staff?: { id: string; nip?: string | null; position?: string | null } | null;
   parent?: {
     id: string;

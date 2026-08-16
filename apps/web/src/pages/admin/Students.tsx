@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { GraduationCap, Plus, Search, Upload, Camera, CreditCard, Eye } from 'lucide-react';
+import { GraduationCap, Plus, Search, Upload, Pencil, Trash2, Camera, CreditCard, Loader2 } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Input, Field, Select, Modal, Badge, EmptyState } from '../../lib/ui';
@@ -8,7 +8,7 @@ import { PageHeader } from '../../components/AppShell';
 import { useNavigate } from 'react-router-dom';
 
 interface StudentRow {
-  id: string; userId: string; nis: string; fullName: string; className: string | null; majorName: string | null;
+  id: string; userId: string; nis: string; fullName: string; className: string | null; classId: string | null; majorName: string | null;
   faceRegistered: boolean; hasCard: boolean; isActive: boolean; gender: string;
 }
 
@@ -19,6 +19,8 @@ export default function Students() {
   const [search, setSearch] = useState('');
   const [classId, setClassId] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [editing, setEditing] = useState<StudentRow | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data: students } = useQuery({
     queryKey: ['students', search, classId],
@@ -30,19 +32,55 @@ export default function Students() {
     queryFn: () => api<{ success: boolean; data: { id: string; name: string }[] }>('/classes').then((r) => r.data),
   });
 
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleAll = () => {
+    if (!students?.length) return;
+    setSelected((prev) => (prev.size === students.length ? new Set() : new Set(students.map((s) => s.id))));
+  };
+
+  const deleteOne = useMutation({
+    mutationFn: (id: string) => api(`/students/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      toast('success', 'Siswa dinonaktifkan.');
+      qc.invalidateQueries({ queryKey: ['students'] });
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus.'),
+  });
+
+  const bulkDelete = useMutation({
+    mutationFn: async () => {
+      for (const id of selected) {
+        await api(`/students/${id}`, { method: 'DELETE' });
+      }
+    },
+    onSuccess: () => {
+      toast('success', `${selected.size} siswa dihapus.`);
+      setSelected(new Set());
+      qc.invalidateQueries({ queryKey: ['students'] });
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus.'),
+  });
+
   return (
     <div>
       <PageHeader title="Siswa" subtitle="Kelola data siswa" />
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
           <Input className="pl-10" placeholder="Cari NIS atau nama…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <Select value={classId} onChange={(e) => setClassId(e.target.value)} className="sm:w-48">
+        <Select value={classId} onChange={(e) => setClassId(e.target.value)} className="lg:w-48">
           <option value="">Semua kelas</option>
           {classes?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </Select>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => navigate('/app/import')}>
             <Upload className="h-4 w-4" /> Import
           </Button>
@@ -52,9 +90,33 @@ export default function Students() {
         </div>
       </div>
 
+      {selected.size > 0 && (
+        <div className="mb-3 flex items-center justify-between rounded-2xl border border-red-200 bg-red-50/60 px-4 py-2.5 dark:bg-red-500/10">
+          <p className="text-sm font-semibold text-red-600">{selected.size} siswa dipilih</p>
+          <Button
+            variant="danger"
+            className="!px-3 !py-1.5 text-xs"
+            onClick={() => {
+              if (window.confirm(`Hapus ${selected.size} siswa terpilih? (akun dinonaktifkan)`)) bulkDelete.mutate();
+            }}
+            disabled={bulkDelete.isPending}
+          >
+            {bulkDelete.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            Hapus Terpilih
+          </Button>
+        </div>
+      )}
+
       <div className="space-y-2">
         {students?.map((s) => (
           <Card key={s.id} className="flex items-center gap-3 p-3.5">
+            <input
+              type="checkbox"
+              checked={selected.has(s.id)}
+              onChange={() => toggle(s.id)}
+              className="h-4 w-4 shrink-0 accent-[var(--primary)]"
+              title="Pilih untuk hapus massal"
+            />
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary-soft text-primary">
               <GraduationCap className="h-5 w-5" />
             </div>
@@ -62,9 +124,24 @@ export default function Students() {
               <p className="truncate font-bold text-ink">{s.fullName}</p>
               <p className="text-xs text-muted">{s.nis} · {s.className || 'Tanpa kelas'} {s.majorName ? `· ${s.majorName}` : ''}</p>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="hidden items-center gap-1.5 sm:flex">
               {s.faceRegistered ? <Badge status="PRESENT" label="Wajah" /> : <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-muted dark:bg-slate-700">No wajah</span>}
               {s.hasCard ? <Badge status="APPROVED" label="Kartu" /> : null}
+              {!s.isActive && <Badge status="BLOCKED" label="Nonaktif" />}
+            </div>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setEditing(s)} className="rounded-xl p-2 text-muted hover:bg-primary-soft hover:text-primary" title="Edit">
+                <Pencil className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm(`Hapus ${s.fullName} (NIS ${s.nis})? Akun akan dinonaktifkan.`)) deleteOne.mutate(s.id);
+                }}
+                className="rounded-xl p-2 text-muted hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
+                title="Hapus"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
             </div>
           </Card>
         ))}
@@ -74,6 +151,7 @@ export default function Students() {
       </div>
 
       {showCreate && <StudentForm onClose={() => setShowCreate(false)} classes={classes || []} />}
+      {editing && <StudentEdit student={editing} classes={classes || []} onClose={() => setEditing(null)} />}
     </div>
   );
 }
@@ -122,6 +200,57 @@ function StudentForm({ onClose, classes }: { onClose: () => void; classes: { id:
         <Button onClick={() => mutation.mutate()} disabled={!form.nis || !form.fullName || mutation.isPending}>
           Simpan
         </Button>
+      </div>
+    </Modal>
+  );
+}
+
+function StudentEdit({ student, classes, onClose }: { student: StudentRow; classes: { id: string; name: string }[]; onClose: () => void }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    fullName: student.fullName,
+    gender: student.gender,
+    classId: student.classId || '',
+    isActive: student.isActive,
+  });
+
+  const mutation = useMutation({
+    mutationFn: () => api(`/students/${student.id}`, { method: 'PUT', body: form }),
+    onSuccess: () => {
+      toast('success', 'Data siswa diperbarui.');
+      qc.invalidateQueries({ queryKey: ['students'] });
+      onClose();
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menyimpan.'),
+  });
+
+  return (
+    <Modal open onClose={onClose} title={`Edit Siswa — ${student.nis}`} wide>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Nama Lengkap *"><Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></Field>
+        <Field label="Jenis Kelamin">
+          <Select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
+            <option value="MALE">Laki-laki</option>
+            <option value="FEMALE">Perempuan</option>
+          </Select>
+        </Field>
+        <Field label="Kelas">
+          <Select value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })}>
+            <option value="">Tanpa kelas</option>
+            {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </Select>
+        </Field>
+        <Field label="Status">
+          <Select value={form.isActive ? 'true' : 'false'} onChange={(e) => setForm({ ...form, isActive: e.target.value === 'true' })}>
+            <option value="true">Aktif</option>
+            <option value="false">Nonaktif</option>
+          </Select>
+        </Field>
+      </div>
+      <div className="mt-5 flex justify-end gap-2">
+        <Button variant="outline" onClick={onClose}>Batal</Button>
+        <Button onClick={() => mutation.mutate()} disabled={!form.fullName || mutation.isPending}>Simpan</Button>
       </div>
     </Modal>
   );

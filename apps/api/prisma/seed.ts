@@ -57,17 +57,23 @@ async function main() {
   // ===== Sekolah =====
   const school = await prisma.school.upsert({
     where: { id: 'school_main' },
-    update: {},
+    update: {
+      name: 'SMK Negeri 1 Kras',
+      npsn: '20565942',
+      address: 'Jl. Raya Kras, Kras, Kabupaten Kediri, Jawa Timur',
+      phone: '(0354) 391535',
+      email: 'info@smkn1kras.sch.id',
+    },
     create: {
       id: 'school_main',
-      name: 'SMA Negeri 1 Nusantara',
-      npsn: '12345678',
-      address: 'Jl. Pendidikan No. 1, Jakarta',
-      phone: '(021) 12345678',
-      email: 'info@sman1nusantara.sch.id',
+      name: 'SMK Negeri 1 Kras',
+      npsn: '20565942',
+      address: 'Jl. Raya Kras, Kras, Kabupaten Kediri, Jawa Timur',
+      phone: '(0354) 391535',
+      email: 'info@smkn1kras.sch.id',
       timezone: 'Asia/Jakarta',
-      latitude: -6.2088,
-      longitude: 106.8456,
+      latitude: -7.9659,
+      longitude: 111.9926,
     },
   });
   console.log('   sekolah:', school.name);
@@ -126,10 +132,12 @@ async function main() {
   });
 
   const majors: Record<string, string> = {};
+  // Jurusan SMK Negeri 1 Kras
   for (const m of [
-    { name: 'IPA', code: 'IPA' },
-    { name: 'IPS', code: 'IPS' },
-    { name: 'RPL', code: 'RPL' },
+    { name: 'TKJ', code: 'TKJ' }, // Teknik Komputer dan Jaringan
+    { name: 'TKR', code: 'TKR' }, // Teknik Kendaraan Ringan
+    { name: 'TPTUP', code: 'TPTUP' }, // Teknik Pendingin dan Tata Udara Penerbangan
+    { name: 'KULINER', code: 'KULINER' }, // Tata Boga / Kuliner
   ]) {
     const major = await prisma.major.upsert({ where: { name: m.name }, update: {}, create: m });
     majors[m.name] = major.id;
@@ -246,23 +254,33 @@ async function main() {
     create: { userId: staff.id, nip: '199001012015013001', position: 'Staf Tata Usaha' },
   });
 
-  // ===== Kelas =====
+  // ===== Kelas (satu kelas per jurusan SMKN 1 Kras) =====
   const classXA = await prisma.class.upsert({
-    where: { name_academicYearId: { name: 'X-A', academicYearId: ay.id } },
+    where: { name_academicYearId: { name: 'X-TKJ-1', academicYearId: ay.id } },
     update: {},
     create: {
-      name: 'X-A',
+      name: 'X-TKJ-1',
       grade: 'X',
-      majorId: majors['IPA'],
+      majorId: majors['TKJ'],
       academicYearId: ay.id,
       homeroomTeacherId: teacherWali.id,
       room: 'Labkom 1',
     },
   });
   const classXB = await prisma.class.upsert({
-    where: { name_academicYearId: { name: 'X-B', academicYearId: ay.id } },
+    where: { name_academicYearId: { name: 'X-TKR-1', academicYearId: ay.id } },
     update: {},
-    create: { name: 'X-B', grade: 'X', majorId: majors['IPS'], academicYearId: ay.id, room: 'Ruang 2' },
+    create: { name: 'X-TKR-1', grade: 'X', majorId: majors['TKR'], academicYearId: ay.id, room: 'Bengkel TKR' },
+  });
+  await prisma.class.upsert({
+    where: { name_academicYearId: { name: 'X-TPTUP-1', academicYearId: ay.id } },
+    update: {},
+    create: { name: 'X-TPTUP-1', grade: 'X', majorId: majors['TPTUP'], academicYearId: ay.id, room: 'Lab Pendingin' },
+  });
+  await prisma.class.upsert({
+    where: { name_academicYearId: { name: 'X-KULINER-1', academicYearId: ay.id } },
+    update: {},
+    create: { name: 'X-KULINER-1', grade: 'X', majorId: majors['KULINER'], academicYearId: ay.id, room: 'Dapur Praktik' },
   });
 
   // ===== Jadwal =====
@@ -288,11 +306,11 @@ async function main() {
 
   // ===== Siswa =====
   const studentsSeed = [
-    { nis: '121212', fullName: 'ANWAR', gender: 'MALE' as const, className: 'X-A', parentPhone: '081234567890' },
-    { nis: '121213', fullName: 'ANNAYA YUSMA KHAIRIN', gender: 'FEMALE' as const, className: 'X-A', parentPhone: '081234567891' },
-    { nis: '121214', fullName: 'FAHRISNA HILMI', gender: 'MALE' as const, className: 'X-A', parentPhone: '081234567890' },
-    { nis: '121215', fullName: 'BUNGA CITRA LESTARI', gender: 'FEMALE' as const, className: 'X-B', parentPhone: '081234567892' },
-    { nis: '121216', fullName: 'DIAN PRASTYO', gender: 'MALE' as const, className: 'X-B', parentPhone: '081234567892' },
+    { nis: '121212', fullName: 'ANWAR', gender: 'MALE' as const, className: 'X-TKJ-1', parentPhone: '081234567890' },
+    { nis: '121213', fullName: 'ANNAYA YUSMA KHAIRIN', gender: 'FEMALE' as const, className: 'X-TKJ-1', parentPhone: '081234567891' },
+    { nis: '121214', fullName: 'FAHRISNA HILMI', gender: 'MALE' as const, className: 'X-TKJ-1', parentPhone: '081234567890' },
+    { nis: '121215', fullName: 'BUNGA CITRA LESTARI', gender: 'FEMALE' as const, className: 'X-TKR-1', parentPhone: '081234567892' },
+    { nis: '121216', fullName: 'DIAN PRASTYO', gender: 'MALE' as const, className: 'X-TKR-1', parentPhone: '081234567892' },
   ];
 
   const parents = new Map<string, string>(); // phone -> parentId
@@ -307,18 +325,18 @@ async function main() {
       fullName: s.fullName,
       role: 'STUDENT',
     });
-    const classId = s.className === 'X-A' ? classXA.id : classXB.id;
+    const classId = s.className === 'X-TKJ-1' ? classXA.id : classXB.id;
     const student = await prisma.student.upsert({
       where: { nis: s.nis },
-      update: {},
+      update: { classId, majorId: s.className === 'X-TKJ-1' ? majors['TKJ'] : majors['TKR'] },
       create: {
         userId: user.id,
         nis: s.nis,
         gender: s.gender,
         birthDate: new Date('2009-01-15'),
-        address: 'Jakarta',
+        address: 'Kras, Kediri',
         classId,
-        majorId: s.className === 'X-A' ? majors['IPA'] : majors['IPS'],
+        majorId: s.className === 'X-TKJ-1' ? majors['TKJ'] : majors['TKR'],
         academicYearId: ay.id,
         cardUidHash: sha256(`CARD-${s.nis}`),
       },
@@ -356,6 +374,20 @@ async function main() {
       update: {},
       create: { studentId: student.id, parentId: parents.get(s.parentPhone)!, relation: 'Orang Tua' },
     });
+  }
+
+  // Bersihkan data demo lama dari seed versi sebelumnya (hanya nama demo yang diketahui & aman dihapus)
+  await prisma.class.deleteMany({
+    where: { name: { in: ['X-A', 'X-B', 'X-Test'] }, students: { none: {} } },
+  });
+  for (const m of ['IPA', 'IPS', 'RPL']) {
+    const legacy = await prisma.major.findUnique({
+      where: { name: m },
+      include: { _count: { select: { students: true, classes: true } } },
+    });
+    if (legacy && legacy._count.students === 0 && legacy._count.classes === 0) {
+      await prisma.major.delete({ where: { id: legacy.id } });
+    }
   }
 
   // ===== Absensi hari ini (contoh) =====

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Upload, FileSpreadsheet, CheckCircle2, XCircle } from 'lucide-react';
+import { Upload, FileSpreadsheet, Download, CheckCircle2, XCircle } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Field, EmptyState } from '../../lib/ui';
@@ -8,6 +8,20 @@ import { PageHeader } from '../../components/AppShell';
 
 interface PreviewRow {
   line: number; nis: string; nama: string; kelas: string; errors: string[]; valid: boolean;
+}
+
+const TEMPLATE_HEADERS = ['NIS', 'Nama', 'Kelas', 'Jurusan', 'Jenis Kelamin', 'Tanggal Lahir', 'No HP', 'Nama Orang Tua', 'No WhatsApp Orang Tua', 'Card UID'];
+const TEMPLATE_SAMPLE = ['121217', 'CONTOH SISWA', 'X-TKJ-1', 'TKJ', 'L', '2009-01-15', '081234567899', 'Bapak Contoh', '081234567899', ''];
+
+function downloadTemplate() {
+  const csv = [TEMPLATE_HEADERS.join(','), TEMPLATE_SAMPLE.join(',')].join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'template-import-siswa.csv';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export default function ImportStudents() {
@@ -48,7 +62,15 @@ export default function ImportStudents() {
 
   return (
     <div>
-      <PageHeader title="Import Siswa" subtitle="Upload CSV: NIS, Nama, Kelas, Jurusan, Jenis Kelamin, Tanggal Lahir, No HP, Nama Orang Tua, No WhatsApp Orang Tua, Card UID" />
+      <PageHeader
+        title="Import Siswa"
+        subtitle="Upload CSV: NIS, Nama, Kelas, Jurusan, Jenis Kelamin, Tanggal Lahir, No HP, Nama Orang Tua, No WhatsApp Orang Tua, Card UID"
+        action={
+          <Button variant="outline" onClick={downloadTemplate}>
+            <Download className="h-4 w-4" /> Template CSV
+          </Button>
+        }
+      />
       <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => e.target.files?.[0] && doPreview.mutate(e.target.files[0])} />
 
       {!preview && (

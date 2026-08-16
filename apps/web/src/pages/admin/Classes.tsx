@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Cog } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Input, Field, Select, Segmented, EmptyState } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
 import { useAuth } from '../../lib/auth';
 
-type Tab = 'classes' | 'subjects' | 'schedules';
+type Tab = 'classes' | 'subjects' | 'majors' | 'schedules';
 
 const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 const DAY_LABELS: Record<string, string> = {
@@ -27,12 +27,13 @@ export default function Classes() {
           value={tab}
           onChange={setTab}
           options={[
-            ...(isAdmin ? [{ value: 'classes' as Tab, label: 'Kelas' }, { value: 'subjects' as Tab, label: 'Mapel' }] : []),
+            ...(isAdmin ? [{ value: 'classes' as Tab, label: 'Kelas' }, { value: 'majors' as Tab, label: 'Jurusan' }, { value: 'subjects' as Tab, label: 'Mapel' }] : []),
             { value: 'schedules' as Tab, label: 'Jadwal' },
           ]}
         />
       </div>
       {tab === 'classes' && <ClassesTab />}
+      {tab === 'majors' && <MajorsTab />}
       {tab === 'subjects' && <SubjectsTab />}
       {tab === 'schedules' && <SchedulesTab />}
     </div>
@@ -93,6 +94,44 @@ function ClassesTab() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function MajorsTab() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [name, setName] = useState('');
+  const { data: majors } = useQuery({
+    queryKey: ['majors'],
+    queryFn: () => api<{ success: boolean; data: { id: string; name: string; code?: string | null }[] }>('/majors').then((r) => r.data),
+  });
+  const mutation = useMutation({
+    mutationFn: () => api('/majors', { method: 'POST', body: { name } }),
+    onSuccess: () => { toast('success', 'Jurusan ditambahkan.'); qc.invalidateQueries({ queryKey: ['majors'] }); setName(''); },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'),
+  });
+  return (
+    <div className="grid gap-4 lg:grid-cols-3">
+      <Card>
+        <h3 className="mb-3 flex items-center gap-2 font-bold text-ink"><Cog className="h-4 w-4" /> Tambah Jurusan</h3>
+        <div className="space-y-3">
+          <Field label="Nama Jurusan"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="TKJ / TKR / TPTUP / KULINER" /></Field>
+          <Button className="w-full" onClick={() => mutation.mutate()} disabled={!name}>Simpan</Button>
+        </div>
+      </Card>
+      <div className="lg:col-span-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {majors?.map((m) => (
+          <Card key={m.id} className="flex flex-col items-center gap-1 py-4 text-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary-soft text-primary">
+              <Cog className="h-5 w-5" />
+            </div>
+            <p className="font-bold text-ink">{m.name}</p>
+            {m.code && <p className="text-xs text-muted">{m.code}</p>}
+          </Card>
+        ))}
+        {majors?.length === 0 && <div className="col-span-full"><EmptyState icon={Cog} title="Belum ada jurusan" /></div>}
+      </div>
     </div>
   );
 }

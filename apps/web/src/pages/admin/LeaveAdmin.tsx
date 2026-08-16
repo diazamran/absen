@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, X, FileText } from 'lucide-react';
+import { Check, X, FileText, Paperclip } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Card, Badge, Button, Segmented, EmptyState, Modal, Field, Textarea } from '../../lib/ui';
@@ -9,7 +9,7 @@ import { LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS, shortDate } from '../../lib/for
 
 interface LeaveRow {
   id: string; userName: string; nis: string | null; className: string | null; type: string;
-  startDate: string; endDate: string; reason: string; status: string; rejectionReason?: string | null;
+  startDate: string; endDate: string; reason: string; status: string; rejectionReason?: string | null; attachmentUrl?: string | null;
 }
 
 export default function LeaveAdmin() {
@@ -61,6 +61,16 @@ export default function LeaveAdmin() {
                   <p className="text-xs text-muted">{l.nis} · {LEAVE_TYPE_LABELS[l.type] || l.type}</p>
                   <p className="mt-1 text-sm text-ink">{l.reason}</p>
                   <p className="mt-0.5 text-xs text-muted">{shortDate(l.startDate)} — {shortDate(l.endDate)}</p>
+                  {l.attachmentUrl && (
+                    <a
+                      href={l.attachmentUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary-dark hover:brightness-95"
+                    >
+                      <Paperclip className="h-3.5 w-3.5" /> Lihat Bukti / Lampiran
+                    </a>
+                  )}
                   {l.rejectionReason && <p className="mt-1 text-xs text-red-500">Alasan ditolak: {l.rejectionReason}</p>}
                 </div>
               </div>

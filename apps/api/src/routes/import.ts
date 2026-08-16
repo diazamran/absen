@@ -215,4 +215,156 @@ export async function importRoutes(app: FastifyInstance) {
       data: { created, errors },
     });
   });
+
+  // ===== Import massal Guru & Staff =====
+  const ROLE_BY_LABEL: Record<string, string> = {
+    guru: 'TEACHER',
+    'wali kelas': 'HOMEROOM_TEACHER',
+    wali: 'HOMEROOM_TEACHER',
+    staff: 'STAFF',
+    'admin': 'ADMIN',
+    tu: 'ADMIN',
+    'admin tu': 'ADMIN',
+    'kepala sekolah': 'HEADMASTER',
+    kepsek: 'HEADMASTER',
+  };
+
+  app.post('/import/users/preview', { preHandler: app.requirePermission(PERMISSION_KEYS.usersCreate) }, async (request, reply) => {
+    const data = await request.file();
+    if (!data) throw ApiError.badRequest('FILE_REQUIRED', 'Pilih file CSV terlebih dahulu.');
+    const text = (await data.toBuffer()).toString('utf8').replace(/^\uFEFF/, '');
+    const rows = parseCsv(text);
+    if (rows.length < 2) throw ApiError.badRequest('EMPTY_CSV', 'File CSV kosong atau tidak memiliki data.');
+
+    const headers = rows[0].map((h) => h.trim().toLowerCase());
+    for (const r of ['nama', 'username']) {
+      if (!headers.includes(r)) {
+        throw ApiError.badRequest('INVALID_HEADERS', `Kolom "${r}" wajib ada. Kolom yang didukung: Nama, Username, Role, Password, NIP, Jabatan, Mata Pelajaran, No HP.`);
+      }
+    }
+    const idx = (name: string) => headers.indexOf(name);
+
+    const existingUsers = new Set((await prisma.user.findMany({ select: { username: true } })).map((u) => u.username.toLowerCase()));
+    const subjects = await prisma.subject.findMany({ select: { id: true, name: true } });
+    const subjectMap = new Map(subjects.map((s) => [s.name.toLowerCase(), s.id]));
+
+    const preview = rows.slice(1).map((r, i) => {
+      const get = (name: string) => (idx(name) >= 0 ? (r[idx(name)] || '').trim() : '');
+      const nama = get('nama');
+      const username = get('username');
+      const roleLabel = (get('role') || 'guru').toLowerCase();
+      const roleKey = ROLE_BY_LABEL[roleLabel] || '';
+      const errors: string[] = [];
+      if (!nama) errors.push('Nama kosong');
+      if (!username) errors.push('Username kosong');
+      else if (existingUsers.has(username.toLowerCase())) errors.push(`Username "${username}" sudah dipakai`);
+      if (!roleKey) errors.push(`Role "${get('role')}" tidak dikenal (Guru/Wali Kelas/Staff/Admin/Kepala Sekolah)`);
+      const mapel = get('mata pelajaran');
+      if (mapel && !subjectMap.has(mapel.toLowerCase())) errors.push(`Mapel "${mapel}" tidak ditemukan`);
+      const password = get('password') || 'guru123';
+      if (password.length < 6) errors.push('Password minimal 6 karakter');
+      return {
+        line: i + 2,
+        nama,
+        username,
+        roleKey,
+        roleLabel: get('role') || 'Guru',
+        password,
+        nip: get('nip'),
+        position: get('jabatan'),
+        subjectName: mapel,
+        phone: get('no hp'),
+        errors,
+        valid: errors.length === 0,
+      };
+    });
+
+    return reply.send({
+      success: true,
+      data: {
+        total: preview.length,
+        valid: preview.filter((p) => p.valid).length,
+        invalid: preview.filter((p) => !p.valid).length,
+        rows: preview,
+      },
+    });
+  });
+
+  app.post('/import/users/confirm', { preHandler: app.requirePermission(PERMISSION_KEYS.usersCreate) }, async (request, reply) => {
+    const body = validate(
+      z.object({
+        rows: z.array(
+          z.object({
+            nama: z.string().min(1),
+            username: z.string().min(3),
+            roleKey: z.enum(['ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF']),
+            password: z.string().min(6),
+            nip: z.string().optional(),
+            position: z.string().optional(),
+            subjectName: z.string().optional(),
+            phone: z.string().optional(),
+          }),
+        ),
+      }),
+      request.body,
+    );
+
+    const subjects = await prisma.subject.findMany({ select: { id: true, name: true } });
+    const subjectMap = new Map(subjects.map((s) => [s.name.toLowerCase(), s.id]));
+
+    let created = 0;
+    const errors: { username: string; error: string }[] = [];
+
+    for (const row of body.rows) {
+      try {
+        if (await prisma.user.findUnique({ where: { username: row.username } })) {
+          errors.push({ username: row.username, error: 'Username sudah dipakai' });
+          continue;
+        }
+        const role = await prisma.role.findUnique({ where: { key: row.roleKey } });
+        if (!role) {
+          errors.push({ username: row.username, error: 'Role tidak valid' });
+          continue;
+        }
+        const user = await prisma.user.create({
+          data: {
+            username: row.username,
+            passwordHash: await hashPassword(row.password),
+            fullName: row.nama,
+            phone: row.phone || undefined,
+            roleId: role.id,
+          },
+        });
+        if (row.roleKey === 'TEACHER' || row.roleKey === 'HOMEROOM_TEACHER') {
+          await prisma.teacher.create({
+            data: {
+              userId: user.id,
+              nip: row.nip,
+              position: row.position,
+              subjectId: row.subjectName ? subjectMap.get(row.subjectName.toLowerCase()) : undefined,
+            },
+          });
+        } else if (row.roleKey === 'STAFF') {
+          await prisma.staff.create({ data: { userId: user.id, nip: row.nip, position: row.position } });
+        }
+        created++;
+      } catch (e) {
+        errors.push({ username: row.username, error: (e as Error).message });
+      }
+    }
+
+    await audit({
+      userId: request.user!.id,
+      action: 'USERS_IMPORTED',
+      entity: 'User',
+      newValue: { created, failed: errors.length },
+      request,
+    });
+
+    return reply.send({
+      success: true,
+      message: `${created} akun berhasil diimpor.`,
+      data: { created, errors },
+    });
+  });
 }

@@ -17,6 +17,7 @@ const userCreateSchema = z.object({
   phone: z.string().optional(),
   email: z.string().optional(),
   subjectId: z.string().optional(),
+  isPiket: z.boolean().optional(),
 });
 
 export async function userRoutes(app: FastifyInstance) {
@@ -52,6 +53,7 @@ export async function userRoutes(app: FastifyInstance) {
         roleName: ROLE_LABELS[u.role.key] || u.role.name,
         nip: u.teacher?.nip ?? u.staff?.nip ?? null,
         position: u.teacher?.position ?? u.staff?.position ?? null,
+        isPiket: u.teacher?.isPiket ?? false,
         subjectId: u.teacher?.subjectId ?? null,
         subjectName: u.teacher?.subject?.name ?? null,
         phone: u.phone,
@@ -83,7 +85,7 @@ export async function userRoutes(app: FastifyInstance) {
 
     if (body.roleKey === 'TEACHER' || body.roleKey === 'HOMEROOM_TEACHER') {
       await prisma.teacher.create({
-        data: { userId: user.id, nip: body.nip, position: body.position, subjectId: body.subjectId },
+        data: { userId: user.id, nip: body.nip, position: body.position, subjectId: body.subjectId, isPiket: body.isPiket },
       });
     } else if (body.roleKey === 'STAFF') {
       await prisma.staff.create({ data: { userId: user.id, nip: body.nip, position: body.position } });
@@ -112,6 +114,7 @@ export async function userRoutes(app: FastifyInstance) {
         nip: z.string().optional(),
         position: z.string().optional(),
         subjectId: z.string().optional(),
+        isPiket: z.boolean().optional(),
         roleKey: z.enum(['ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF']).optional(),
       }),
       request.body,
@@ -132,10 +135,10 @@ export async function userRoutes(app: FastifyInstance) {
 
     await prisma.user.update({ where: { id }, data });
 
-    if (existing.teacher && (body.nip !== undefined || body.position !== undefined || body.subjectId !== undefined)) {
+    if (existing.teacher && (body.nip !== undefined || body.position !== undefined || body.subjectId !== undefined || body.isPiket !== undefined)) {
       await prisma.teacher.update({
         where: { userId: id },
-        data: { nip: body.nip, position: body.position, subjectId: body.subjectId },
+        data: { nip: body.nip, position: body.position, subjectId: body.subjectId, isPiket: body.isPiket },
       });
     }
     if (existing.staff && (body.nip !== undefined || body.position !== undefined)) {
