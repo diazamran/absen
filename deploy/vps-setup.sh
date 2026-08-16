@@ -69,6 +69,23 @@ else
   echo "✔ .env sudah ada — tidak diubah."
 fi
 
+# Port aplikasi: bisa diatur via env WEB_PORT (mis. 3000 untuk Caddy eksternal)
+# Saat mode HTTPS container (Caddy di compose), frontend memakai 8080 agar
+# port 80/443 bebas untuk Caddy.
+if [[ -n "$DOMAIN" ]]; then
+  EFFECTIVE_WEB_PORT="8080"
+else
+  EFFECTIVE_WEB_PORT="${WEB_PORT:-80}"
+fi
+
+k="WEB_PORT"
+if grep -q "^$k=" "$APP_DIR/.env"; then
+  sed -i "s|^$k=.*|$k=$EFFECTIVE_WEB_PORT|" "$APP_DIR/.env"
+else
+  echo "$k=$EFFECTIVE_WEB_PORT" >> "$APP_DIR/.env"
+fi
+echo "   Port web : $EFFECTIVE_WEB_PORT"
+
 # Jika memakai domain: simpan DOMAIN + set URL aplikasi & CORS
 if [[ -n "$DOMAIN" ]]; then
   for line in "DOMAIN=$DOMAIN" "APP_URL=https://$DOMAIN" "CORS_ORIGIN=https://$DOMAIN"; do
@@ -92,18 +109,21 @@ fi
 # ---------- 5. Build & start ----------
 echo "➜ Build & start container (mungkin butuh beberapa menit)..."
 cd "$APP_DIR"
-WEB_PORT=8080 DOMAIN="$DOMAIN" docker compose $COMPOSE_FILES up -d --build
+WEB_PORT="$EFFECTIVE_WEB_PORT" DOMAIN="$DOMAIN" docker compose $COMPOSE_FILES up -d --build
 
 # ---------- 6. Seed data (aman diulang — idempotent) ----------
 echo "➜ Menyiapkan data awal..."
-WEB_PORT=8080 DOMAIN="$DOMAIN" docker compose $COMPOSE_FILES exec -T backend npm run db:seed || true
+WEB_PORT="$EFFECTIVE_WEB_PORT" DOMAIN="$DOMAIN" docker compose $COMPOSE_FILES exec -T backend npm run db:seed || true
 
 # ---------- 7. Firewall ----------
 if command -v ufw &>/dev/null; then
-  echo "➜ Membuka port di firewall (22, 80, 443)..."
+  echo "➜ Membuka port di firewall..."
   ufw allow OpenSSH
-  ufw allow 80/tcp
-  ufw allow 443/tcp
+  if [[ -n "$DOMAIN" ]]; then
+    ufw allow 80/tcp
+    ufw allow 443/tcp
+  fi
+  ufw allow "$EFFECTIVE_WEB_PORT"/tcp
   ufw --force enable || true
 fi
 
