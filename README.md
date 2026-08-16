@@ -248,6 +248,8 @@ tanpa butuh Chrome/assetlinks, kamera/lokasi/upload sudah aktif.
   Build: `bash deploy/android/build-apk.sh` → `PresensiKu-v1.0.0.apk`.
 
 - **Kompatibel semua Android** 5.0+ (API 21), termasuk HP lama/RAM kecil.
+- Setelah build, APK otomatis tersedia untuk **diunduh langsung dari website**
+  (`/apk/PresensiKu.apk`) — pengunjung HP Android melihat banner unduhan di atas halaman.
 - Panduan lengkap: [`deploy/android/README-ANDROID.md`](deploy/android/README-ANDROID.md)
 - Build butuh Java JDK 17+ & Android SDK (sekali install di komputer).
 

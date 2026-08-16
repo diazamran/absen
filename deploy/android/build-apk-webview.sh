@@ -98,8 +98,18 @@ fi
 
 OUT="PresensiKu-WebView-v${APP_VERSION}.apk"
 cp "$APK" "../$OUT"
+
+# ===== Salin ke folder publik website (agar bisa diunduh dari web) =====
+APK_WEB_DIR="../../apps/web/public/apk"
+mkdir -p "$APK_WEB_DIR"
+cp "$APK" "$APK_WEB_DIR/PresensiKu.apk"
 echo ""
 echo "✅ Selesai! APK siap dibagikan:"
 echo "   deploy/android/$OUT"
+echo "   (juga disalin ke $APK_WEB_DIR/PresensiKu.apk untuk diunduh dari website)"
+echo ""
+echo "➜ Supaya bisa diunduh dari https://absen.smkn1kras.sch.id/apk/PresensiKu.apk:"
+echo "   git add apps/web/public/apk/PresensiKu.apk && git commit -m 'update APK' && git push origin main"
+echo "   lalu di VPS: cd /opt/presensiku && bash update.sh"
 echo ""
 echo "⚠️  Simpan baik-baik $KEYSTORE dan $KEYSTORE_PROPS — keystore hilang = tidak bisa update APK versi berikutnya!"

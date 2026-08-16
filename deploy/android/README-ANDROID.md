@@ -70,7 +70,25 @@ Script ini otomatis:
 4. Saat pertama dibuka, aplikasi meminta izin **kamera** & **lokasi** — izinkan agar
    daftar/scan wajah dan absensi geolokasi berfungsi.
 
-## 4. Kalau domain berubah
+## 4. Sediakan unduhan dari website (disarankan)
+
+Script build otomatis menyalin APK ke `apps/web/public/apk/PresensiKu.apk`.
+Supaya pengunjung bisa mengunduh langsung dari website:
+
+```bash
+git add apps/web/public/apk/PresensiKu.apk
+git commit -m "update APK"
+git push origin main
+# lalu di VPS:
+cd /opt/presensiku && bash update.sh
+```
+
+Setelah itu, HP Android yang membuka `https://absen.smkn1kras.sch.id` akan melihat
+**banner "Unduh aplikasi PresensiKu"** di atas halaman dengan tombol **APK**.
+Banner hanya muncul di browser Android biasa (tidak muncul di dalam aplikasi APK
+atau PWA yang sudah terpasang, dan bisa ditutup — muncul lagi setelah 7 hari).
+
+## 5. Kalau domain berubah
 
 Buka `deploy/android/webview/app/src/main/res/values/strings.xml`, ganti
 `start_url` dan `start_host`, lalu build ulang APK.

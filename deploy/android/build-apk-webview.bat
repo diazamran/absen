@@ -85,9 +85,19 @@ if not exist "%APK%" (
 
 set "OUT=PresensiKu-WebView-v%APP_VERSION%.apk"
 copy /y "%APK%" "..\%OUT%" >nul
+
+REM ===== Salin ke folder publik website =====
+set "APK_WEB_DIR=..\..\apps\web\public\apk"
+if not exist "%APK_WEB_DIR%" mkdir "%APK_WEB_DIR%"
+copy /y "%APK%" "%APK_WEB_DIR%\PresensiKu.apk" >nul
 echo.
 echo [SELESAI] APK siap dibagikan:
 echo    deploy\android\%OUT%
+echo    (juga disalin ke %APK_WEB_DIR%\PresensiKu.apk untuk diunduh dari website)
+echo.
+echo Supaya bisa diunduh dari https://absen.smkn1kras.sch.id/apk/PresensiKu.apk:
+echo    git add apps/web/public/apk/PresensiKu.apk ^&^& git commit -m "update APK" ^&^& git push origin main
+echo    lalu di VPS: cd /opt/presensiku ^&^& bash update.sh
 echo.
 echo [PENTING] Simpan baik-baik %KEYSTORE% dan %KEYSTORE_PROPS% — keystore hilang = tidak bisa update APK!
 
