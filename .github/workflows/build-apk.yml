@@ -1,0 +1,92 @@
+name: Build APK WebView
+
+# Cara pakai:
+# 1. Buka https://github.com/diazamran/absen → tab Actions → "Build APK WebView"
+# 2. Klik tombol "Run workflow" → pilih branch main → Run workflow
+# 3. Tunggu ±10 menit sampai selesai (APK otomatis di-commit ke apps/web/public/apk/)
+# 4. Di VPS: cd /opt/presensiku && bash update.sh
+# 5. Banner "Unduh APK" di website kini mengunduh APK asli yang bisa diinstall.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK Platform 36
+        run: |
+          if command -v sdkmanager >/dev/null 2>&1; then
+            sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          else
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
+          fi
+
+      # Keystore disimpan di cache agar tanda tangan APK stabil antar build
+      # (update di HP yang sudah terpasang membutuhkan kunci yang sama).
+      - name: Restore keystore (cache)
+        uses: actions/cache@v4
+        with:
+          path: deploy/android/webview/presensiku-release.keystore
+          key: presensiku-webview-release-keystore-v1
+
+      - name: Siapkan keystore + properties
+        working-directory: deploy/android/webview
+        run: |
+          if [ ! -f presensiku-release.keystore ]; then
+            keytool -genkeypair -v \
+              -keystore presensiku-release.keystore \
+              -alias presensiku -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass presensiku123 -keypass presensiku123 \
+              -dname "CN=PresensiKu, OU=School, O=SMKN 1 Kras, L=Kediri, ST=Jawa Timur, C=ID"
+          fi
+          printf 'storeFile=presensiku-release.keystore\nstorePassword=presensiku123\nkeyAlias=presensiku\nkeyPassword=presensiku123\n' > keystore.properties
+          ls -la presensiku-release.keystore keystore.properties
+
+      - name: Build APK release
+        working-directory: deploy/android/webview
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Unggah APK sebagai artefak
+        uses: actions/upload-artifact@v4
+        with:
+          name: PresensiKu-WebView-apk
+          path: deploy/android/webview/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+      - name: Salin APK ke folder publik website
+        run: |
+          mkdir -p apps/web/public/apk
+          cp deploy/android/webview/app/build/outputs/apk/release/app-release.apk apps/web/public/apk/PresensiKu.apk
+          ls -la apps/web/public/apk/
+
+      - name: Commit APK (jika berubah)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/public/apk/PresensiKu.apk
+          if git diff --cached --quiet; then
+            echo "APK tidak berubah — tidak ada commit baru."
+          else
+            git commit -m "chore: update APK WebView (auto-build)"
+            git push origin HEAD:main
+            echo "APK berhasil di-commit ke main."
+          fi

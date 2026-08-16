@@ -23,7 +23,33 @@ build APK ulang** setiap ada pembaruan.
 
 # Pilihan 1: APK WebView sederhana (disarankan)
 
+## 0. Cara termudah: build otomatis di GitHub (tanpa install apa pun) ⭐
+
+Tidak perlu Java/Android SDK di komputer — **GitHub Actions yang membangun APK-nya**
+(workflow `Build APK WebView` sudah tersedia di repo):
+
+1. Buka **https://github.com/diazamran/absen** → tab **Actions** →
+   **Build APK WebView** → tombol **Run workflow** → branch `main` → **Run workflow**.
+2. Tunggu ± 10 menit sampai selesai (lingkaran hijau ✓).
+   APK otomatis di-commit ke `apps/web/public/apk/PresensiKu.apk` di GitHub.
+3. Di VPS: `cd /opt/presensiku && bash update.sh`.
+4. Selesai — HP Android yang membuka website langsung melihat banner
+   **"Unduh aplikasi PresensiKu"** dan tombol **APK** yang mengunduh APK asli
+   (bisa langsung diinstall).
+
+Catatan:
+- Keystore tanda tangan disimpan di **cache GitHub** agar APK versi berikutnya tetap
+  dianggap "update" oleh HP yang sudah terpasang. Jangan hapus cache workflow.
+- Setelah auto-build, jalankan `git pull` sekali di komputer lokal agar repo lokal
+  sinkron dengan commit APK yang dibuat otomatis.
+- Kalau mau, file APK-nya juga tersedia sebagai **artifact** di halaman hasil
+  workflow (untuk diunduh manual / disebar lewat WhatsApp).
+
 ## 1. Siapkan komputer build (sekali saja, ± 10 menit)
+
+> Lewati bagian ini kalau sudah memakai **cara otomatis di GitHub (poin 0)**.
+
+Install dua hal berikut di komputer Windows/Linux/macOS yang akan dipakai build:
 
 Install dua hal berikut di komputer Windows/Linux/macOS yang akan dipakai build:
 

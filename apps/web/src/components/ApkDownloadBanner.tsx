@@ -32,10 +32,16 @@ export default function ApkDownloadBanner() {
     } catch {
       /* abaikan */
     }
-    // Hanya tampil jika file APK benar-benar ada di server (hindari link rusak)
+    // Hanya tampil jika file APK benar-benar ada di server (hindari link rusak).
+    // Catatan: nginx SPA fallback mengembalikan index.html (HTTP 200) untuk path
+    // yang tidak ada — jadi cek tipe & ukuran, bukan hanya status 200.
     fetch(APK_URL, { method: 'HEAD' })
       .then((r) => {
-        if (r.ok) setVisible(true);
+        if (!r.ok) return;
+        const ct = (r.headers.get('content-type') || '').toLowerCase();
+        const len = Number(r.headers.get('content-length') || 0);
+        const looksLikeApk = len > 500_000 || /vnd\.android|application\/octet-stream/.test(ct);
+        if (looksLikeApk) setVisible(true);
       })
       .catch(() => {});
   }, []);
