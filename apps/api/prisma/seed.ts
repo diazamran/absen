@@ -454,7 +454,7 @@ async function main() {
   console.log('   Wali Kelas  : wali / guru123');
   console.log('   Guru        : guru / guru123');
   console.log('   Staff       : staff / staff123');
-  console.log('   Siswa       : siswa_121212 / siswa123');
+  console.log('   Siswa       : login NISN + tanggal lahir (mis. NISN 121212 / 2009-01-15)');
   console.log('   Orang Tua   : login via WhatsApp 081234567890 + OTP (lihat log server)');
 }
 

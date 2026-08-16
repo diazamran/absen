@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 
 interface StudentRow {
   id: string; userId: string; nis: string; fullName: string; className: string | null; classId: string | null; majorName: string | null;
-  faceRegistered: boolean; hasCard: boolean; isActive: boolean; gender: string;
+  faceRegistered: boolean; hasCard: boolean; isActive: boolean; gender: string; birthDate?: string | null;
   parents?: { id: string; name: string; phone: string }[];
 }
 
@@ -124,7 +124,7 @@ export default function Students() {
             <div className="min-w-0 flex-1">
               <p className="truncate font-bold text-ink">{s.fullName}</p>
               <p className="text-xs text-muted">{s.nis} · {s.className || 'Tanpa kelas'} {s.majorName ? `· ${s.majorName}` : ''}</p>
-              <p className="mt-0.5 truncate font-mono text-[11px] text-primary">Login: siswa_{s.nis} / siswa123</p>
+              <p className="mt-0.5 truncate font-mono text-[11px] text-primary">Login: NISN {s.nis} + tanggal lahir</p>
             </div>
             <div className="hidden items-center gap-1.5 sm:flex">
               {s.faceRegistered ? <Badge status="PRESENT" label="Wajah" /> : <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-muted dark:bg-slate-700">No wajah</span>}
@@ -162,7 +162,7 @@ function StudentForm({ onClose, classes }: { onClose: () => void; classes: { id:
   const { toast } = useToast();
   const qc = useQueryClient();
   const [form, setForm] = useState({
-    nis: '', fullName: '', gender: 'MALE', classId: '', password: 'siswa123', parentName: '', parentPhone: '', cardUid: '',
+    nis: '', fullName: '', gender: 'MALE', birthDate: '', classId: '', parentName: '', parentPhone: '', cardUid: '',
   });
 
   const mutation = useMutation({
@@ -180,6 +180,7 @@ function StudentForm({ onClose, classes }: { onClose: () => void; classes: { id:
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="NISN *"><Input value={form.nis} onChange={(e) => setForm({ ...form, nis: e.target.value })} placeholder="Nomor Induk Siswa Nasional" /></Field>
         <Field label="Nama Lengkap *"><Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} placeholder="Nama siswa" /></Field>
+        <Field label="Tanggal Lahir" hint="Dipakai untuk login siswa (NISN + tanggal lahir)"><Input type="date" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} /></Field>
         <Field label="Jenis Kelamin">
           <Select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
             <option value="MALE">Laki-laki</option>
@@ -195,7 +196,6 @@ function StudentForm({ onClose, classes }: { onClose: () => void; classes: { id:
         <Field label="Nama Orang Tua"><Input value={form.parentName} onChange={(e) => setForm({ ...form, parentName: e.target.value })} placeholder="Opsional" /></Field>
         <Field label="No WhatsApp Orang Tua"><Input value={form.parentPhone} onChange={(e) => setForm({ ...form, parentPhone: e.target.value })} placeholder="0812…" /></Field>
         <Field label="UID Kartu (opsional)"><Input value={form.cardUid} onChange={(e) => setForm({ ...form, cardUid: e.target.value })} placeholder="04:A2:3B:…" /></Field>
-        <Field label="Password awal" hint="Default: siswa123"><Input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></Field>
       </div>
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="outline" onClick={onClose}>Batal</Button>
@@ -215,12 +215,12 @@ function StudentEdit({ student, classes, onClose }: { student: StudentRow; class
     nis: student.nis,
     fullName: student.fullName,
     gender: student.gender,
+    birthDate: student.birthDate ? student.birthDate.slice(0, 10) : '',
     classId: student.classId || '',
     isActive: student.isActive,
     parentName: parent?.name || '',
     parentPhone: parent?.phone || '',
     cardUid: '',
-    password: '',
   });
 
   const mutation = useMutation({
@@ -229,6 +229,7 @@ function StudentEdit({ student, classes, onClose }: { student: StudentRow; class
         nis: form.nis,
         fullName: form.fullName,
         gender: form.gender,
+        birthDate: form.birthDate,
         classId: form.classId,
         isActive: form.isActive,
       };
@@ -237,7 +238,6 @@ function StudentEdit({ student, classes, onClose }: { student: StudentRow; class
         body.parentPhone = form.parentPhone;
       }
       if (form.cardUid.trim()) body.cardUid = form.cardUid.trim();
-      if (form.password) body.password = form.password;
       return api(`/students/${student.id}`, { method: 'PUT', body });
     },
     onSuccess: () => {
@@ -253,6 +253,7 @@ function StudentEdit({ student, classes, onClose }: { student: StudentRow; class
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="NISN *"><Input value={form.nis} onChange={(e) => setForm({ ...form, nis: e.target.value })} /></Field>
         <Field label="Nama Lengkap *"><Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></Field>
+        <Field label="Tanggal Lahir" hint="Dipakai untuk login siswa (NISN + tanggal lahir)"><Input type="date" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} /></Field>
         <Field label="Jenis Kelamin">
           <Select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
             <option value="MALE">Laki-laki</option>
@@ -268,7 +269,6 @@ function StudentEdit({ student, classes, onClose }: { student: StudentRow; class
         <Field label="Nama Orang Tua"><Input value={form.parentName} onChange={(e) => setForm({ ...form, parentName: e.target.value })} placeholder="Opsional" /></Field>
         <Field label="No WhatsApp Orang Tua"><Input value={form.parentPhone} onChange={(e) => setForm({ ...form, parentPhone: e.target.value })} placeholder="0812…" /></Field>
         <Field label="UID Kartu (kosongkan jika tidak diubah)" hint="UID disimpan terenkripsi, tidak bisa ditampilkan kembali."><Input value={form.cardUid} onChange={(e) => setForm({ ...form, cardUid: e.target.value })} placeholder="04:A2:3B:…" /></Field>
-        <Field label="Password baru (opsional)"><Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Kosongkan jika tidak diubah" /></Field>
         <Field label="Status">
           <Select value={form.isActive ? 'true' : 'false'} onChange={(e) => setForm({ ...form, isActive: e.target.value === 'true' })}>
             <option value="true">Aktif</option>

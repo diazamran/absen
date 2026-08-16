@@ -137,7 +137,7 @@ export async function seedFixture(): Promise<Fixture> {
     data: { name: 'X-Test', grade: 'X', majorId: major.id, academicYearId: ay.id, homeroomTeacherId: teacher.id },
   });
   const student = await prisma.student.create({
-    data: { userId: studentUser.id, nis: '999001', classId: klass.id, majorId: major.id, academicYearId: ay.id, cardUidHash: sha256('CARD-TEST-001') },
+    data: { userId: studentUser.id, nis: '999001', birthDate: new Date('2010-01-01'), classId: klass.id, majorId: major.id, academicYearId: ay.id, cardUidHash: sha256('CARD-TEST-001') },
   });
   await prisma.qrCredential.create({ data: { userId: studentUser.id, nonce: randomNonce() } });
   await prisma.cardCredential.create({ data: { userId: studentUser.id, cardUidHash: sha256('CARD-TEST-001') } });
@@ -146,7 +146,7 @@ export async function seedFixture(): Promise<Fixture> {
   const { buildApp } = await import('../src/app.js');
   const app = await buildApp();
   const loginAdmin = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'admin_test', password: 'admin123' } });
-  const loginStudent = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'siswa_test', password: 'siswa123' } });
+  const loginStudent = await app.inject({ method: 'POST', url: '/api/auth/login-student', payload: { nis: '999001', birthDate: '2010-01-01' } });
   const loginTeacher = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'guru_test', password: 'guru123' } });
   await app.close();
 

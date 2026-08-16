@@ -16,6 +16,12 @@ const loginSchema = z.object({
   deviceId: z.string().optional(),
 });
 
+const studentLoginSchema = z.object({
+  nis: z.string().min(1, 'NISN wajib diisi.'),
+  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal lahir salah (YYYY-MM-DD).'),
+  deviceId: z.string().optional(),
+});
+
 const otpRequestSchema = z.object({
   phone: z.string().min(9, 'Nomor WhatsApp tidak valid.').max(16),
   purpose: z.enum(['parent-login', 'reset-password']).default('parent-login'),
@@ -48,6 +54,9 @@ export async function authRoutes(app: FastifyInstance) {
     if (!user || !user.isActive) {
       throw ApiError.unauthorized('INVALID_CREDENTIALS', 'Username atau password salah.');
     }
+    if (user.role.key === 'STUDENT') {
+      throw ApiError.unauthorized('STUDENT_LOGIN_METHOD', 'Siswa login menggunakan NISN dan tanggal lahir.');
+    }
     const ok = await verifyPassword(body.password, user.passwordHash);
     if (!ok) {
       throw ApiError.unauthorized('INVALID_CREDENTIALS', 'Username atau password salah.');
@@ -76,6 +85,51 @@ export async function authRoutes(app: FastifyInstance) {
           student: user.student ? { id: user.student.id, nis: user.student.nis, className: user.student.classId } : null,
           teacher: user.teacher ? { id: user.teacher.id, nip: user.teacher.nip, isPiket: user.teacher.isPiket } : null,
           staff: user.staff ? { id: user.staff.id, nip: user.staff.nip } : null,
+        },
+      },
+    });
+  });
+
+  // Login siswa: NISN + tanggal lahir (tanpa username/password)
+  app.post('/auth/login-student', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
+    const body = validate(studentLoginSchema, request.body);
+    const student = await prisma.student.findUnique({
+      where: { nis: body.nis.trim() },
+      include: { user: { include: { role: true } } },
+    });
+    if (!student || !student.user || !student.user.isActive) {
+      throw ApiError.unauthorized('INVALID_CREDENTIALS', 'NISN atau tanggal lahir salah.');
+    }
+    if (!student.birthDate) {
+      throw ApiError.badRequest('BIRTHDATE_MISSING', 'Tanggal lahir belum diisi pada data siswa. Hubungi admin / TU untuk melengkapinya.');
+    }
+    const d = student.birthDate;
+    const dob = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+    if (dob !== body.birthDate.trim()) {
+      throw ApiError.unauthorized('INVALID_CREDENTIALS', 'NISN atau tanggal lahir salah.');
+    }
+
+    const tokens = await issueTokens(student.user.id, { request, deviceId: body.deviceId });
+    await audit({
+      userId: student.user.id,
+      action: 'STUDENT_LOGIN',
+      entity: 'Student',
+      entityId: student.id,
+      request,
+    });
+
+    return reply.send({
+      success: true,
+      data: {
+        ...tokens,
+        user: {
+          id: student.user.id,
+          username: student.user.username,
+          fullName: student.user.fullName,
+          roleKey: student.user.role.key,
+          roleName: ROLE_LABELS[student.user.role.key] || student.user.role.name,
+          avatarUrl: student.user.avatarUrl,
+          student: { id: student.id, nis: student.nis, className: student.classId },
         },
       },
     });

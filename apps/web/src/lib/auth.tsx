@@ -26,6 +26,7 @@ interface AuthCtx {
   user: MeData | null;
   loading: boolean;
   login: (username: string, password: string, deviceId?: string) => Promise<void>;
+  loginStudent: (nis: string, birthDate: string, deviceId?: string) => Promise<void>;
   loginParentOtp: (phone: string, code: string, deviceId?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
@@ -70,6 +71,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     registerDevice(deviceId);
   };
 
+  const loginStudent = async (nis: string, birthDate: string, deviceId?: string) => {
+    const res = await api<{ success: boolean; data: { accessToken: string; refreshToken: string; user: MeData } }>(
+      '/auth/login-student',
+      { method: 'POST', body: { nis, birthDate, deviceId } },
+    );
+    storeLogin(res.data.accessToken, res.data.refreshToken, res.data.user);
+    registerDevice(deviceId);
+  };
+
   const loginParentOtp = async (phone: string, code: string, deviceId?: string) => {
     const res = await api<{ success: boolean; data: { accessToken: string; refreshToken: string; user: MeData } }>(
       '/auth/otp/verify',
@@ -93,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('presensiku_device_id');
   };
 
-  return <Ctx.Provider value={{ user, loading, login, loginParentOtp, logout, refreshMe }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, loading, login, loginStudent, loginParentOtp, logout, refreshMe }}>{children}</Ctx.Provider>;
 }
 
 export function deviceId(): string {

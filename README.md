@@ -113,14 +113,14 @@ npm run dev
 | Wali Kelas | `wali` | `guru123` |
 | Guru | `guru` | `guru123` |
 | Staff | `staff` | `staff123` |
-| Siswa | `siswa_121212` | `siswa123` |
+| Siswa | NISN `121212` + tanggal lahir `2009-01-15` | (tanpa password) |
 | Orang Tua | WhatsApp `081234567890` | OTP (kode ditampilkan di log server saat development) |
 
 > ⚠️ Password di atas HANYA untuk development — wajib diganti di production.
 
 ### Panduan Penggunaan (di mana fiturnya?)
 
-**Siswa** (login `siswa_121212` / `siswa123`)
+**Siswa** (login NISN + tanggal lahir, mis. NISN `121212` + `2009-01-15` — dihalaman login pilih tab **Siswa**; tanpa username/password)
 - Bottom nav **Absen** → pilih metode: **Absen Wajah**, **QR Code**, **Kartu / NFC**, atau **Manual** (khusus guru/petugas).
 - **Absen Wajah**: kamera depan + frame scan + liveness. Belum terdaftar? Kartu **"Daftar"** muncul otomatis di halaman Absen → siswa mendaftarkan wajahnya sendiri dari HP (sampel + persetujuan) → status *Menunggu Persetujuan* → setelah di-**Setujui** admin, wajah baru bisa dipakai absen.
 - **QR Code**: mode **Pindai QR** (kamera belakang) atau **QR Saya** (tampilkan QR pribadi + tombol *Absen Sekarang* untuk tes tanpa HP kedua).

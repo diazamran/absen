@@ -13,23 +13,51 @@ beforeAll(async () => {
 
 describe('Autentikasi', () => {
   it('login berhasil mengembalikan access + refresh token', async () => {
-    const res = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'siswa_test', password: 'siswa123' } });
+    const res = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'guru_test', password: 'guru123' } });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.success).toBe(true);
     expect(body.data.accessToken).toBeTruthy();
     expect(body.data.refreshToken).toBeTruthy();
-    expect(body.data.user.roleKey).toBe('STUDENT');
+    expect(body.data.user.roleKey).toBe('TEACHER');
   });
 
   it('login gagal dengan password salah', async () => {
-    const res = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'siswa_test', password: 'salah' } });
+    const res = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'guru_test', password: 'salah' } });
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body).code).toBe('INVALID_CREDENTIALS');
+  });
+
+  it('siswa TIDAK bisa login dengan username/password', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'siswa_test', password: 'siswa123' } });
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body).code).toBe('STUDENT_LOGIN_METHOD');
+  });
+
+  it('login siswa berhasil dengan NISN + tanggal lahir yang benar', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/login-student', payload: { nis: '999001', birthDate: '2010-01-01' } });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.success).toBe(true);
+    expect(body.data.accessToken).toBeTruthy();
+    expect(body.data.user.roleKey).toBe('STUDENT');
+    expect(body.data.user.student.nis).toBe('999001');
+  });
+
+  it('login siswa gagal dengan tanggal lahir salah', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/login-student', payload: { nis: '999001', birthDate: '2010-02-02' } });
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body).code).toBe('INVALID_CREDENTIALS');
+  });
+
+  it('login siswa gagal dengan NISN tidak terdaftar', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/login-student', payload: { nis: '000000', birthDate: '2010-01-01' } });
     expect(res.statusCode).toBe(401);
     expect(JSON.parse(res.body).code).toBe('INVALID_CREDENTIALS');
   });
 
   it('refresh token berputar (rotasi)', async () => {
-    const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'siswa_test', password: 'siswa123' } });
+    const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'guru_test', password: 'guru123' } });
     const refresh = JSON.parse(login.body).data.refreshToken;
     const res1 = await app.inject({ method: 'POST', url: '/api/auth/refresh', payload: { refreshToken: refresh } });
     expect(res1.statusCode).toBe(200);
