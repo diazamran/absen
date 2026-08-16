@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Camera, QrCode, CreditCard, ListChecks, ScanFace, Clock } from 'lucide-react';
+import { Camera, QrCode, CreditCard, ListChecks, ScanFace, Clock, RefreshCw } from 'lucide-react';
 import { Card, Button } from '../../lib/ui';
 import { useAuth } from '../../lib/auth';
 import { api } from '../../lib/api';
@@ -42,6 +42,21 @@ export default function Absent() {
               <p className="text-xs text-muted">Daftarkan wajahmu dulu agar bisa absen menggunakan Face Recognition.</p>
             </div>
             <Button onClick={() => navigate('/app/face-me')} className="shrink-0">Daftar</Button>
+          </div>
+        </Card>
+      )}
+
+      {user?.roleKey === 'STUDENT' && faceStatus?.registered && (
+        <Card className="border-amber-200 bg-amber-50/60 dark:bg-amber-500/10">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+              <RefreshCw className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-ink">Wajah tidak dikenali?</p>
+              <p className="text-xs text-muted">Perbarui data wajahmu agar absen wajah selalu berhasil. Perlu persetujuan admin lagi.</p>
+            </div>
+            <Button variant="outline" onClick={() => navigate('/app/face-me')} className="shrink-0">Perbarui</Button>
           </div>
         </Card>
       )}

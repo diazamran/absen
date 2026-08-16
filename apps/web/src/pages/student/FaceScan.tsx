@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, XCircle, Loader2, Camera } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, Loader2, Camera, RefreshCw } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { startCamera, stopCamera, captureFrame } from '../../lib/camera';
-import { Segmented, Badge } from '../../lib/ui';
+import { Segmented, Badge, Button } from '../../lib/ui';
 import { STATUS_LABELS } from '../../lib/format';
 
 type Type = 'CHECK_IN' | 'CHECK_OUT';
@@ -143,6 +143,12 @@ export default function FaceScan() {
               </div>
               <p className="text-lg font-bold text-ink">{result.message}</p>
               <p className="mt-1 text-sm text-muted">Silakan coba lagi dengan pencahayaan yang cukup.</p>
+              <div className="mt-4 flex flex-col gap-2">
+                <Button variant="outline" onClick={() => { setResult(null); navigate('/app/face-me'); }}>
+                  <RefreshCw className="h-4 w-4" /> Perbarui Data Wajah
+                </Button>
+                <Button onClick={() => setResult(null)}>Coba Lagi</Button>
+              </div>
             </div>
           )}
         </div>
