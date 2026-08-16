@@ -69,9 +69,17 @@ else
   echo "✔ .env sudah ada — tidak diubah."
 fi
 
-# Simpan domain agar update.sh bisa mendeteksi mode HTTPS
-if [[ -n "$DOMAIN" ]] && ! grep -q "^DOMAIN=" "$APP_DIR/.env"; then
-  echo "DOMAIN=$DOMAIN" >> "$APP_DIR/.env"
+# Jika memakai domain: simpan DOMAIN + set URL aplikasi & CORS
+if [[ -n "$DOMAIN" ]]; then
+  for line in "DOMAIN=$DOMAIN" "APP_URL=https://$DOMAIN" "CORS_ORIGIN=https://$DOMAIN"; do
+    k="${line%%=*}"
+    if grep -q "^$k=" "$APP_DIR/.env"; then
+      sed -i "s|^$k=.*|$line|" "$APP_DIR/.env"
+    else
+      echo "$line" >> "$APP_DIR/.env"
+    fi
+  done
+  echo "   Domain: $DOMAIN (HTTPS aktif, APP_URL & CORS diset)"
 fi
 
 # ---------- 4. HTTPS (Caddy) ----------
