@@ -33,6 +33,7 @@ export default function TeacherHome() {
 
   const isStudent = user?.roleKey === 'STUDENT';
   const isParent = user?.roleKey === 'PARENT';
+  const isPiket = user?.roleKey === 'PIKET';
 
   const menu = isStudent
     ? [
@@ -42,18 +43,23 @@ export default function TeacherHome() {
         { label: 'Kartu / NFC', icon: <ClipboardList className="h-6 w-6" />, to: '/app/absent/card' },
         { label: 'Riwayat', icon: <History className="h-6 w-6" />, to: '/app/history' },
       ]
-    : [
-        { label: 'Ajukan Izin', icon: <FilePlus2 className="h-6 w-6" />, to: '/app/leave/mine' },
-        { label: 'Scan Gerbang', icon: <ScanLine className="h-6 w-6" />, to: '/app/gate' },
-        { label: 'Jurnal Mengajar', icon: <BookOpen className="h-6 w-6" />, to: '/app/journal' },
-        { label: 'Kelas', icon: <ClipboardList className="h-6 w-6" />, to: '/app/classes' },
-        { label: 'Riwayat', icon: <History className="h-6 w-6" />, to: '/app/history' },
-      ];
+    : isPiket
+      ? [
+          { label: 'Scan Gerbang', icon: <ScanLine className="h-6 w-6" />, to: '/app/gate' },
+          { label: 'Ajukan Izin', icon: <FilePlus2 className="h-6 w-6" />, to: '/app/leave/mine' },
+          { label: 'Riwayat', icon: <History className="h-6 w-6" />, to: '/app/history' },
+        ]
+      : [
+          { label: 'Ajukan Izin', icon: <FilePlus2 className="h-6 w-6" />, to: '/app/leave/mine' },
+          { label: 'Absen', icon: <Camera className="h-6 w-6" />, to: '/app/absent' },
+          { label: 'Jurnal Mengajar', icon: <BookOpen className="h-6 w-6" />, to: '/app/journal' },
+          { label: 'Kelas', icon: <ClipboardList className="h-6 w-6" />, to: '/app/classes' },
+          { label: 'Riwayat', icon: <History className="h-6 w-6" />, to: '/app/history' },
+        ];
 
   const quickAction = async () => {
-    // Absen diri sendiri: default metode QR
     toast('info', 'Buka halaman Absen untuk memilih metode.');
-    navigate(isStudent ? '/app/absent' : '/app/gate');
+    navigate(isStudent ? '/app/absent' : isPiket ? '/app/gate' : '/app/absent');
   };
 
   if (isLoading || !data) {
@@ -88,15 +94,15 @@ export default function TeacherHome() {
         )}
       </div>
 
-      {/* Guru piket */}
-      {!isStudent && !isParent && user?.teacher?.isPiket && (
+      {/* Petugas piket */}
+      {isPiket && (
         <Card className="flex items-center justify-between gap-3 border-amber-200 bg-amber-50/70 dark:bg-amber-500/10">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
               <ShieldCheck className="h-6 w-6" />
             </div>
             <div className="min-w-0">
-              <p className="font-bold text-ink">Kamu guru piket hari ini</p>
+              <p className="font-bold text-ink">Kamu petugas piket hari ini</p>
               <p className="text-sm text-muted">Buka Scan Gerbang untuk mencatat absen siswa (wajah / QR / kartu) di gerbang.</p>
             </div>
           </div>

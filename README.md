@@ -127,8 +127,9 @@ npm run dev
 - Bottom nav **Riwayat** (riwayat absensi) dan **Izin** (ajukan izin).
 
 **Guru / Staff / Wali Kelas** (login `guru` / `guru123`)
-- **Guru piket** (diatur admin di menu Guru & Staff): dashboard guru menampilkan kartu **"Kamu guru piket hari ini"** → tombol **Buka Gerbang** — kamera otomatis, scan wajah/QR/kartu untuk mencatat absen siswa di gerbang.
-- Bottom nav **Absen** → **Scan Gerbang** juga bisa dibuka semua guru/staff.
+- **Petugas Piket** adalah **role tersendiri** (terpisah dari Guru): admin memilih role **Petugas Piket** saat membuat/import akun (atau ubah role lewat Edit). Hanya Petugas Piket & admin yang bisa scan absen siswa di gerbang.
+- Login sebagai Petugas Piket → dashboard menampilkan kartu **"Kamu petugas piket hari ini"** → **Buka Gerbang** — kamera otomatis, scan wajah/QR/kartu untuk mencatat absen siswa di gerbang. Menu/bottom nav **Absen** membuka gerbang.
+- Guru/Staff/Wali Kelas absen **diri sendiri** lewat bottom nav **Absen** (wajah/QR/kartu) — tidak bisa scan siswa di gerbang.
 - **Kelas** → pilih kelas → validasi kehadiran (bottom sheet ubah status siswa).
 - **Jurnal Mengajar** & menu lain lewat drawer ☰ (kiri atas).
 
@@ -137,8 +138,8 @@ npm run dev
   - **Menunggu Persetujuan** (bagian atas): daftar siswa yang mendaftar wajah dari HP-nya sendiri → tombol **Setujui** (wajah langsung aktif) atau **Reset** (tolak/hapus data).
   - **Daftarkan manual**: pilih siswa → kamera aktif → ambil 1–4 sampel → centang persetujuan → **Simpan Registrasi** (langsung aktif karena dilakukan admin).
   - Data wajah bisa di-**Reset** kapan saja (mis. ada masalah).
-- **Siswa**: identitas memakai **NISN** (NISN/Nama/Kelas/Orang Tua/UID Kartu/Password, tambah & edit lengkap), hapus per siswa, **checkbox hapus massal**, **Import CSV + template** (kolom NISN atau NIS).
-- **Guru & Staff**: tambah/edit/nonaktifkan akun, **Import CSV massal + template**, dan **toggle Guru Piket** (guru yang menjaga gerbang).
+- **Siswa**: identitas memakai **NISN** + **Tanggal Lahir** (dipakai login), tambah/edit lengkap, hapus per siswa, **checkbox hapus massal**, **Import & Export CSV + template** (format sama: NISN, Nama, Kelas, Jurusan, Jenis Kelamin, Tanggal Lahir, No HP, Orang Tua, Card UID).
+- **Guru & Staff**: tambah/edit (termasuk ubah **username**) /nonaktifkan akun, **checkbox hapus massal**, **Import & Export CSV + template**, dan role **Petugas Piket** yang terpisah dari Guru.
 - **Kelas**: tab **Jurusan** (kelola jurusan TKJ/TKR/TPTUP/KULINER), kelas dengan **edit/hapus** + pilih jurusan, mapel, jadwal.
 - **Pengaturan → Aturan Absensi & Lokasi**: set **titik absensi GPS** (latitude/longitude + radius) dan aktifkan "Wajib GPS di area sekolah" — siswa hanya bisa absen di dalam radius itu (diverifikasi server).
 - **Izin**: pengajuan bisa menyertakan **bukti/lampiran** (surat/dokter) — admin melihat tombol **Lihat Bukti**.

@@ -81,7 +81,7 @@ export async function seedFixture(): Promise<Fixture> {
 
   // Roles + permissions
   const roles = new Map<string, string>();
-  for (const key of ['SUPER_ADMIN', 'ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF', 'STUDENT', 'PARENT'] as const) {
+  for (const key of ['SUPER_ADMIN', 'ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF', 'PIKET', 'STUDENT', 'PARENT'] as const) {
     const r = await prisma.role.create({ data: { key, name: ROLE_LABELS[key] } });
     roles.set(key, r.id);
   }

@@ -5,6 +5,8 @@ import { hashPassword, sha256, randomNonce } from '../lib/crypto.js';
 import { validate } from '../utils/validate.js';
 import { ApiError } from '../utils/errors.js';
 import { audit } from '../lib/audit.js';
+import { toCsv } from '../lib/csv.js';
+import { ROLE_LABELS } from '../rbac/permissions.js';
 import { PERMISSION_KEYS } from '../rbac/permissions.js';
 
 function parseCsv(text: string): string[][] {
@@ -229,6 +231,8 @@ export async function importRoutes(app: FastifyInstance) {
     'admin tu': 'ADMIN',
     'kepala sekolah': 'HEADMASTER',
     kepsek: 'HEADMASTER',
+    piket: 'PIKET',
+    'petugas piket': 'PIKET',
   };
 
   app.post('/import/users/preview', { preHandler: app.requirePermission(PERMISSION_KEYS.usersCreate) }, async (request, reply) => {
@@ -260,7 +264,7 @@ export async function importRoutes(app: FastifyInstance) {
       if (!nama) errors.push('Nama kosong');
       if (!username) errors.push('Username kosong');
       else if (existingUsers.has(username.toLowerCase())) errors.push(`Username "${username}" sudah dipakai`);
-      if (!roleKey) errors.push(`Role "${get('role')}" tidak dikenal (Guru/Wali Kelas/Staff/Admin/Kepala Sekolah)`);
+      if (!roleKey) errors.push(`Role "${get('role')}" tidak dikenal (Guru/Wali Kelas/Staff/Admin/Kepala Sekolah/Petugas Piket)`);
       const mapel = get('mata pelajaran');
       if (mapel && !subjectMap.has(mapel.toLowerCase())) errors.push(`Mapel "${mapel}" tidak ditemukan`);
       const password = get('password') || 'guru123';
@@ -299,7 +303,7 @@ export async function importRoutes(app: FastifyInstance) {
           z.object({
             nama: z.string().min(1),
             username: z.string().min(3),
-            roleKey: z.enum(['ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF']),
+            roleKey: z.enum(['ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF', 'PIKET']),
             password: z.string().min(6),
             nip: z.string().optional(),
             position: z.string().optional(),
@@ -368,5 +372,59 @@ export async function importRoutes(app: FastifyInstance) {
       message: `${created} akun berhasil diimpor.`,
       data: { created, errors },
     });
+  });
+
+  // ===== Export CSV (format sama dengan template import) =====
+  app.get('/export/students', { preHandler: app.requirePermission(PERMISSION_KEYS.studentsRead) }, async (_request, reply) => {
+    const rows = await prisma.student.findMany({
+      where: { isActive: true },
+      include: {
+        user: { select: { fullName: true, phone: true } },
+        class: { select: { name: true } },
+        major: { select: { name: true } },
+        parentLinks: { include: { parent: { select: { name: true, phone: true } } } },
+      },
+      orderBy: { nis: 'asc' },
+    });
+    const csv = toCsv(
+      rows.map((s) => ({
+        NISN: s.nis,
+        Nama: s.user?.fullName ?? '',
+        Kelas: s.class?.name ?? '',
+        Jurusan: s.major?.name ?? '',
+        'Jenis Kelamin': s.gender === 'FEMALE' ? 'Perempuan' : 'Laki-laki',
+        'Tanggal Lahir': s.birthDate ? `${s.birthDate.getUTCFullYear()}-${String(s.birthDate.getUTCMonth() + 1).padStart(2, '0')}-${String(s.birthDate.getUTCDate()).padStart(2, '0')}` : '',
+        'No HP': s.user?.phone ?? '',
+        'Nama Orang Tua': s.parentLinks[0]?.parent.name ?? '',
+        'No WhatsApp Orang Tua': s.parentLinks[0]?.parent.phone ?? '',
+        'Card UID': '', // UID disimpan terenkripsi (hash) — tidak bisa diekspor
+      })),
+    );
+    reply.header('Content-Type', 'text/csv; charset=utf-8');
+    reply.header('Content-Disposition', 'attachment; filename="siswa.csv"');
+    return reply.send(csv);
+  });
+
+  app.get('/export/users', { preHandler: app.requirePermission(PERMISSION_KEYS.usersRead) }, async (_request, reply) => {
+    const rows = await prisma.user.findMany({
+      where: { role: { key: { notIn: ['STUDENT', 'PARENT'] } }, isActive: true },
+      include: { role: true, teacher: { include: { subject: true } }, staff: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const csv = toCsv(
+      rows.map((u) => ({
+        Nama: u.fullName,
+        Username: u.username,
+        Role: ROLE_LABELS[u.role.key] || u.role.name,
+        Password: '', // hash tidak bisa diekspor — set ulang manual bila perlu
+        NIP: u.teacher?.nip ?? u.staff?.nip ?? '',
+        Jabatan: u.teacher?.position ?? u.staff?.position ?? '',
+        'Mata Pelajaran': u.teacher?.subject?.name ?? '',
+        'No HP': u.phone ?? '',
+      })),
+    );
+    reply.header('Content-Type', 'text/csv; charset=utf-8');
+    reply.header('Content-Disposition', 'attachment; filename="guru-staff.csv"');
+    return reply.send(csv);
   });
 }

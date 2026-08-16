@@ -52,7 +52,8 @@ export function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: 
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-const GATE_ROLES = new Set(['ADMIN', 'SUPER_ADMIN', 'TEACHER', 'HOMEROOM_TEACHER', 'STAFF']);
+// Hanya petugas piket (role PIKET) atau admin yang bisa scan absen siswa di gerbang
+const GATE_ROLES = new Set(['ADMIN', 'SUPER_ADMIN', 'PIKET']);
 
 export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   attendance: Awaited<ReturnType<typeof prisma.attendance.create>>;
@@ -118,7 +119,10 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
     targetUserId = res.userId;
     cardVerified = true;
   } else if (method === 'GATE') {
-    // Gate: identitas dari bukti (wajah/QR/kartu)
+    // Gate: identitas dari bukti (wajah/QR/kartu) — hanya petugas piket / admin
+    if (!isGateOperator) {
+      throw ApiError.forbidden('GATE_RESTRICTED', 'Scan gerbang hanya untuk petugas piket.');
+    }
     if (proof.token) {
       const res = await verifyQrToken(proof.token);
       targetUserId = res.userId;

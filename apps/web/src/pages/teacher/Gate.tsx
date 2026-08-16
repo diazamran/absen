@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, XCircle, Wifi, WifiOff, ArrowLeft, Users } from 'lucide-react';
+import { CheckCircle2, XCircle, Wifi, WifiOff, ArrowLeft, Users, ShieldCheck } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
 import { useTheme } from '../../lib/theme';
 import { useToast } from '../../lib/toast';
+import { Button } from '../../lib/ui';
 import { useSocketEvent, joinDashboard } from '../../lib/socket';
 import { startCamera, stopCamera, captureFrame, decodeQrFromVideo } from '../../lib/camera';
 import { Badge } from '../../lib/ui';
@@ -22,6 +24,7 @@ interface Result {
 
 export default function Gate() {
   const { branding } = useTheme();
+  const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -130,6 +133,25 @@ export default function Gate() {
   }, [ready]);
 
   const s = stats?.stats;
+
+  // Hanya petugas piket / admin yang boleh scan absen siswa di gerbang
+  const canOperateGate = ['PIKET', 'ADMIN', 'SUPER_ADMIN'].includes(user?.roleKey || '');
+  if (!canOperateGate) {
+    return (
+      <div className="flex min-h-[70dvh] items-center justify-center px-4">
+        <div className="w-full max-w-sm rounded-3xl border border-line/60 bg-surface p-6 text-center shadow-card dark:bg-slate-800/70">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+            <ShieldCheck className="h-7 w-7" />
+          </div>
+          <p className="font-bold text-ink">Hanya petugas piket</p>
+          <p className="mt-1 text-sm text-muted">Scan gerbang untuk absen siswa hanya bisa dilakukan petugas piket atau admin. Kamu bisa absen sendiri lewat menu Absen.</p>
+          <Button className="mt-4 w-full" onClick={() => navigate('/app/absent')}>
+            <ArrowLeft className="h-4 w-4" /> Absen Diri Sendiri
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="-mx-4 -mt-5 flex min-h-[calc(100dvh-0px)] flex-col lg:mx-0 lg:mt-0">

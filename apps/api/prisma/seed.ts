@@ -17,6 +17,7 @@ async function main() {
     'HOMEROOM_TEACHER',
     'TEACHER',
     'STAFF',
+    'PIKET',
     'STUDENT',
     'PARENT',
   ] as const;

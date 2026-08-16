@@ -48,18 +48,25 @@ const BOTTOM_NAV: Record<string, NavItem[]> = {
   TEACHER: [
     { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
     { to: '/app/classes', label: 'Kelas', icon: <GraduationCap className="h-6 w-6" /> },
-    { to: '/app/gate', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> },
+    { to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> },
     { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
     { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
   ],
   HOMEROOM_TEACHER: [
     { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
     { to: '/app/classes', label: 'Kelas', icon: <GraduationCap className="h-6 w-6" /> },
-    { to: '/app/gate', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> },
+    { to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> },
     { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
     { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
   ],
   STAFF: [
+    { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
+    { to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> },
+    { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
+    { to: '/app/leave', label: 'Izin', icon: <FilePlus2 className="h-6 w-6" /> },
+    { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
+  ],
+  PIKET: [
     { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
     { to: '/app/gate', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> },
     { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
@@ -284,7 +291,9 @@ export function AppShell() {
                   { to: '/app/home', label: 'Beranda', icon: <Home className="h-5 w-5" /> },
                   { to: '/app/history', label: 'Riwayat', icon: <History className="h-5 w-5" /> },
                   { to: '/app/leave', label: 'Ajukan Izin', icon: <FilePlus2 className="h-5 w-5" /> },
-                  { to: '/app/gate', label: 'Scan Gerbang', icon: <ScanLine className="h-5 w-5" /> },
+                  ...(user?.roleKey === 'PIKET'
+                    ? [{ to: '/app/gate', label: 'Scan Gerbang', icon: <ScanLine className="h-5 w-5" /> }]
+                    : [{ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-5 w-5" /> }]),
                   { to: '/app/notifications', label: 'Notifikasi', icon: <Bell className="h-5 w-5" /> },
                   { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-5 w-5" /> },
                 ].map((item) => (

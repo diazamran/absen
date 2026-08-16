@@ -92,3 +92,22 @@ export interface ApiEnvelope<T> {
   message?: string;
   data: T;
 }
+
+/** Unduh CSV dari endpoint export (dengan token). */
+export async function downloadCsv(path: string, filename: string): Promise<void> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => null);
+    throw new ApiError(json?.message || 'Gagal mengunduh.', json?.code || 'UNKNOWN', res.status);
+  }
+  const text = await res.text();
+  const blob = new Blob(['\uFEFF' + text.replace(/^\uFEFF/, '')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

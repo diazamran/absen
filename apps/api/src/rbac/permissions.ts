@@ -51,6 +51,7 @@ export const ROLE_KEYS = {
   HOMEROOM_TEACHER: 'HOMEROOM_TEACHER',
   TEACHER: 'TEACHER',
   STAFF: 'STAFF',
+  PIKET: 'PIKET',
   STUDENT: 'STUDENT',
   PARENT: 'PARENT',
 } as const;
@@ -112,6 +113,18 @@ const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     PERMISSION_KEYS.notificationsRead,
     PERMISSION_KEYS.faceRegister,
   ],
+  PIKET: [
+    // Petugas Piket: menjaga gerbang — absen siswa (wajah/QR/kartu) + pantau kehadiran
+    PERMISSION_KEYS.dashboardView,
+    PERMISSION_KEYS.studentsRead,
+    PERMISSION_KEYS.attendanceCreate,
+    PERMISSION_KEYS.attendanceRead,
+    PERMISSION_KEYS.leaveCreate,
+    PERMISSION_KEYS.leaveRead,
+    PERMISSION_KEYS.notificationsRead,
+    PERMISSION_KEYS.faceRegister,
+    PERMISSION_KEYS.monitorView,
+  ],
   STUDENT: [
     PERMISSION_KEYS.dashboardView,
     PERMISSION_KEYS.attendanceCreate,
@@ -155,6 +168,7 @@ export const ROLE_LABELS: Record<string, string> = {
   HOMEROOM_TEACHER: 'Wali Kelas',
   TEACHER: 'Guru',
   STAFF: 'Staff',
+  PIKET: 'Petugas Piket',
   STUDENT: 'Siswa',
   PARENT: 'Orang Tua',
 };

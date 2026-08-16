@@ -204,7 +204,8 @@ export async function dashboardRoutes(app: FastifyInstance) {
       }
 
       case 'TEACHER':
-      case 'STAFF': {
+      case 'STAFF':
+      case 'PIKET': {
         const myAtt = await prisma.attendance.findUnique({
           where: { userId_date_type: { userId, date: dayStart, type: 'CHECK_IN' } },
         });

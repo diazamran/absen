@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Users as UsersIcon, Plus, Search, Upload, Download, Loader2, ShieldCheck, CheckCircle2, XCircle, Pencil, Trash2 } from 'lucide-react';
-import { api, ApiError } from '../../lib/api';
+import { api, ApiError, downloadCsv } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Input, Field, Select, Modal, Badge, EmptyState } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
@@ -12,7 +12,7 @@ interface UserRow {
 }
 
 const ROLE_LABEL: Record<string, string> = {
-  TEACHER: 'Guru', HOMEROOM_TEACHER: 'Wali Kelas', STAFF: 'Staff', ADMIN: 'Admin / TU', HEADMASTER: 'Kepala Sekolah',
+  TEACHER: 'Guru', HOMEROOM_TEACHER: 'Wali Kelas', STAFF: 'Staff', ADMIN: 'Admin / TU', HEADMASTER: 'Kepala Sekolah', PIKET: 'Petugas Piket',
 };
 
 export default function Users() {
@@ -22,6 +22,7 @@ export default function Users() {
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data: users } = useQuery({
     queryKey: ['users', search],
@@ -41,35 +42,81 @@ export default function Users() {
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus.'),
   });
 
-  const togglePiket = useMutation({
-    mutationFn: (u: UserRow) => api(`/users/${u.id}`, { method: 'PUT', body: { isPiket: !u.isPiket } }),
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleAll = () => {
+    if (!users?.length) return;
+    setSelected((prev) => (prev.size === users.length ? new Set() : new Set(users.map((u) => u.id))));
+  };
+
+  const bulkDelete = useMutation({
+    mutationFn: async () => {
+      for (const id of selected) {
+        await api(`/users/${id}`, { method: 'DELETE' });
+      }
+    },
     onSuccess: () => {
-      toast('success', 'Status piket diperbarui.');
+      toast('success', `${selected.size} akun dinonaktifkan.`);
+      setSelected(new Set());
       qc.invalidateQueries({ queryKey: ['users'] });
     },
-    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menyimpan.'),
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus.'),
   });
+
+  const doExport = async () => {
+    try {
+      await downloadCsv('/export/users', 'guru-staff.csv');
+      toast('success', 'Export CSV berhasil diunduh.');
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Gagal export.');
+    }
+  };
 
   return (
     <div>
       <PageHeader title="Guru & Staff" subtitle="Kelola akun tenaga pendidik dan kependidikan" />
-      <div className="mb-4 flex gap-3">
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
           <Input className="pl-10" placeholder="Cari nama atau username…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <Button variant="outline" onClick={() => setShowImport(true)}>
-          <Upload className="h-4 w-4" /> Import
-        </Button>
-        <Button onClick={() => setShowCreate(true)}>
-          <Plus className="h-4 w-4" /> Tambah
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {selected.size > 0 && (
+            <Button variant="danger" onClick={() => window.confirm(`Nonaktifkan ${selected.size} akun terpilih?`) && bulkDelete.mutate()} disabled={bulkDelete.isPending}>
+              {bulkDelete.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Hapus Terpilih ({selected.size})
+            </Button>
+          )}
+          <Button variant="outline" onClick={doExport}>
+            <Download className="h-4 w-4" /> Export
+          </Button>
+          <Button variant="outline" onClick={() => setShowImport(true)}>
+            <Upload className="h-4 w-4" /> Import
+          </Button>
+          <Button onClick={() => setShowCreate(true)}>
+            <Plus className="h-4 w-4" /> Tambah
+          </Button>
+        </div>
       </div>
+
+      {users && users.length > 0 && (
+        <label className="mb-3 flex w-fit items-center gap-2 text-sm text-muted">
+          <input type="checkbox" checked={selected.size === users.length && users.length > 0} onChange={toggleAll} className="h-4 w-4 accent-[var(--primary)]" />
+          Pilih semua ({users.length})
+        </label>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {users?.map((u) => (
-          <Card key={u.id}>
+          <Card key={u.id} className={selected.has(u.id) ? 'border-primary ring-2 ring-primary/20' : ''}>
             <div className="flex items-center gap-3">
+              <input type="checkbox" checked={selected.has(u.id)} onChange={() => toggle(u.id)} className="h-4 w-4 shrink-0 accent-[var(--primary)]" />
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-soft text-primary">
                 <UsersIcon className="h-5 w-5" />
               </div>
@@ -97,20 +144,10 @@ export default function Users() {
               <span className="rounded-full bg-primary-soft px-2.5 py-1 font-semibold text-primary-dark">{u.roleName}</span>
               {u.subjectName && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-muted dark:bg-slate-700">{u.subjectName}</span>}
               {u.position && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-muted dark:bg-slate-700">{u.position}</span>}
-              {(u.roleKey === 'TEACHER' || u.roleKey === 'HOMEROOM_TEACHER') && (
-                <button
-                  onClick={() => togglePiket.mutate(u)}
-                  disabled={togglePiket.isPending}
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold transition-colors ${
-                    u.isPiket
-                      ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-500/20 dark:text-amber-300'
-                      : 'bg-slate-100 text-muted hover:bg-amber-50 hover:text-amber-600 dark:bg-slate-700'
-                  }`}
-                  title={u.isPiket ? 'Klik untuk melepas piket' : 'Jadikan guru piket (jaga gerbang)'}
-                >
-                  <ShieldCheck className="h-3 w-3" />
-                  {u.isPiket ? 'Guru Piket' : 'Piket'}
-                </button>
+              {u.roleKey === 'PIKET' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                  <ShieldCheck className="h-3 w-3" /> Petugas Piket
+                </span>
               )}
             </div>
           </Card>
@@ -156,12 +193,13 @@ function UserForm({ onClose, subjects, initial }: { onClose: () => void; subject
     <Modal open onClose={onClose} title={initial ? `Edit Akun — ${initial.fullName}` : 'Tambah Akun'} wide>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Nama Lengkap *"><Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></Field>
-        <Field label="Username *"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} disabled={!!initial} /></Field>
+        <Field label="Username *"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoCapitalize="none" /></Field>
         <Field label="Role">
           <Select value={form.roleKey} onChange={(e) => setForm({ ...form, roleKey: e.target.value })}>
             <option value="TEACHER">Guru</option>
             <option value="HOMEROOM_TEACHER">Wali Kelas</option>
             <option value="STAFF">Staff</option>
+            <option value="PIKET">Petugas Piket</option>
             <option value="ADMIN">Admin / TU</option>
             <option value="HEADMASTER">Kepala Sekolah</option>
           </Select>
@@ -247,7 +285,7 @@ function UserImport({ onClose }: { onClose: () => void }) {
     <Modal open onClose={onClose} title="Import Guru & Staff (CSV)" wide>
       <div className="space-y-4">
         <div className="flex items-center justify-between rounded-2xl bg-primary-soft/40 p-3">
-          <p className="text-xs text-muted">Kolom: Nama, Username, Role (Guru/Wali Kelas/Staff/Admin/Kepala Sekolah), Password, NIP, Jabatan, Mata Pelajaran, No HP.</p>
+          <p className="text-xs text-muted">Kolom: Nama, Username, Role (Guru/Wali Kelas/Staff/Admin/Kepala Sekolah/Petugas Piket), Password, NIP, Jabatan, Mata Pelajaran, No HP.</p>
           <Button variant="outline" className="!px-3 !py-1.5 text-xs" onClick={downloadTemplate}>
             <Download className="h-3.5 w-3.5" /> Template
           </Button>

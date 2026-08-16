@@ -11,7 +11,7 @@ const userCreateSchema = z.object({
   username: z.string().min(3),
   password: z.string().min(6),
   fullName: z.string().min(1),
-  roleKey: z.enum(['ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF']),
+  roleKey: z.enum(['ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF', 'PIKET']),
   nip: z.string().optional(),
   position: z.string().optional(),
   phone: z.string().optional(),
@@ -90,6 +90,7 @@ export async function userRoutes(app: FastifyInstance) {
     } else if (body.roleKey === 'STAFF') {
       await prisma.staff.create({ data: { userId: user.id, nip: body.nip, position: body.position } });
     }
+    // PIKET: cukup akun dengan role Petugas Piket (tanpa data guru/staff)
 
     await audit({
       userId: request.user!.id,
@@ -107,6 +108,7 @@ export async function userRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const body = validate(
       z.object({
+        username: z.string().min(3).optional(),
         fullName: z.string().min(1).optional(),
         phone: z.string().optional(),
         email: z.string().optional(),
@@ -116,7 +118,7 @@ export async function userRoutes(app: FastifyInstance) {
         subjectId: z.string().optional(),
         isPiket: z.boolean().optional(),
         password: z.string().min(6).optional(),
-        roleKey: z.enum(['ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF']).optional(),
+        roleKey: z.enum(['ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF', 'PIKET']).optional(),
       }),
       request.body,
     );
@@ -125,6 +127,11 @@ export async function userRoutes(app: FastifyInstance) {
     if (!existing) throw ApiError.notFound('Akun tidak ditemukan.');
 
     const data: Record<string, unknown> = {};
+    if (body.username && body.username !== existing.username) {
+      const dup = await prisma.user.findUnique({ where: { username: body.username } });
+      if (dup) throw ApiError.conflict('USERNAME_EXISTS', 'Username sudah digunakan.');
+      data.username = body.username;
+    }
     if (body.fullName) data.fullName = body.fullName;
     if (body.phone !== undefined) data.phone = body.phone;
     if (body.email !== undefined) data.email = body.email;
@@ -148,6 +155,12 @@ export async function userRoutes(app: FastifyInstance) {
         where: { userId: id },
         data: { nip: body.nip, position: body.position },
       });
+    }
+
+    // PIKET: role khusus petugas piket — lepas relasi guru/staff agar tidak "menyatu" dengan rule guru
+    if (body.roleKey === 'PIKET') {
+      if (existing.teacher) await prisma.teacher.delete({ where: { userId: id } });
+      if (existing.staff) await prisma.staff.delete({ where: { userId: id } });
     }
 
     await audit({

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { GraduationCap, Plus, Search, Upload, Pencil, Trash2, Camera, CreditCard, Loader2 } from 'lucide-react';
-import { api, ApiError } from '../../lib/api';
+import { GraduationCap, Plus, Search, Upload, Download, Pencil, Trash2, Camera, CreditCard, Loader2 } from 'lucide-react';
+import { api, ApiError, downloadCsv } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Input, Field, Select, Modal, Badge, EmptyState } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
@@ -55,6 +55,15 @@ export default function Students() {
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus.'),
   });
 
+  const doExport = async () => {
+    try {
+      await downloadCsv('/export/students', 'siswa.csv');
+      toast('success', 'Export CSV berhasil diunduh.');
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Gagal export.');
+    }
+  };
+
   const bulkDelete = useMutation({
     mutationFn: async () => {
       for (const id of selected) {
@@ -82,6 +91,9 @@ export default function Students() {
           {classes?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </Select>
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={doExport}>
+            <Download className="h-4 w-4" /> Export
+          </Button>
           <Button variant="outline" onClick={() => navigate('/app/import')}>
             <Upload className="h-4 w-4" /> Import
           </Button>
