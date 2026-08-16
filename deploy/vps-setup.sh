@@ -69,6 +69,11 @@ else
   echo "✔ .env sudah ada — tidak diubah."
 fi
 
+# Simpan domain agar update.sh bisa mendeteksi mode HTTPS
+if [[ -n "$DOMAIN" ]] && ! grep -q "^DOMAIN=" "$APP_DIR/.env"; then
+  echo "DOMAIN=$DOMAIN" >> "$APP_DIR/.env"
+fi
+
 # ---------- 4. HTTPS (Caddy) ----------
 COMPOSE_FILES="-f docker-compose.yml"
 if [[ -n "$DOMAIN" ]]; then
