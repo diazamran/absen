@@ -101,7 +101,7 @@ function ManualForm({ onClose }: { onClose: () => void }) {
   return (
     <Modal open onClose={onClose} title="Absensi Manual" wide>
       <div className="space-y-3">
-        <Field label="Cari siswa"><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="NIS / nama…" /></Field>
+        <Field label="Cari siswa"><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="NISN / nama…" /></Field>
         <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-2xl border border-line p-2">
           {students?.map((s) => (
             <button

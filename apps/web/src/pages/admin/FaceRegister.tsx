@@ -186,7 +186,7 @@ export default function FaceRegister() {
           <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
           <Input
             className="pl-10"
-            placeholder="Cari nama atau NIS…"
+            placeholder="Cari nama atau NISN…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onFocus={() => setSearch((s) => s)}
@@ -366,7 +366,7 @@ export default function FaceRegister() {
         <EmptyState
           icon={ScanFace}
           title="Pilih siswa untuk memulai"
-          description="Cari siswa berdasarkan nama atau NIS, lalu daftarkan wajahnya melalui kamera."
+          description="Cari siswa berdasarkan nama atau NISN, lalu daftarkan wajahnya melalui kamera."
         />
       )}
     </div>

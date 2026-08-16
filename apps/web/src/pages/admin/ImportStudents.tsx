@@ -10,7 +10,7 @@ interface PreviewRow {
   line: number; nis: string; nama: string; kelas: string; errors: string[]; valid: boolean;
 }
 
-const TEMPLATE_HEADERS = ['NIS', 'Nama', 'Kelas', 'Jurusan', 'Jenis Kelamin', 'Tanggal Lahir', 'No HP', 'Nama Orang Tua', 'No WhatsApp Orang Tua', 'Card UID'];
+const TEMPLATE_HEADERS = ['NISN', 'Nama', 'Kelas', 'Jurusan', 'Jenis Kelamin', 'Tanggal Lahir', 'No HP', 'Nama Orang Tua', 'No WhatsApp Orang Tua', 'Card UID'];
 const TEMPLATE_SAMPLE = ['121217', 'CONTOH SISWA', 'X-TKJ-1', 'TKJ', 'L', '2009-01-15', '081234567899', 'Bapak Contoh', '081234567899', ''];
 
 function downloadTemplate() {
@@ -64,7 +64,7 @@ export default function ImportStudents() {
     <div>
       <PageHeader
         title="Import Siswa"
-        subtitle="Upload CSV: NIS, Nama, Kelas, Jurusan, Jenis Kelamin, Tanggal Lahir, No HP, Nama Orang Tua, No WhatsApp Orang Tua, Card UID"
+        subtitle="Upload CSV: NISN, Nama, Kelas, Jurusan, Jenis Kelamin, Tanggal Lahir, No HP, Nama Orang Tua, No WhatsApp Orang Tua, Card UID"
         action={
           <Button variant="outline" onClick={downloadTemplate}>
             <Download className="h-4 w-4" /> Template CSV

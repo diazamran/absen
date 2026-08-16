@@ -137,9 +137,10 @@ npm run dev
   - **Menunggu Persetujuan** (bagian atas): daftar siswa yang mendaftar wajah dari HP-nya sendiri → tombol **Setujui** (wajah langsung aktif) atau **Reset** (tolak/hapus data).
   - **Daftarkan manual**: pilih siswa → kamera aktif → ambil 1–4 sampel → centang persetujuan → **Simpan Registrasi** (langsung aktif karena dilakukan admin).
   - Data wajah bisa di-**Reset** kapan saja (mis. ada masalah).
-- **Siswa**: tambah/edit/hapus per siswa, **checkbox hapus massal**, **Import CSV + template** (menu Import), isi **No WhatsApp Orang Tua** → akun orang tua dibuat otomatis.
-- **Guru & Staff**: tambah akun, **Import CSV massal + template**, dan **toggle Guru Piket** (guru yang menjaga gerbang).
-- **Kelas**: tab **Jurusan** untuk kelola jurusan (TKJ/TKR/TPTUP/KULINER) + kelas + mapel + jadwal.
+- **Siswa**: identitas memakai **NISN** (NISN/Nama/Kelas/Orang Tua/UID Kartu/Password, tambah & edit lengkap), hapus per siswa, **checkbox hapus massal**, **Import CSV + template** (kolom NISN atau NIS).
+- **Guru & Staff**: tambah/edit/nonaktifkan akun, **Import CSV massal + template**, dan **toggle Guru Piket** (guru yang menjaga gerbang).
+- **Kelas**: tab **Jurusan** (kelola jurusan TKJ/TKR/TPTUP/KULINER), kelas dengan **edit/hapus** + pilih jurusan, mapel, jadwal.
+- **Pengaturan → Aturan Absensi & Lokasi**: set **titik absensi GPS** (latitude/longitude + radius) dan aktifkan "Wajib GPS di area sekolah" — siswa hanya bisa absen di dalam radius itu (diverifikasi server).
 - **Izin**: pengajuan bisa menyertakan **bukti/lampiran** (surat/dokter) — admin melihat tombol **Lihat Bukti**.
 - **Absensi**: monitoring realtime hari ini + tombol **Absen Manual** (fallback, tercatat di audit log).
 - **Pengaturan**: nama aplikasi/sekolah, warna tema, aturan absensi (jam terlambat, anti-duplikat, GPS).

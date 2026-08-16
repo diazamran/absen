@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Cog } from 'lucide-react';
+import { Plus, Trash2, Cog, Pencil } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
-import { Button, Card, Input, Field, Select, Segmented, EmptyState } from '../../lib/ui';
+import { Button, Card, Input, Field, Select, Segmented, EmptyState, Modal } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
 import { useAuth } from '../../lib/auth';
 
@@ -40,61 +40,116 @@ export default function Classes() {
   );
 }
 
+interface ClassRow {
+  id: string; name: string; grade: string; majorId?: string | null; majorName?: string | null;
+  homeroomTeacher?: string | null; room?: string | null; studentCount: number;
+}
+
 function ClassesTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', grade: 'X', room: '' });
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<ClassRow | null>(null);
 
   const { data: classes } = useQuery({
     queryKey: ['classes'],
-    queryFn: () => api<{ success: boolean; data: { id: string; name: string; grade: string; majorName?: string | null; homeroomTeacher?: string | null; room?: string | null; studentCount: number }[] }>('/classes').then((r) => r.data),
+    queryFn: () => api<{ success: boolean; data: ClassRow[] }>('/classes').then((r) => r.data),
   });
-  const mutation = useMutation({
-    mutationFn: () => api('/classes', { method: 'POST', body: form }),
-    onSuccess: () => { toast('success', 'Kelas ditambahkan.'); qc.invalidateQueries({ queryKey: ['classes'] }); setShowForm(false); },
+  const { data: majors } = useQuery({
+    queryKey: ['majors'],
+    queryFn: () => api<{ success: boolean; data: { id: string; name: string }[] }>('/majors').then((r) => r.data),
+  });
+
+  const del = useMutation({
+    mutationFn: (id: string) => api(`/classes/${id}`, { method: 'DELETE' }),
+    onSuccess: () => { toast('success', 'Kelas dinonaktifkan.'); qc.invalidateQueries({ queryKey: ['classes'] }); },
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'),
   });
 
   return (
     <div>
       <div className="mb-3 flex justify-end">
-        <Button className="px-3 py-2 text-sm" onClick={() => setShowForm(true)}><Plus className="h-4 w-4" /> Kelas Baru</Button>
+        <Button className="px-3 py-2 text-sm" onClick={() => setFormOpen(true)}><Plus className="h-4 w-4" /> Kelas Baru</Button>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {classes?.map((c) => (
           <Card key={c.id}>
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
                 <p className="text-lg font-extrabold text-ink">{c.name}</p>
-                <p className="text-xs text-muted">{c.majorName || '—'} · {c.homeroomTeacher || 'Tanpa wali kelas'}</p>
+                <p className="text-xs text-muted">{c.majorName || '—'} · {c.homeroomTeacher || 'Tanpa wali kelas'}{c.room ? ` · ${c.room}` : ''}</p>
               </div>
-              <span className="rounded-xl bg-primary-soft px-3 py-1.5 text-sm font-bold text-primary-dark">{c.studentCount} siswa</span>
+              <span className="shrink-0 rounded-xl bg-primary-soft px-3 py-1.5 text-sm font-bold text-primary-dark">{c.studentCount} siswa</span>
+            </div>
+            <div className="mt-3 flex justify-end gap-1">
+              <button onClick={() => setEditing(c)} className="rounded-xl p-2 text-muted hover:bg-primary-soft hover:text-primary" title="Edit">
+                <Pencil className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm(`Nonaktifkan kelas ${c.name}? Siswa di dalamnya tidak akan hilang.`)) del.mutate(c.id);
+                }}
+                className="rounded-xl p-2 text-muted hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
+                title="Nonaktifkan"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
             </div>
           </Card>
         ))}
+        {classes?.length === 0 && <div className="col-span-full"><EmptyState icon={Plus} title="Belum ada kelas" description="Tambahkan kelas baru untuk memulai." /></div>}
       </div>
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowForm(false)}>
-          <div className="w-full max-w-sm rounded-3xl bg-surface p-5 shadow-float dark:bg-slate-800" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-4 font-bold text-ink">Kelas Baru</h3>
-            <div className="space-y-3">
-              <Field label="Nama Kelas"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="X-A" /></Field>
-              <Field label="Tingkat">
-                <Select value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value })}>
-                  {['X', 'XI', 'XII'].map((g) => <option key={g} value={g}>{g}</option>)}
-                </Select>
-              </Field>
-              <Field label="Ruang"><Input value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} placeholder="Labkom 1" /></Field>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowForm(false)}>Batal</Button>
-              <Button onClick={() => mutation.mutate()} disabled={!form.name}>Simpan</Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {formOpen && <ClassForm majors={majors || []} onClose={() => setFormOpen(false)} />}
+      {editing && <ClassForm majors={majors || []} initial={editing} onClose={() => setEditing(null)} />}
     </div>
+  );
+}
+
+function ClassForm({ majors, initial, onClose }: { majors: { id: string; name: string }[]; initial?: ClassRow; onClose: () => void }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    name: initial?.name || '',
+    grade: initial?.grade || 'X',
+    majorId: initial?.majorId || '',
+    room: initial?.room || '',
+  });
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      initial
+        ? api(`/classes/${initial.id}`, { method: 'PUT', body: form })
+        : api('/classes', { method: 'POST', body: form }),
+    onSuccess: () => {
+      toast('success', initial ? 'Kelas diperbarui.' : 'Kelas ditambahkan.');
+      qc.invalidateQueries({ queryKey: ['classes'] });
+      onClose();
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'),
+  });
+
+  return (
+    <Modal open onClose={onClose} title={initial ? `Edit Kelas — ${initial.name}` : 'Kelas Baru'}>
+      <div className="space-y-3">
+        <Field label="Nama Kelas"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="X-TKJ-1" /></Field>
+        <Field label="Tingkat">
+          <Select value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value })}>
+            {['X', 'XI', 'XII'].map((g) => <option key={g} value={g}>{g}</option>)}
+          </Select>
+        </Field>
+        <Field label="Jurusan">
+          <Select value={form.majorId} onChange={(e) => setForm({ ...form, majorId: e.target.value })}>
+            <option value="">Tanpa jurusan</option>
+            {majors.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </Select>
+        </Field>
+        <Field label="Ruang"><Input value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} placeholder="Labkom 1" /></Field>
+      </div>
+      <div className="mt-4 flex justify-end gap-2">
+        <Button variant="outline" onClick={onClose}>Batal</Button>
+        <Button onClick={() => mutation.mutate()} disabled={!form.name}>Simpan</Button>
+      </div>
+    </Modal>
   );
 }
 

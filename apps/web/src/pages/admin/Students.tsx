@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 interface StudentRow {
   id: string; userId: string; nis: string; fullName: string; className: string | null; classId: string | null; majorName: string | null;
   faceRegistered: boolean; hasCard: boolean; isActive: boolean; gender: string;
+  parents?: { id: string; name: string; phone: string }[];
 }
 
 export default function Students() {
@@ -74,7 +75,7 @@ export default function Students() {
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <Input className="pl-10" placeholder="Cari NIS atau nama…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input className="pl-10" placeholder="Cari NISN atau nama…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Select value={classId} onChange={(e) => setClassId(e.target.value)} className="lg:w-48">
           <option value="">Semua kelas</option>
@@ -135,7 +136,7 @@ export default function Students() {
               </button>
               <button
                 onClick={() => {
-                  if (window.confirm(`Hapus ${s.fullName} (NIS ${s.nis})? Akun akan dinonaktifkan.`)) deleteOne.mutate(s.id);
+                  if (window.confirm(`Hapus ${s.fullName} (NISN ${s.nis})? Akun akan dinonaktifkan.`)) deleteOne.mutate(s.id);
                 }}
                 className="rounded-xl p-2 text-muted hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
                 title="Hapus"
@@ -176,7 +177,7 @@ function StudentForm({ onClose, classes }: { onClose: () => void; classes: { id:
   return (
     <Modal open onClose={onClose} title="Tambah Siswa" wide>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="NIS *"><Input value={form.nis} onChange={(e) => setForm({ ...form, nis: e.target.value })} placeholder="121217" /></Field>
+        <Field label="NISN *"><Input value={form.nis} onChange={(e) => setForm({ ...form, nis: e.target.value })} placeholder="Nomor Induk Siswa Nasional" /></Field>
         <Field label="Nama Lengkap *"><Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} placeholder="Nama siswa" /></Field>
         <Field label="Jenis Kelamin">
           <Select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
@@ -208,15 +209,36 @@ function StudentForm({ onClose, classes }: { onClose: () => void; classes: { id:
 function StudentEdit({ student, classes, onClose }: { student: StudentRow; classes: { id: string; name: string }[]; onClose: () => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const parent = student.parents?.[0];
   const [form, setForm] = useState({
+    nis: student.nis,
     fullName: student.fullName,
     gender: student.gender,
     classId: student.classId || '',
     isActive: student.isActive,
+    parentName: parent?.name || '',
+    parentPhone: parent?.phone || '',
+    cardUid: '',
+    password: '',
   });
 
   const mutation = useMutation({
-    mutationFn: () => api(`/students/${student.id}`, { method: 'PUT', body: form }),
+    mutationFn: () => {
+      const body: Record<string, unknown> = {
+        nis: form.nis,
+        fullName: form.fullName,
+        gender: form.gender,
+        classId: form.classId,
+        isActive: form.isActive,
+      };
+      if (form.parentName && form.parentPhone) {
+        body.parentName = form.parentName;
+        body.parentPhone = form.parentPhone;
+      }
+      if (form.cardUid.trim()) body.cardUid = form.cardUid.trim();
+      if (form.password) body.password = form.password;
+      return api(`/students/${student.id}`, { method: 'PUT', body });
+    },
     onSuccess: () => {
       toast('success', 'Data siswa diperbarui.');
       qc.invalidateQueries({ queryKey: ['students'] });
@@ -226,8 +248,9 @@ function StudentEdit({ student, classes, onClose }: { student: StudentRow; class
   });
 
   return (
-    <Modal open onClose={onClose} title={`Edit Siswa — ${student.nis}`} wide>
+    <Modal open onClose={onClose} title={`Edit Siswa — NISN ${student.nis}`} wide>
       <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="NISN *"><Input value={form.nis} onChange={(e) => setForm({ ...form, nis: e.target.value })} /></Field>
         <Field label="Nama Lengkap *"><Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></Field>
         <Field label="Jenis Kelamin">
           <Select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
@@ -241,6 +264,10 @@ function StudentEdit({ student, classes, onClose }: { student: StudentRow; class
             {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </Select>
         </Field>
+        <Field label="Nama Orang Tua"><Input value={form.parentName} onChange={(e) => setForm({ ...form, parentName: e.target.value })} placeholder="Opsional" /></Field>
+        <Field label="No WhatsApp Orang Tua"><Input value={form.parentPhone} onChange={(e) => setForm({ ...form, parentPhone: e.target.value })} placeholder="0812…" /></Field>
+        <Field label="UID Kartu (kosongkan jika tidak diubah)" hint="UID disimpan terenkripsi, tidak bisa ditampilkan kembali."><Input value={form.cardUid} onChange={(e) => setForm({ ...form, cardUid: e.target.value })} placeholder="04:A2:3B:…" /></Field>
+        <Field label="Password baru (opsional)"><Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Kosongkan jika tidak diubah" /></Field>
         <Field label="Status">
           <Select value={form.isActive ? 'true' : 'false'} onChange={(e) => setForm({ ...form, isActive: e.target.value === 'true' })}>
             <option value="true">Aktif</option>
@@ -250,7 +277,7 @@ function StudentEdit({ student, classes, onClose }: { student: StudentRow; class
       </div>
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="outline" onClick={onClose}>Batal</Button>
-        <Button onClick={() => mutation.mutate()} disabled={!form.fullName || mutation.isPending}>Simpan</Button>
+        <Button onClick={() => mutation.mutate()} disabled={!form.fullName || !form.nis || mutation.isPending}>Simpan</Button>
       </div>
     </Modal>
   );

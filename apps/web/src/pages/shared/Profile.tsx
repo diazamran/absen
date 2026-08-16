@@ -47,7 +47,7 @@ export default function Profile() {
           <p className="text-sm text-muted">{user?.roleName}</p>
           <p className="text-xs text-muted">
             @{user?.username}
-            {user?.student?.nis && ` · NIS ${user.student.nis}`}
+            {user?.student?.nis && ` · NISN ${user.student.nis}`}
             {user?.teacher?.nip && ` · NIP ${user.teacher.nip}`}
             {user?.staff?.nip && ` · NIP ${user.staff.nip}`}
           </p>

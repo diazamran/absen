@@ -48,7 +48,7 @@ export default function ParentChildren() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-lg font-extrabold text-ink">{active.name}</p>
-                <p className="text-sm text-muted">{active.className} · NIS {active.nis}</p>
+                <p className="text-sm text-muted">{active.className} · NISN {active.nis}</p>
               </div>
               <div className="rounded-2xl bg-primary-soft p-3 text-primary"><Baby className="h-6 w-6" /></div>
             </div>

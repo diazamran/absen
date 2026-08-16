@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users as UsersIcon, Plus, Search, Upload, Download, Loader2, ShieldCheck, CheckCircle2, XCircle } from 'lucide-react';
+import { Users as UsersIcon, Plus, Search, Upload, Download, Loader2, ShieldCheck, CheckCircle2, XCircle, Pencil, Trash2 } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Input, Field, Select, Modal, Badge, EmptyState } from '../../lib/ui';
@@ -21,6 +21,7 @@ export default function Users() {
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [editing, setEditing] = useState<UserRow | null>(null);
 
   const { data: users } = useQuery({
     queryKey: ['users', search],
@@ -29,6 +30,15 @@ export default function Users() {
   const { data: subjects } = useQuery({
     queryKey: ['subjects'],
     queryFn: () => api<{ success: boolean; data: { id: string; name: string }[] }>('/subjects').then((r) => r.data),
+  });
+
+  const deleteUser = useMutation({
+    mutationFn: (id: string) => api(`/users/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      toast('success', 'Akun dinonaktifkan.');
+      qc.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus.'),
   });
 
   const togglePiket = useMutation({
@@ -67,6 +77,20 @@ export default function Users() {
                 <p className="truncate font-bold text-ink">{u.fullName}</p>
                 <p className="text-xs text-muted">@{u.username}{u.nip ? ` · ${u.nip}` : ''}</p>
               </div>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setEditing(u)} className="rounded-xl p-2 text-muted hover:bg-primary-soft hover:text-primary" title="Edit">
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    if (window.confirm(`Nonaktifkan akun ${u.fullName} (@${u.username})?`)) deleteUser.mutate(u.id);
+                  }}
+                  className="rounded-xl p-2 text-muted hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
+                  title="Nonaktifkan"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
               <Badge status={u.isActive ? 'APPROVED' : 'BLOCKED'} label={u.isActive ? 'Aktif' : 'Nonaktif'} />
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
@@ -95,22 +119,33 @@ export default function Users() {
       </div>
 
       {showCreate && <UserForm onClose={() => setShowCreate(false)} subjects={subjects || []} />}
+      {editing && <UserForm initial={editing} onClose={() => setEditing(null)} subjects={subjects || []} />}
       {showImport && <UserImport onClose={() => setShowImport(false)} />}
     </div>
   );
 }
 
-function UserForm({ onClose, subjects }: { onClose: () => void; subjects: { id: string; name: string }[] }) {
+function UserForm({ onClose, subjects, initial }: { onClose: () => void; subjects: { id: string; name: string }[]; initial?: UserRow }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [form, setForm] = useState({
-    username: '', password: 'guru123', fullName: '', roleKey: 'TEACHER', nip: '', position: '', phone: '', subjectId: '',
-  });
+  const [form, setForm] = useState(() => ({
+    username: initial?.username || '',
+    password: '',
+    fullName: initial?.fullName || '',
+    roleKey: initial?.roleKey || 'TEACHER',
+    nip: initial?.nip || '',
+    position: initial?.position || '',
+    phone: initial?.phone || '',
+    subjectId: initial?.subjectName ? subjects.find((s) => s.name === initial.subjectName)?.id || '' : '',
+  }));
 
   const mutation = useMutation({
-    mutationFn: () => api('/users', { method: 'POST', body: form }),
+    mutationFn: () =>
+      initial
+        ? api(`/users/${initial.id}`, { method: 'PUT', body: form })
+        : api('/users', { method: 'POST', body: { ...form, password: form.password || 'guru123' } }),
     onSuccess: () => {
-      toast('success', 'Akun berhasil dibuat.');
+      toast('success', initial ? 'Akun diperbarui.' : 'Akun berhasil dibuat.');
       qc.invalidateQueries({ queryKey: ['users'] });
       onClose();
     },
@@ -118,10 +153,10 @@ function UserForm({ onClose, subjects }: { onClose: () => void; subjects: { id: 
   });
 
   return (
-    <Modal open onClose={onClose} title="Tambah Akun" wide>
+    <Modal open onClose={onClose} title={initial ? `Edit Akun — ${initial.fullName}` : 'Tambah Akun'} wide>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Nama Lengkap *"><Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></Field>
-        <Field label="Username *"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
+        <Field label="Username *"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} disabled={!!initial} /></Field>
         <Field label="Role">
           <Select value={form.roleKey} onChange={(e) => setForm({ ...form, roleKey: e.target.value })}>
             <option value="TEACHER">Guru</option>
@@ -131,7 +166,7 @@ function UserForm({ onClose, subjects }: { onClose: () => void; subjects: { id: 
             <option value="HEADMASTER">Kepala Sekolah</option>
           </Select>
         </Field>
-        <Field label="Password"><Input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></Field>
+        <Field label={initial ? 'Password baru (opsional)' : 'Password'} hint={initial ? 'Kosongkan jika tidak diubah' : undefined}><Input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></Field>
         <Field label="NIP"><Input value={form.nip} onChange={(e) => setForm({ ...form, nip: e.target.value })} /></Field>
         <Field label="Jabatan"><Input value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} placeholder="Guru Mapel / Staf TU" /></Field>
         <Field label="Mata Pelajaran (guru)">

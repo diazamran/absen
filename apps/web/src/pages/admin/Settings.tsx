@@ -21,13 +21,16 @@ export default function Settings() {
 
   const [branding, setBranding] = useState<Record<string, unknown> | null>(null);
   const [rules, setRules] = useState<Record<string, unknown> | null>(null);
+  const [school, setSchool] = useState<Record<string, unknown> | null>(null);
 
   const b = (branding as Record<string, unknown> | null) ?? ((settings?.branding as Record<string, unknown>) || {});
   const r = (rules as Record<string, unknown> | null) ?? ((settings?.attendanceRules as Record<string, unknown>) || {});
+  const s = (school as Record<string, unknown> | null) ?? ((settings?.school as Record<string, unknown>) || {});
   const notif = (settings?.notifications as Record<string, unknown>) || {};
 
   const setB = (k: string, v: unknown) => setBranding({ ...b, [k]: v });
   const setR = (k: string, v: unknown) => setRules({ ...r, [k]: v });
+  const setS = (k: string, v: unknown) => setSchool({ ...s, [k]: v });
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -36,6 +39,7 @@ export default function Settings() {
         body: {
           branding: branding ? { ...b } : undefined,
           attendanceRules: rules ? { ...r } : undefined,
+          school: school ? { latitude: Number(s.latitude), longitude: Number(s.longitude) } : undefined,
         },
       }),
     onSuccess: () => {
@@ -83,21 +87,32 @@ export default function Settings() {
           </div>
         </Card>
 
-        {/* Aturan absensi */}
+        {/* Aturan absensi + lokasi */}
         <Card>
-          <h3 className="mb-3 flex items-center gap-2 font-bold text-ink"><Clock3 className="h-4 w-4" /> Aturan Absensi</h3>
+          <h3 className="mb-3 flex items-center gap-2 font-bold text-ink"><Clock3 className="h-4 w-4" /> Aturan Absensi & Lokasi</h3>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Jam batas terlambat"><Input type="number" value={Number(r.lateAfterHour ?? 7)} onChange={(e) => setR('lateAfterHour', Number(e.target.value))} /></Field>
             <Field label="Menit"><Input type="number" value={Number(r.lateAfterMinute ?? 0)} onChange={(e) => setR('lateAfterMinute', Number(e.target.value))} /></Field>
-            <Field label="Radius lokasi (m)"><Input type="number" value={Number(r.radiusMeters ?? 100)} onChange={(e) => setR('radiusMeters', Number(e.target.value))} /></Field>
-            <label className="flex items-center gap-2 pt-5 text-sm font-medium text-ink">
-              <input type="checkbox" checked={r.locationEnabled === true} onChange={(e) => setR('locationEnabled', e.target.checked)} className="h-4 w-4 accent-teal-600" />
-              Wajib GPS di area sekolah
-            </label>
             <label className="flex items-center gap-2 pt-5 text-sm font-medium text-ink">
               <input type="checkbox" checked={r.duplicatePrevention !== false} onChange={(e) => setR('duplicatePrevention', e.target.checked)} className="h-4 w-4 accent-teal-600" />
               Cegah absen ganda
             </label>
+          </div>
+          <div className="mt-4 rounded-2xl border border-line/70 bg-slate-50/60 p-3 dark:bg-slate-900/40">
+            <p className="mb-2 text-sm font-semibold text-ink">📍 Titik Absensi (GPS)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Latitude"><Input type="number" step="any" value={Number(s.latitude) || ''} onChange={(e) => setS('latitude', e.target.value)} placeholder="-7.9659" /></Field>
+              <Field label="Longitude"><Input type="number" step="any" value={Number(s.longitude) || ''} onChange={(e) => setS('longitude', e.target.value)} placeholder="111.9926" /></Field>
+              <Field label="Radius (meter)"><Input type="number" value={Number(r.radiusMeters ?? 100)} onChange={(e) => setR('radiusMeters', Number(e.target.value))} /></Field>
+              <label className="flex items-center gap-2 pt-5 text-sm font-medium text-ink">
+                <input type="checkbox" checked={r.locationEnabled === true} onChange={(e) => setR('locationEnabled', e.target.checked)} className="h-4 w-4 accent-teal-600" />
+                Wajib GPS di area sekolah
+              </label>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              Cara ambil koordinat: buka Google Maps → klik kanan lokasi sekolah → salin angka dari kotak pencarian (contoh: <code>-7.965900, 111.992600</code>).
+              Jika diaktifkan, siswa hanya bisa absen dalam radius ini dari titik sekolah.
+            </p>
           </div>
         </Card>
 

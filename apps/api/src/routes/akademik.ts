@@ -71,7 +71,14 @@ export async function akademikRoutes(app: FastifyInstance) {
     );
     const klass = await prisma.class.update({ where: { id }, data: body });
     await audit({ userId: request.user!.id, action: 'CLASS_UPDATED', entity: 'Class', entityId: id, newValue: body, request });
-    return reply.send({ success: true, data: klass });
+    return reply.send({ success: true, message: 'Kelas diperbarui.', data: klass });
+  });
+
+  app.delete('/classes/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.classesManage) }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    await prisma.class.update({ where: { id }, data: { isActive: false } });
+    await audit({ userId: request.user!.id, action: 'CLASS_DELETED', entity: 'Class', entityId: id, request });
+    return reply.send({ success: true, message: 'Kelas dinonaktifkan.' });
   });
 
   // ===== Jurusan =====

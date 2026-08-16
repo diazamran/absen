@@ -23,6 +23,7 @@ const studentCreateSchema = z.object({
 });
 
 const studentUpdateSchema = z.object({
+  nis: z.string().min(1).optional(),
   fullName: z.string().min(1).optional(),
   gender: z.enum(['MALE', 'FEMALE']).optional(),
   birthDate: z.string().optional(),
@@ -31,6 +32,10 @@ const studentUpdateSchema = z.object({
   majorId: z.string().optional(),
   academicYearId: z.string().optional(),
   isActive: z.boolean().optional(),
+  parentName: z.string().optional(),
+  parentPhone: z.string().optional(),
+  cardUid: z.string().optional(),
+  password: z.string().min(6).optional(),
 });
 
 export async function studentRoutes(app: FastifyInstance) {
@@ -174,8 +179,20 @@ export async function studentRoutes(app: FastifyInstance) {
   app.put('/students/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.studentsUpdate) }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = validate(studentUpdateSchema, request.body);
-    const existing = await prisma.student.findUnique({ where: { id } });
+    const existing = await prisma.student.findUnique({ where: { id }, include: { user: true } });
     if (!existing) throw ApiError.notFound('Siswa tidak ditemukan.');
+
+    // Ubah NISN (dan username siswa_xxx mengikuti)
+    if (body.nis && body.nis !== existing.nis) {
+      const dup = await prisma.student.findUnique({ where: { nis: body.nis } });
+      if (dup) throw ApiError.conflict('NIS_EXISTS', `NISN ${body.nis} sudah digunakan.`);
+      const username = `siswa_${body.nis}`;
+      if (await prisma.user.findUnique({ where: { username } })) {
+        throw ApiError.conflict('USERNAME_EXISTS', 'Username untuk NISN baru sudah dipakai.');
+      }
+      await prisma.student.update({ where: { id }, data: { nis: body.nis } });
+      await prisma.user.update({ where: { id: existing.userId }, data: { username } });
+    }
 
     const student = await prisma.student.update({
       where: { id },
@@ -189,12 +206,60 @@ export async function studentRoutes(app: FastifyInstance) {
         updatedById: request.user!.id,
       },
     });
-    if (body.fullName) {
-      await prisma.user.update({ where: { id: existing.userId }, data: { fullName: body.fullName } });
+
+    const userData: Record<string, unknown> = {};
+    if (body.fullName) userData.fullName = body.fullName;
+    if (body.password) userData.passwordHash = await hashPassword(body.password);
+    if (body.isActive !== undefined) userData.isActive = body.isActive;
+    if (Object.keys(userData).length) {
+      await prisma.user.update({ where: { id: existing.userId }, data: userData });
     }
     if (body.isActive !== undefined) {
-      await prisma.user.update({ where: { id: existing.userId }, data: { isActive: body.isActive } });
       await prisma.student.update({ where: { id }, data: { isActive: body.isActive } });
+    }
+
+    // UID kartu
+    if (body.cardUid !== undefined) {
+      if (body.cardUid) {
+        const cardUidHash = sha256(body.cardUid.replace(/\s+/g, '').toUpperCase());
+        await prisma.student.update({ where: { id }, data: { cardUidHash } });
+        await prisma.cardCredential.upsert({
+          where: { userId: existing.userId },
+          update: { cardUidHash, isActive: true },
+          create: { userId: existing.userId, cardUidHash },
+        });
+      } else {
+        await prisma.student.update({ where: { id }, data: { cardUidHash: null } });
+        await prisma.cardCredential.deleteMany({ where: { userId: existing.userId } });
+      }
+    }
+
+    // Orang tua
+    if (body.parentName && body.parentPhone) {
+      const phone = body.parentPhone.replace(/[^0-9]/g, '');
+      const parentRole = await prisma.role.findUnique({ where: { key: 'PARENT' } });
+      let parent = await prisma.parent.findUnique({ where: { phone } });
+      if (!parent && parentRole) {
+        const pu = await prisma.user.create({
+          data: {
+            username: `ortu_${phone}`,
+            passwordHash: await hashPassword('ortu123'),
+            fullName: body.parentName,
+            phone,
+            roleId: parentRole.id,
+          },
+        });
+        parent = await prisma.parent.create({ data: { userId: pu.id, phone, name: body.parentName } });
+      } else if (parent) {
+        await prisma.parent.update({ where: { id: parent.id }, data: { name: body.parentName } });
+      }
+      if (parent) {
+        await prisma.studentParent.upsert({
+          where: { studentId_parentId: { studentId: id, parentId: parent.id } },
+          update: { relation: 'Orang Tua' },
+          create: { studentId: id, parentId: parent.id, relation: 'Orang Tua' },
+        });
+      }
     }
 
     await audit({
@@ -202,8 +267,8 @@ export async function studentRoutes(app: FastifyInstance) {
       action: 'STUDENT_UPDATED',
       entity: 'Student',
       entityId: id,
-      oldValue: { classId: existing.classId },
-      newValue: { classId: body.classId },
+      oldValue: { classId: existing.classId, nis: existing.nis },
+      newValue: { classId: body.classId, nis: body.nis, fullName: body.fullName },
       request,
     });
 

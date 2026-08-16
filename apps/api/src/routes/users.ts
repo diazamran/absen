@@ -115,6 +115,7 @@ export async function userRoutes(app: FastifyInstance) {
         position: z.string().optional(),
         subjectId: z.string().optional(),
         isPiket: z.boolean().optional(),
+        password: z.string().min(6).optional(),
         roleKey: z.enum(['ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF']).optional(),
       }),
       request.body,
@@ -128,6 +129,7 @@ export async function userRoutes(app: FastifyInstance) {
     if (body.phone !== undefined) data.phone = body.phone;
     if (body.email !== undefined) data.email = body.email;
     if (body.isActive !== undefined) data.isActive = body.isActive;
+    if (body.password) data.passwordHash = await hashPassword(body.password);
     if (body.roleKey) {
       const role = await prisma.role.findUnique({ where: { key: body.roleKey } });
       if (role) data.roleId = role.id;

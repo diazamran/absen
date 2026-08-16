@@ -88,7 +88,7 @@ export default function ClassAttendance() {
 
       {/* Bottom sheet: ubah status */}
       <BottomSheet open={!!selected} onClose={() => setSelected(null)} title={selected?.name}>
-        <p className="mb-3 text-sm text-muted">NIS {selected?.nis} · Pilih status kehadiran:</p>
+        <p className="mb-3 text-sm text-muted">NISN {selected?.nis} · Pilih status kehadiran:</p>
         <div className="grid grid-cols-2 gap-2">
           {STATUS_OPTIONS.map((st) => (
             <button

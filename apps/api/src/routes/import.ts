@@ -43,10 +43,12 @@ export async function importRoutes(app: FastifyInstance) {
     if (rows.length < 2) throw ApiError.badRequest('EMPTY_CSV', 'File CSV kosong atau tidak memiliki data.');
 
     const headers = rows[0].map((h) => h.trim().toLowerCase());
-    const required = ['nis', 'nama'];
+    // Kolom identitas: terima "NIS" atau "NISN"
+    const nisCol = headers.includes('nisn') ? 'nisn' : 'nis';
+    const required = [nisCol, 'nama'];
     for (const r of required) {
       if (!headers.includes(r)) {
-        throw ApiError.badRequest('INVALID_HEADERS', `Kolom "${r}" wajib ada di CSV. Kolom yang didukung: NIS, Nama, Kelas, Jurusan, Jenis Kelamin, Tanggal Lahir, No HP, Nama Orang Tua, No WhatsApp Orang Tua, Card UID.`);
+        throw ApiError.badRequest('INVALID_HEADERS', `Kolom "${r}" wajib ada di CSV. Kolom yang didukung: NISN/NIS, Nama, Kelas, Jurusan, Jenis Kelamin, Tanggal Lahir, No HP, Nama Orang Tua, No WhatsApp Orang Tua, Card UID.`);
       }
     }
     const idx = (name: string) => headers.indexOf(name);
@@ -63,12 +65,12 @@ export async function importRoutes(app: FastifyInstance) {
 
     const preview = rows.slice(1).map((r, i) => {
       const get = (name: string) => (idx(name) >= 0 ? (r[idx(name)] || '').trim() : '');
-      const nis = get('nis');
+      const nis = get(nisCol);
       const nama = get('nama');
       const errors: string[] = [];
-      if (!nis) errors.push('NIS kosong');
+      if (!nis) errors.push('NISN kosong');
       if (!nama) errors.push('Nama kosong');
-      if (existingNis.has(nis)) errors.push(`NIS ${nis} sudah terdaftar`);
+      if (existingNis.has(nis)) errors.push(`NISN ${nis} sudah terdaftar`);
       const className = get('kelas');
       if (className && !classMap.has(className.toLowerCase())) errors.push(`Kelas "${className}" tidak ditemukan`);
       return {
