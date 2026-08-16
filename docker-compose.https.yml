@@ -1,0 +1,25 @@
+# HTTPS otomatis dengan Caddy (Let's Encrypt).
+# Jalankan dengan domain:
+#   WEB_PORT=8080 DOMAIN=absen.sekolah.sch.id \
+#   docker compose -f docker-compose.yml -f docker-compose.https.yml up -d --build
+# Lalu buka https://absen.sekolah.sch.id (port 80/443 di firewall harus terbuka).
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: presensiku_caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

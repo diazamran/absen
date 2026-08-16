@@ -1,0 +1,13 @@
+{$DOMAIN} {
+	encode gzip
+
+	# Semua lalu lintas diteruskan ke container frontend (nginx-nya sudah
+	# meneruskan /api dan /socket.io ke backend secara internal).
+	reverse_proxy frontend:80
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options SAMEORIGIN
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}

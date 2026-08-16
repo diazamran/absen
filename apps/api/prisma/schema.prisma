@@ -1,0 +1,662 @@
+// PresensiKu - Prisma Schema
+// PostgreSQL + Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ================= ENUMS =================
+
+enum AttendanceStatus {
+  PRESENT // Hadir
+  LATE // Terlambat
+  EXCUSED // Izin
+  SICK // Sakit
+  OFFICIAL_DUTY // Dinas
+  ABSENT // Tidak hadir / alpa
+  LEAVE // Cuti
+}
+
+enum AttendanceMethod {
+  FACE
+  QR
+  NFC
+  RFID
+  MANUAL
+  GATE
+  IMPORT
+}
+
+enum AttendanceType {
+  CHECK_IN
+  CHECK_OUT
+}
+
+enum LeaveType {
+  SICK // Sakit
+  PERSONAL // Izin
+  LEAVE // Cuti
+  OFFICIAL_DUTY // Dinas Luar
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ApprovalAction {
+  APPROVE
+  REJECT
+}
+
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  BLOCKED
+  UNKNOWN
+}
+
+enum NotificationChannel {
+  IN_APP
+  PUSH
+  WHATSAPP
+  EMAIL
+}
+
+enum ScheduleDay {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum FaceStatus {
+  REGISTERED
+  PENDING
+  DISABLED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+// ================= RBAC =================
+
+model Role {
+  id        String   @id @default(cuid())
+  key       String   @unique // SUPER_ADMIN, ADMIN, HEADMASTER, HOMEROOM_TEACHER, TEACHER, STAFF, STUDENT, PARENT
+  name      String
+  isSystem  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  users     User[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id        String   @id @default(cuid())
+  key       String   @unique // e.g. students:read, attendance:create
+  name      String
+  module    String
+  createdAt DateTime @default(now())
+  roles     RolePermission[]
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+// ================= USER =================
+
+model User {
+  id             String    @id @default(cuid())
+  username       String    @unique
+  passwordHash   String
+  fullName       String
+  email          String?
+  phone          String?
+  avatarUrl      String?
+  roleId         String
+  isActive       Boolean   @default(true)
+  preferences    Json? // { theme, primaryColor, ... }
+  lastLoginAt    DateTime?
+  lastLoginIp    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  role           Role          @relation(fields: [roleId], references: [id])
+  student        Student?
+  teacher        Teacher?
+  staff          Staff?
+  parent         Parent?
+  attendance     Attendance[]
+  faceProfiles   FaceProfile[]
+  faceEmbeddings FaceEmbedding[]
+  qrCredentials  QrCredential?
+  cardCredential CardCredential?
+  leaveRequests  LeaveRequest[]
+  leaveApprovals LeaveApproval[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+  refreshTokens  RefreshToken[]
+  sessions       Session[]
+  createdStudents Student[] @relation("CreatedStudents")
+  updatedStudents Student[] @relation("UpdatedStudents")
+  devices        Device[]
+  manualAttendance Attendance[] @relation("ManualAttendance")
+  leaveReviews   LeaveRequest[] @relation("LeaveReviewer")
+  updatedSettings SchoolSetting[]
+
+  @@index([roleId])
+  @@index([username])
+  @@index([phone])
+}
+
+model Student {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  nis             String   @unique
+  gender          Gender   @default(MALE)
+  birthDate       DateTime?
+  address         String?
+  cardUidHash     String? @unique
+  faceRegistered  Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  classId         String?
+  majorId         String?
+  academicYearId  String?
+  createdById     String?
+  updatedById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user          User?         @relation(fields: [userId], references: [id])
+  class         Class?        @relation(fields: [classId], references: [id])
+  major         Major?        @relation(fields: [majorId], references: [id])
+  academicYear  AcademicYear? @relation(fields: [academicYearId], references: [id])
+  createdBy     User?         @relation("CreatedStudents", fields: [createdById], references: [id])
+  updatedBy     User?         @relation("UpdatedStudents", fields: [updatedById], references: [id])
+  parentLinks   StudentParent[]
+  attendance    Attendance[]
+  leaveRequests LeaveRequest[]
+
+  @@index([nis])
+  @@index([classId])
+  @@index([isActive])
+}
+
+model Parent {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  phone     String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user        User?           @relation(fields: [userId], references: [id])
+  childLinks  StudentParent[]
+
+  @@index([phone])
+}
+
+model StudentParent {
+  id        String   @id @default(cuid())
+  studentId String
+  parentId  String
+  relation  String? // Ayah, Ibu, Wali
+  createdAt DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  parent  Parent  @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, parentId])
+}
+
+model Teacher {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  nip       String?
+  position  String?
+  subjectId String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User?      @relation(fields: [userId], references: [id])
+  subject   Subject?   @relation(fields: [subjectId], references: [id])
+  schedules Schedule[]
+  homeroom  Class[]
+  attendance Attendance[]
+  journals  TeachingJournal[]
+}
+
+model Staff {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  nip       String?
+  position  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User?       @relation(fields: [userId], references: [id])
+  attendance Attendance[]
+}
+
+// ================= AKADEMIK =================
+
+model AcademicYear {
+  id        String   @id @default(cuid())
+  name      String   @unique // e.g. "2025/2026"
+  isActive  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  students Student[]
+  classes  Class[]
+}
+
+model Major {
+  id        String   @id @default(cuid())
+  name      String   @unique // e.g. "IPA", "IPS", "RPL"
+  code      String?  @unique
+  createdAt DateTime @default(now())
+
+  students Student[]
+  classes  Class[]
+}
+
+model Class {
+  id                String   @id @default(cuid())
+  name              String // e.g. "X-A", "XI-RPL-1"
+  grade             String // X, XI, XII
+  majorId           String?
+  academicYearId    String?
+  homeroomTeacherId String?
+  room              String?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  major            Major?            @relation(fields: [majorId], references: [id])
+  academicYear     AcademicYear?     @relation(fields: [academicYearId], references: [id])
+  homeroomTeacher  Teacher?          @relation(fields: [homeroomTeacherId], references: [id])
+  students         Student[]
+  schedules        Schedule[]
+  journals         TeachingJournal[]
+
+  @@unique([name, academicYearId])
+  @@index([grade])
+  @@index([majorId])
+}
+
+model Subject {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  code      String?
+  color     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  teachers Teacher[]
+  schedules Schedule[]
+  journals TeachingJournal[]
+}
+
+model Schedule {
+  id         String      @id @default(cuid())
+  classId    String
+  subjectId  String
+  teacherId  String
+  day        ScheduleDay
+  startTime  String // "07:00"
+  endTime    String // "08:30"
+  room       String?
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id])
+  teacher Teacher @relation(fields: [teacherId], references: [id])
+  journals TeachingJournal[]
+
+  @@index([classId])
+  @@index([teacherId])
+  @@index([day])
+  @@unique([classId, subjectId, day, startTime])
+}
+
+// ================= ABSENSI =================
+
+model Attendance {
+  id               String           @id @default(cuid())
+  userId           String
+  studentId        String?
+  teacherId        String?
+  staffId          String?
+  date             DateTime         @db.Date
+  type             AttendanceType   @default(CHECK_IN)
+  checkIn          DateTime?
+  checkOut         DateTime?
+  status           AttendanceStatus @default(PRESENT)
+  method           AttendanceMethod @default(FACE)
+  deviceId         String?
+  latitude         Float?
+  longitude        Float?
+  accuracy         Float?
+  locationVerified Boolean          @default(false)
+  faceVerified     Boolean          @default(false)
+  livenessVerified Boolean          @default(false)
+  qrVerified       Boolean          @default(false)
+  cardVerified     Boolean          @default(false)
+  lateMinutes      Int              @default(0)
+  notes            String?
+  createdById      String? // untuk absensi manual oleh guru/admin
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  user      User?     @relation(fields: [userId], references: [id])
+  student   Student?  @relation(fields: [studentId], references: [id])
+  teacher   Teacher?  @relation(fields: [teacherId], references: [id])
+  staff     Staff?    @relation(fields: [staffId], references: [id])
+  createdBy User?     @relation("ManualAttendance", fields: [createdById], references: [id])
+
+  @@unique([userId, date, type]) // satu absen datang & satu pulang per hari per user
+  @@index([date])
+  @@index([studentId])
+  @@index([teacherId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([deviceId])
+}
+
+// ================= BIOMETRIK & KREDENSIAL =================
+
+model FaceProfile {
+  id            String     @id @default(cuid())
+  userId        String     @unique
+  status        FaceStatus @default(PENDING)
+  consentAt     DateTime
+  consent       Boolean    @default(true)
+  provider      String     @default("mock") // mock | provider eksternal
+  samplesCount  Int        @default(0)
+  registeredBy  String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  user      User?          @relation(fields: [userId], references: [id])
+  embeddings FaceEmbedding[]
+}
+
+model FaceEmbedding {
+  id            String   @id @default(cuid())
+  faceProfileId String
+  userId        String
+  embedding     Json // vector: [number, ...]
+  dimensions    Int      @default(64)
+  version       String   @default("ahash-v1")
+  createdAt     DateTime @default(now())
+
+  faceProfile FaceProfile @relation(fields: [faceProfileId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model QrCredential {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  // QR dinamis: token JWT ditandatangani, nonce disimpan untuk rotasi
+  nonce       String
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  user        User?     @relation(fields: [userId], references: [id])
+}
+
+model CardCredential {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  cardUidHash String    @unique // SHA-256 dari UID kartu
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  user        User?     @relation(fields: [userId], references: [id])
+
+  @@index([cardUidHash])
+}
+
+// ================= IZIN =================
+
+model LeaveRequest {
+  id            String      @id @default(cuid())
+  userId        String
+  studentId     String?
+  type          LeaveType
+  startDate     DateTime    @db.Date
+  endDate       DateTime    @db.Date
+  reason        String
+  attachmentUrl String?
+  status        LeaveStatus @default(PENDING)
+  submittedAt   DateTime    @default(now())
+  reviewedAt    DateTime?
+  reviewedById  String?
+  rejectionReason String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  user      User?          @relation(fields: [userId], references: [id])
+  student   Student?       @relation(fields: [studentId], references: [id])
+  reviewedBy User?         @relation("LeaveReviewer", fields: [reviewedById], references: [id])
+  approvals LeaveApproval[]
+
+  @@index([userId])
+  @@index([studentId])
+  @@index([status])
+  @@index([startDate])
+}
+
+model LeaveApproval {
+  id            String         @id @default(cuid())
+  leaveRequestId String
+  approverId    String
+  action        ApprovalAction
+  note          String?
+  createdAt     DateTime       @default(now())
+
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+  approver     User         @relation(fields: [approverId], references: [id])
+}
+
+// ================= JURNAL MENGAJAR =================
+
+model TeachingJournal {
+  id          String    @id @default(cuid())
+  teacherId   String
+  classId     String
+  subjectId   String
+  scheduleId  String?
+  date        DateTime  @db.Date
+  period      String? // "Jam 1"
+  material    String
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  teacher Teacher @relation(fields: [teacherId], references: [id])
+  class   Class   @relation(fields: [classId], references: [id])
+  subject Subject @relation(fields: [subjectId], references: [id])
+  schedule Schedule? @relation(fields: [scheduleId], references: [id])
+
+  @@unique([teacherId, classId, date])
+  @@index([classId])
+  @@index([date])
+}
+
+// ================= NOTIFIKASI =================
+
+model Notification {
+  id        String               @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  channel   NotificationChannel  @default(IN_APP)
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime             @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+}
+
+// ================= SEKOLAH & PENGATURAN =================
+
+model School {
+  id        String   @id @default(cuid())
+  name      String
+  npsn      String?
+  address   String?
+  phone     String?
+  email     String?
+  logoUrl   String?
+  timezone  String   @default("Asia/Jakarta")
+  latitude  Float?
+  longitude Float?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  locations Location[]
+}
+
+model SchoolSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedById String?
+  updatedAt DateTime @updatedAt
+
+  updatedBy User? @relation(fields: [updatedById], references: [id])
+}
+
+model Location {
+  id           String   @id @default(cuid())
+  schoolId     String
+  name         String
+  latitude     Float
+  longitude    Float
+  radiusMeters Int      @default(100)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+}
+
+// ================= PERANGKAT & SESSION =================
+
+model Device {
+  id          String       @id @default(cuid())
+  deviceId    String       @unique
+  userId      String?
+  name        String
+  browser     String?
+  os          String?
+  ip          String?
+  fingerprint String?
+  lastSeenAt  DateTime?
+  status      DeviceStatus @default(UNKNOWN)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Session {
+  id        String       @id @default(cuid())
+  userId    String
+  deviceId  String?
+  ip        String?
+  userAgent String?
+  status    DeviceStatus @default(UNKNOWN)
+  lastSeenAt DateTime?
+  createdAt DateTime     @default(now())
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model RefreshToken {
+  id          String    @id @default(cuid())
+  userId      String
+  tokenHash   String    @unique
+  jti         String    @unique
+  sessionId   String?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  replacedById String?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model OtpCode {
+  id         String    @id @default(cuid())
+  phone      String
+  codeHash   String // tidak pernah disimpan plaintext
+  purpose    String    @default("parent-login")
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([phone, purpose])
+  @@index([expiresAt])
+}
+
+// ================= AUDIT =================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String // e.g. STUDENT_CREATED, ATTENDANCE_MANUAL_CHANGED
+  entity    String?
+  entityId  String?
+  oldValue  Json?
+  newValue  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([entity, entityId])
+}

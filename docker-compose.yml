@@ -1,0 +1,74 @@
+version: "3.9"
+
+# PresensiKu — Sistem Informasi Absensi Sekolah
+# Jalankan: docker compose up -d --build
+# Akses: http://IP-VPS  (atau http://localhost untuk dev lokal)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: presensiku_postgres
+    environment:
+      POSTGRES_USER: presensiku
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-presensiku123}
+      POSTGRES_DB: presensiku
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U presensiku"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: presensiku_redis
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+
+  backend:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: presensiku_api
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://presensiku:${DB_PASSWORD:-presensiku123}@postgres:5432/presensiku
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      APP_NAME: ${APP_NAME:-PresensiKu}
+      SCHOOL_NAME: ${SCHOOL_NAME:-SMA Negeri 1 Nusantara}
+      APP_URL: ${APP_URL:-http://localhost}
+      API_URL: ${API_URL:-http://localhost:4000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      TIMEZONE: Asia/Jakarta
+      STORAGE_DRIVER: local
+      FACE_RECOGNITION_PROVIDER: ${FACE_RECOGNITION_PROVIDER:-mock}
+      OTP_DEV_PREVIEW: "false"
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    expose:
+      - "4000"
+
+  frontend:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: presensiku_web
+    depends_on:
+      - backend
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-80}:80"
+
+volumes:
+  pgdata:
+  redisdata:
+  uploads:

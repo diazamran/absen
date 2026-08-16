@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+uploads/
+.tools/
+.tmp-test/
+.DS_Store
+coverage/
+.freebuff/

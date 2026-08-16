@@ -1,0 +1,22 @@
+{
+  "name": "presensiku",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PresensiKu - Sistem Informasi Absensi Sekolah Terintegrasi (PWA + Fastify + Prisma + PostgreSQL)",
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm --prefix apps/api run dev\" \"npm --prefix apps/web run dev\"",
+    "dev:api": "npm --prefix apps/api run dev",
+    "dev:web": "npm --prefix apps/web run dev",
+    "build": "npm --prefix apps/api run build && npm --prefix apps/web run build",
+    "start": "npm --prefix apps/api run start",
+    "lint": "npm --prefix apps/api run lint && npm --prefix apps/web run lint",
+    "test": "npm --prefix apps/api run test",
+    "typecheck": "npm --prefix apps/api run typecheck && npm --prefix apps/web run typecheck",
+    "db:migrate": "npm --prefix apps/api run db:migrate",
+    "db:seed": "npm --prefix apps/api run db:seed",
+    "db:studio": "npm --prefix apps/api run db:studio"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

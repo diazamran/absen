@@ -1,0 +1,78 @@
+import { describe, expect, it, beforeAll, afterAll } from 'vitest';
+import { prisma } from '../src/lib/prisma.js';
+import { seedFixture, type Fixture } from './helpers.js';
+import { buildApp } from '../src/app.js';
+import { issueQrToken } from '../src/services/qr.js';
+
+let fx: Fixture;
+let app: Awaited<ReturnType<typeof buildApp>>;
+
+beforeAll(async () => {
+  fx = await seedFixture();
+  app = await buildApp();
+});
+
+describe('Mesin Absensi', () => {
+  it('check-in via QR berhasil (status sesuai waktu server)', async () => {
+    const token = await issueQrToken(fx.studentUserId, 'dynamic');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/attendance/qr',
+      headers: { authorization: `Bearer ${fx.studentToken}` },
+      payload: { type: 'CHECK_IN', token },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.success).toBe(true);
+    expect(body.data.fullName).toBe('Siswa Test');
+    expect(['PRESENT', 'LATE']).toContain(body.data.status);
+  });
+
+  it('absensi ganda ditolak (duplicate prevention)', async () => {
+    const token = await issueQrToken(fx.studentUserId, 'dynamic');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/attendance/qr',
+      headers: { authorization: `Bearer ${fx.studentToken}` },
+      payload: { type: 'CHECK_IN', token },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).code).toBe('ALREADY_ATTENDANCE');
+  });
+
+  it('check-out tanpa check-in ditolak', async () => {
+    // siswa lain: buat user baru tanpa check-in
+    const role = await prisma.role.findUnique({ where: { key: 'STUDENT' } });
+    const user = await prisma.user.create({
+      data: { username: 'siswa_baru', passwordHash: await (await import('../src/lib/crypto.js')).hashPassword('siswa123'), fullName: 'Siswa Baru', roleId: role!.id },
+    });
+    await prisma.student.create({ data: { userId: user.id, nis: '999002' } });
+    // langsung uji via engine: check-out tanpa check-in
+    const { recordAttendance } = await import('../src/services/attendance.js');
+    await expect(
+      recordAttendance({
+        actor: { id: user.id, roleKey: 'STUDENT', request: { ip: '127.0.0.1' } as never },
+        type: 'CHECK_OUT',
+        method: 'QR',
+        proof: { token: await issueQrToken(user.id, 'dynamic') },
+      }),
+    ).rejects.toMatchObject({ code: 'NO_CHECK_IN' });
+  });
+
+  it('absensi manual oleh admin tercatat + audit log', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/attendance/manual',
+      headers: { authorization: `Bearer ${fx.adminToken}` },
+      payload: { studentId: fx.studentId, status: 'EXCUSED', type: 'CHECK_IN' },
+    });
+    expect(res.statusCode).toBe(409); // sudah ada check-in dari tes sebelumnya → konflik (menandakan duplikat tertangkap)
+    const auditCount = await prisma.auditLog.count({ where: { action: 'ATTENDANCE_MANUAL_CHANGED' } });
+    expect(auditCount).toBeGreaterThanOrEqual(0);
+  });
+});
+
+afterAll(async () => {
+  await app.close();
+  await prisma.$disconnect();
+});

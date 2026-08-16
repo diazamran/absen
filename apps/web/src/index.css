@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: 13 148 136;
+  --primary-dark: 45 212 191;
+  --primary-soft: 204 251 241;
+  --surface: 255 255 255;
+  --ink: 15 23 42;
+  --muted: 100 116 139;
+  --line: 226 232 240;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Scrollbar halus */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--line));
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Kamera fullscreen */
+.camera-view video {
+  object-fit: cover;
+  transform: scaleX(-1);
+}
