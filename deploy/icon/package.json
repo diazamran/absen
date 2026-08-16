@@ -1,0 +1,12 @@
+{
+  "name": "presensiku-icon-render",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Render logo SVGs to all PWA + Android icon PNG sizes",
+  "scripts": {
+    "render": "node render.mjs"
+  },
+  "dependencies": {
+    "sharp": "^0.35.3"
+  }
+}

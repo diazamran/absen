@@ -88,8 +88,9 @@ export default function History() {
             {rows?.map((r) => (
               <Card key={r.id} className="flex items-center gap-3 p-3.5">
                 <div className="flex flex-col items-center rounded-xl bg-slate-50 px-3 py-1.5 dark:bg-slate-900">
-                  <span className="text-sm font-bold text-ink">{r.dayKey.slice(8)}</span>
-                  <span className="text-[10px] uppercase text-muted">{r.dayKey.slice(5, 7)}</span>
+                  {/* dayKey bisa tidak ada pada laporan bulanan guru/staff — fallback ke date */}
+                  <span className="text-sm font-bold text-ink">{(r.dayKey || r.date || '').slice(8)}</span>
+                  <span className="text-[10px] uppercase text-muted">{(r.dayKey || r.date || '').slice(5, 7)}</span>
                 </div>
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2">

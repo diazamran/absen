@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1D4FA3"/>
+      <stop offset="0.55" stop-color="#12398A"/>
+      <stop offset="1" stop-color="#0A2768"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2E6AD4"/>
+      <stop offset="1" stop-color="#17419F"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.32" r="0.7">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#glow)"/>
+
+  <!-- Shield: blue fill, gold outer border -->
+  <path d="M256 92 L366 92 C398 92 410 122 404 152 L374 352 C370 386 342 404 314 412 L256 428 L198 412 C170 404 142 386 138 352 L108 152 C102 122 114 92 146 92 Z"
+        fill="url(#shield)" stroke="#FFD200" stroke-width="10" stroke-linejoin="round"/>
+  <!-- Inner magenta crest line -->
+  <path d="M256 110 L351 110 C372 110 381 131 377 152 L350 340 C347 366 327 381 306 388 L256 402 L206 388 C185 381 165 366 162 340 L135 152 C131 131 140 110 161 110 Z"
+        fill="none" stroke="#F04E98" stroke-width="5" stroke-linejoin="round" opacity="0.92"/>
+
+  <!-- Star (white, point up) -->
+  <path d="M256 126 L263.8 147.3 L286.4 148.1 L268.5 162.1 L274.8 183.9 L256 171.2 L237.2 183.9 L243.5 162.1 L225.6 148.1 L248.2 147.3 Z"
+        fill="#FFFFFF"/>
+
+  <!-- Checkmark (attendance) -->
+  <path d="M212 276 L250 314 L306 240"
+        fill="none" stroke="#FFFFFF" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Open book (gold, nods to school emblem) -->
+  <path d="M256 400 C244 387 226 381 211 383 L211 366 C227 364 244 370 256 383 Z" fill="#FFD200"/>
+  <path d="M256 400 C268 387 286 381 301 383 L301 366 C285 364 268 370 256 383 Z" fill="#FFD200"/>
+  <line x1="256" y1="383" x2="256" y2="400" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
+</svg>

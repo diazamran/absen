@@ -331,4 +331,11 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 
 ---
 
+## Log Perubahan
+
+- **Logo baru** — ikon aplikasi didesain ulang terinspirasi emblem SMKN 1 Kras (perisai biru, bingkai emas, aksen magenta, bintang, tanda centang absen, buku terbuka). Berlaku untuk PWA (`apps/web/public/icons/`), favicon, dan semua ikon Android (TWA + WebView). Sumber SVG + script ada di `deploy/icon/` (regenerate: `cd deploy/icon && npm install && npm run render`).
+- **Perbaikan halaman Riwayat** — error `Cannot read properties of undefined (reading 'slice')` saat guru/staff membuka Riwayat Absensi (data laporan bulanan tidak punya `dayKey`). Kini aman dengan fallback ke tanggal.
+
+---
+
 Dibangun dengan Fastify, Prisma, PostgreSQL, Socket.IO, React, Vite, Tailwind CSS, dan PWA.
