@@ -237,13 +237,19 @@ Cakupan tes: autentikasi, rotasi refresh token, RBAC (forbidden untuk role lain)
 
 ## Aplikasi Android (APK)
 
-Aplikasi ini bisa dijadikan **aplikasi Android (APK)** dengan teknik TWA (Trusted Web Activity):
-APK tipis yang membuka aplikasi langsung dari server — **update di VPS otomatis tampil di HP tanpa build ulang APK**.
+Aplikasi ini bisa dijadikan **aplikasi Android (APK)** — APK tipis yang menampilkan website
+langsung dari server, jadi **update di VPS otomatis tampil di HP tanpa build APK ulang**.
+Ada dua pilihan:
+
+- **APK WebView (disarankan)** — hanya menampilkan website; jalan di semua Android 5.0+
+tanpa butuh Chrome/assetlinks, kamera/lokasi/upload sudah aktif.
+  Build: `bash deploy/android/build-apk-webview.sh` → `PresensiKu-WebView-v1.0.0.apk`.
+- **APK TWA** — cangkang PWA (untuk notifikasi push), perlu Chrome + assetlinks untuk fullscreen.
+  Build: `bash deploy/android/build-apk.sh` → `PresensiKu-v1.0.0.apk`.
 
 - **Kompatibel semua Android** 5.0+ (API 21), termasuk HP lama/RAM kecil.
 - Panduan lengkap: [`deploy/android/README-ANDROID.md`](deploy/android/README-ANDROID.md)
-- Build: `bash deploy/android/build-apk.sh` (butuh Java JDK 17+ & Android SDK, sekali install).
-- Aktifkan mode fullscreen via `/.well-known/assetlinks.json` (fingerprint dari keystore).
+- Build butuh Java JDK 17+ & Android SDK (sekali install di komputer).
 
 Tanpa APK pun siswa bisa install langsung dari Chrome: buka aplikasi → menu ⋮ → **Install aplikasi**.
 

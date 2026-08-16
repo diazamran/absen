@@ -1,0 +1,59 @@
+// ============================================================
+// app/build.gradle — Aplikasi WebView PresensiKu
+// APK tipis yang hanya menampilkan website absensi.
+// ============================================================
+
+plugins {
+    id 'com.android.application'
+}
+
+// Kredensial tanda tangan dibaca dari keystore.properties di root proyek
+// (TIDAK di-commit ke git). Dibuat otomatis oleh build-apk-webview.sh / .bat.
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    compileSdkVersion 36
+    namespace "com.presensiku.app"
+
+    defaultConfig {
+        applicationId "com.presensiku.app"
+        minSdkVersion 21
+        targetSdkVersion 36
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    signingConfigs {
+        release {
+            storeFile file(keystoreProperties.getProperty("storeFile", "presensiku-release.keystore"))
+            storePassword keystoreProperties.getProperty("storePassword", "PASSWORD_PLACEHOLDER")
+            keyAlias keystoreProperties.getProperty("keyAlias", "presensiku")
+            keyPassword keystoreProperties.getProperty("keyPassword", "PASSWORD_PLACEHOLDER")
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lintOptions {
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    // Murni framework Android — tanpa dependensi eksternal, APK tetap tipis.
+}

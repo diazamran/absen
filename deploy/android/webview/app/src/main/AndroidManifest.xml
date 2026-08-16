@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.presensiku.app">
+
+    <!-- Internet: koneksi ke server absensi -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Kamera: registrasi wajah & scan wajah siswa -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+
+    <!-- Lokasi: verifikasi absensi geolokasi (titik sekolah) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
+    <!-- Upload bukti izin dari galeri/file manager (Android 5–12) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <!-- Matikan edge-to-edge paksa (Android 15+) agar konten tidak tertutup status bar -->
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_EDGE_TO_EDGE_BY_DEFAULT"
+            android:value="false"/>
+
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
