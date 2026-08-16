@@ -186,14 +186,64 @@ export async function userRoutes(app: FastifyInstance) {
 
   app.delete('/users/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.usersDelete) }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    await prisma.user.update({ where: { id }, data: { isActive: false } });
+    if (id === request.user!.id) {
+      throw ApiError.badRequest('CANNOT_DELETE_SELF', 'Tidak bisa menghapus akun sendiri.');
+    }
+    const existing = await prisma.user.findUnique({
+      where: { id },
+      include: { teacher: true, staff: true, student: true, parent: true },
+    });
+    if (!existing) throw ApiError.notFound('Akun tidak ditemukan.');
+
+    // Hapus PERMANEN: bersihkan semua data terkait dalam satu transaksi,
+    // agar tidak ada sisa data (riwayat absen, wajah, izin, dll) yang menggantung.
+    await prisma.$transaction(async (tx) => {
+      // riwayat absen: absen sendiri + absen manual yang dibuat oleh user ini
+      await tx.attendance.deleteMany({
+        where: {
+          OR: [
+            { userId: id },
+            ...(existing.teacher ? [{ teacherId: existing.teacher.id }] : []),
+            ...(existing.staff ? [{ staffId: existing.staff.id }] : []),
+            { createdById: id },
+          ],
+        },
+      });
+      // biometrik wajah
+      await tx.faceEmbedding.deleteMany({ where: { userId: id } });
+      await tx.faceProfile.deleteMany({ where: { userId: id } });
+      // kredensial QR & kartu
+      await tx.qrCredential.deleteMany({ where: { userId: id } });
+      await tx.cardCredential.deleteMany({ where: { userId: id } });
+      // izin (approval ikut terhapus via cascade)
+      await tx.leaveApproval.deleteMany({ where: { approverId: id } });
+      await tx.leaveRequest.deleteMany({ where: { userId: id } });
+      // notifikasi, sesi, token, perangkat
+      await tx.notification.deleteMany({ where: { userId: id } });
+      await tx.session.deleteMany({ where: { userId: id } });
+      await tx.refreshToken.deleteMany({ where: { userId: id } });
+      await tx.device.deleteMany({ where: { userId: id } });
+      // jadwal & jurnal mengajar guru
+      if (existing.teacher) {
+        await tx.schedule.deleteMany({ where: { teacherId: existing.teacher.id } });
+        await tx.teachingJournal.deleteMany({ where: { teacherId: existing.teacher.id } });
+      }
+      // profil terkait
+      if (existing.teacher) await tx.teacher.delete({ where: { userId: id } });
+      if (existing.staff) await tx.staff.delete({ where: { userId: id } });
+      if (existing.student) await tx.student.delete({ where: { userId: id } });
+      if (existing.parent) await tx.parent.delete({ where: { userId: id } });
+      await tx.user.delete({ where: { id } });
+    });
+
     await audit({
       userId: request.user!.id,
-      action: 'USER_DEACTIVATED',
+      action: 'USER_DELETED',
       entity: 'User',
       entityId: id,
+      oldValue: { username: existing.username, fullName: existing.fullName },
       request,
     });
-    return reply.send({ success: true, message: 'Akun dinonaktifkan.' });
+    return reply.send({ success: true, message: 'Akun dihapus permanen.' });
   });
 }

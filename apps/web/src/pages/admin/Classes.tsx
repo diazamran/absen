@@ -67,7 +67,7 @@ function ClassesTab() {
 
   const del = useMutation({
     mutationFn: (id: string) => api(`/classes/${id}`, { method: 'DELETE' }),
-    onSuccess: () => { toast('success', 'Kelas dinonaktifkan.'); qc.invalidateQueries({ queryKey: ['classes'] }); },
+    onSuccess: () => { toast('success', 'Kelas dihapus permanen.'); qc.invalidateQueries({ queryKey: ['classes'] }); },
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'),
   });
 
@@ -76,7 +76,7 @@ function ClassesTab() {
       for (const id of selected) await api(`/classes/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
-      toast('success', `${selected.size} kelas dinonaktifkan.`);
+      toast('success', `${selected.size} kelas dihapus permanen.`);
       setSelected(new Set());
       qc.invalidateQueries({ queryKey: ['classes'] });
     },
@@ -94,7 +94,7 @@ function ClassesTab() {
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
         {selected.size > 0 && (
-          <Button variant="danger" className="px-3 py-2 text-sm" onClick={() => window.confirm(`Nonaktifkan ${selected.size} kelas terpilih?`) && bulkDelete.mutate()} disabled={bulkDelete.isPending}>
+          <Button variant="danger" className="px-3 py-2 text-sm" onClick={() => window.confirm(`Hapus PERMANEN ${selected.size} kelas terpilih? Jadwal & jurnal ikut terhapus; siswa di kelas kehilangan kelas.`) && bulkDelete.mutate()} disabled={bulkDelete.isPending}>
             {bulkDelete.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Hapus Terpilih ({selected.size})
           </Button>
         )}
@@ -130,10 +130,10 @@ function ClassesTab() {
               </button>
               <button
                 onClick={() => {
-                  if (window.confirm(`Nonaktifkan kelas ${c.name}? Siswa di dalamnya tidak akan hilang.`)) del.mutate(c.id);
+                  if (window.confirm(`Hapus PERMANEN kelas ${c.name}? Jadwal & jurnal ikut terhapus dan siswa di dalamnya tidak lagi memiliki kelas.`)) del.mutate(c.id);
                 }}
                 className="rounded-xl p-2 text-muted hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
-                title="Nonaktifkan"
+                title="Hapus permanen"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -362,7 +362,7 @@ function SubjectsTab() {
       for (const id of selected) await api(`/subjects/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
-      toast('success', `${selected.size} mapel dinonaktifkan.`);
+      toast('success', `${selected.size} mapel dihapus permanen.`);
       setSelected(new Set());
       qc.invalidateQueries({ queryKey: ['subjects'] });
     },
@@ -475,7 +475,7 @@ function SubjectsTab() {
               Pilih semua ({subjects.length})
             </label>
             {selected.size > 0 && (
-              <Button variant="danger" className="!px-3 !py-1.5 text-xs" onClick={() => window.confirm(`Nonaktifkan ${selected.size} mapel terpilih?`) && bulkDelete.mutate()} disabled={bulkDelete.isPending}>
+              <Button variant="danger" className="!px-3 !py-1.5 text-xs" onClick={() => window.confirm(`Hapus PERMANEN ${selected.size} mapel terpilih? Jadwal mengajar terkait ikut terhapus.`) && bulkDelete.mutate()} disabled={bulkDelete.isPending}>
                 {bulkDelete.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Hapus Terpilih ({selected.size})
               </Button>
             )}
@@ -493,14 +493,14 @@ function SubjectsTab() {
               <button onClick={() => setEditing(s)} className="rounded-xl p-2 text-muted hover:bg-primary-soft hover:text-primary" title="Edit"><Pencil className="h-4 w-4" /></button>
               <button
                 onClick={() => {
-                  if (window.confirm(`Nonaktifkan mapel ${s.name}?`)) {
+                  if (window.confirm(`Hapus PERMANEN mapel ${s.name}? Jadwal mengajar terkait ikut terhapus.`)) {
                     api(`/subjects/${s.id}`, { method: 'DELETE' })
-                      .then(() => { toast('success', 'Mapel dinonaktifkan.'); qc.invalidateQueries({ queryKey: ['subjects'] }); })
+                      .then(() => { toast('success', 'Mapel dihapus permanen.'); qc.invalidateQueries({ queryKey: ['subjects'] }); })
                       .catch((e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'));
                   }
                 }}
                 className="rounded-xl p-2 text-muted hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
-                title="Nonaktifkan"
+                title="Hapus permanen"
               >
                 <Trash2 className="h-4 w-4" />
               </button>

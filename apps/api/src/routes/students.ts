@@ -277,11 +277,46 @@ export async function studentRoutes(app: FastifyInstance) {
 
   app.delete('/students/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.studentsDelete) }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const existing = await prisma.student.findUnique({ where: { id } });
+    const existing = await prisma.student.findUnique({
+      where: { id },
+      include: { user: true, parentLinks: { include: { parent: true } } },
+    });
     if (!existing) throw ApiError.notFound('Siswa tidak ditemukan.');
-    // Soft delete: nonaktifkan akun (aman & auditabel)
-    await prisma.user.update({ where: { id: existing.userId }, data: { isActive: false } });
-    await prisma.student.update({ where: { id }, data: { isActive: false } });
+    const parentIds = existing.parentLinks.map((l) => l.parentId);
+
+    // Hapus PERMANEN: bersihkan semua data terkait dalam satu transaksi
+    await prisma.$transaction(async (tx) => {
+      // riwayat absen & izin
+      await tx.attendance.deleteMany({ where: { OR: [{ userId: existing.userId }, { studentId: id }] } });
+      await tx.leaveRequest.deleteMany({ where: { userId: existing.userId } });
+      // biometrik wajah & kredensial
+      await tx.faceEmbedding.deleteMany({ where: { userId: existing.userId } });
+      await tx.faceProfile.deleteMany({ where: { userId: existing.userId } });
+      await tx.qrCredential.deleteMany({ where: { userId: existing.userId } });
+      await tx.cardCredential.deleteMany({ where: { userId: existing.userId } });
+      // notifikasi, sesi, token, perangkat
+      await tx.notification.deleteMany({ where: { userId: existing.userId } });
+      await tx.session.deleteMany({ where: { userId: existing.userId } });
+      await tx.refreshToken.deleteMany({ where: { userId: existing.userId } });
+      await tx.device.deleteMany({ where: { userId: existing.userId } });
+      // data siswa (link orang tua ikut terhapus otomatis via cascade)
+      await tx.student.delete({ where: { id } });
+      await tx.user.delete({ where: { id: existing.userId } });
+      // hapus akun orang tua yang tidak punya anak tersisa lagi
+      for (const parentId of parentIds) {
+        const links = await tx.studentParent.count({ where: { parentId } });
+        if (links > 0) continue;
+        const parent = await tx.parent.findUnique({ where: { id: parentId } });
+        if (!parent) continue;
+        await tx.notification.deleteMany({ where: { userId: parent.userId } });
+        await tx.session.deleteMany({ where: { userId: parent.userId } });
+        await tx.refreshToken.deleteMany({ where: { userId: parent.userId } });
+        await tx.device.deleteMany({ where: { userId: parent.userId } });
+        await tx.parent.delete({ where: { id: parentId } });
+        await tx.user.delete({ where: { id: parent.userId } });
+      }
+    });
+
     await audit({
       userId: request.user!.id,
       action: 'STUDENT_DELETED',
@@ -290,6 +325,6 @@ export async function studentRoutes(app: FastifyInstance) {
       oldValue: { nis: existing.nis },
       request,
     });
-    return reply.send({ success: true, message: 'Siswa dinonaktifkan.' });
+    return reply.send({ success: true, message: 'Siswa dihapus permanen.' });
   });
 }

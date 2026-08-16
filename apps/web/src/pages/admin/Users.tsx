@@ -36,7 +36,7 @@ export default function Users() {
   const deleteUser = useMutation({
     mutationFn: (id: string) => api(`/users/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      toast('success', 'Akun dinonaktifkan.');
+      toast('success', 'Akun dihapus permanen.');
       qc.invalidateQueries({ queryKey: ['users'] });
     },
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus.'),
@@ -62,7 +62,7 @@ export default function Users() {
       }
     },
     onSuccess: () => {
-      toast('success', `${selected.size} akun dinonaktifkan.`);
+      toast('success', `${selected.size} akun dihapus permanen.`);
       setSelected(new Set());
       qc.invalidateQueries({ queryKey: ['users'] });
     },
@@ -88,7 +88,7 @@ export default function Users() {
         </div>
         <div className="flex flex-wrap gap-2">
           {selected.size > 0 && (
-            <Button variant="danger" onClick={() => window.confirm(`Nonaktifkan ${selected.size} akun terpilih?`) && bulkDelete.mutate()} disabled={bulkDelete.isPending}>
+            <Button variant="danger" onClick={() => window.confirm(`Hapus permanen ${selected.size} akun terpilih? Riwayat absen, jadwal, dan izin terkait ikut terhapus dan tidak bisa dikembalikan.`) && bulkDelete.mutate()} disabled={bulkDelete.isPending}>
               {bulkDelete.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
               Hapus Terpilih ({selected.size})
             </Button>
@@ -130,10 +130,10 @@ export default function Users() {
                 </button>
                 <button
                   onClick={() => {
-                    if (window.confirm(`Nonaktifkan akun ${u.fullName} (@${u.username})?`)) deleteUser.mutate(u.id);
+                    if (window.confirm(`Hapus PERMANEN akun ${u.fullName} (@${u.username})? Seluruh data terkait (riwayat absen, jadwal, izin) akan dihapus dari database dan tidak bisa dikembalikan.`)) deleteUser.mutate(u.id);
                   }}
                   className="rounded-xl p-2 text-muted hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
-                  title="Nonaktifkan"
+                  title="Hapus permanen"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>

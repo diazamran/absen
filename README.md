@@ -140,7 +140,7 @@ npm run dev
   - **Daftarkan manual**: pilih siswa → kamera aktif → ambil 1–4 sampel → centang persetujuan → **Simpan Registrasi** (langsung aktif karena dilakukan admin).
   - Data wajah bisa di-**Reset** kapan saja (mis. ada masalah).
 - **Siswa**: identitas memakai **NISN** + **Tanggal Lahir** (dipakai login), tambah/edit lengkap, hapus per siswa, **checkbox hapus massal**, **Import & Export CSV + template** (format sama: NISN, Nama, Kelas, Jurusan, Jenis Kelamin, Tanggal Lahir, No HP, Orang Tua, Card UID).
-- **Guru & Staff**: tambah/edit (termasuk ubah **username**) /nonaktifkan akun, **checkbox hapus massal**, **Import & Export CSV + template**, dan role **Petugas Piket** yang terpisah dari Guru.
+- **Guru & Staff**: tambah/edit (termasuk ubah **username**) /hapus akun, **checkbox hapus massal**, **Import & Export CSV + template**, dan role **Petugas Piket** yang terpisah dari Guru.
 - **Kelas & Jadwal** (menu **Kelas**): tab **Kelas** (tambah/edit/hapus + **checkbox hapus massal** + **Import/Export CSV** + template, kolom Nama Kelas/Tingkat/Jurusan/Ruang), tab **Jurusan** (TKJ/TKR/TPTUP/KULINER), tab **Mapel** (tambah/edit/hapus + **checkbox hapus massal** + **Import/Export CSV** + template), tab **Jadwal**.
 - **Pengaturan → Aturan Absensi**: selain jam batas terlambat, kini ada **Jam Pulang Sekolah**. Siswa yang absen pulang **sebelum jam itu** otomatis ditandai **"Pulang Awal"** di riwayat absensi (badge kuning) — mis. izin lebih awal karena sakit/keperluan.
 - **Perangkat**: daftar HP/komputer yang pernah login (terdaftar otomatis, 1000+ perangkat tidak memperlambat server). Tersedia **cari**, **filter status**, **blokir/aktifkan**, **hapus (reset)** per perangkat, dan **hapus massal** via checkbox.

@@ -49,7 +49,7 @@ export default function Students() {
   const deleteOne = useMutation({
     mutationFn: (id: string) => api(`/students/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      toast('success', 'Siswa dinonaktifkan.');
+      toast('success', 'Siswa dihapus permanen.');
       qc.invalidateQueries({ queryKey: ['students'] });
     },
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus.'),
@@ -71,7 +71,7 @@ export default function Students() {
       }
     },
     onSuccess: () => {
-      toast('success', `${selected.size} siswa dihapus.`);
+      toast('success', `${selected.size} siswa dihapus permanen.`);
       setSelected(new Set());
       qc.invalidateQueries({ queryKey: ['students'] });
     },
@@ -110,7 +110,7 @@ export default function Students() {
             variant="danger"
             className="!px-3 !py-1.5 text-xs"
             onClick={() => {
-              if (window.confirm(`Hapus ${selected.size} siswa terpilih? (akun dinonaktifkan)`)) bulkDelete.mutate();
+              if (window.confirm(`Hapus PERMANEN ${selected.size} siswa terpilih? Riwayat absen, izin, dan data wajah ikut terhapus dari database dan tidak bisa dikembalikan.`)) bulkDelete.mutate();
             }}
             disabled={bulkDelete.isPending}
           >
@@ -149,7 +149,7 @@ export default function Students() {
               </button>
               <button
                 onClick={() => {
-                  if (window.confirm(`Hapus ${s.fullName} (NISN ${s.nis})? Akun akan dinonaktifkan.`)) deleteOne.mutate(s.id);
+                  if (window.confirm(`Hapus PERMANEN ${s.fullName} (NISN ${s.nis})? Riwayat absen, izin, dan data wajah ikut terhapus dan tidak bisa dikembalikan.`)) deleteOne.mutate(s.id);
                 }}
                 className="rounded-xl p-2 text-muted hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
                 title="Hapus"

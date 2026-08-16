@@ -76,9 +76,14 @@ export async function akademikRoutes(app: FastifyInstance) {
 
   app.delete('/classes/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.classesManage) }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    await prisma.class.update({ where: { id }, data: { isActive: false } });
+    // Hapus PERMANEN: jadwal & jurnal terkait ikut dihapus, siswa di kelas otomatis lepas kelas
+    await prisma.$transaction(async (tx) => {
+      await tx.teachingJournal.deleteMany({ where: { classId: id } });
+      await tx.schedule.deleteMany({ where: { classId: id } });
+      await tx.class.delete({ where: { id } });
+    });
     await audit({ userId: request.user!.id, action: 'CLASS_DELETED', entity: 'Class', entityId: id, request });
-    return reply.send({ success: true, message: 'Kelas dinonaktifkan.' });
+    return reply.send({ success: true, message: 'Kelas dihapus permanen.' });
   });
 
   // ===== Jurusan =====
@@ -117,9 +122,14 @@ export async function akademikRoutes(app: FastifyInstance) {
 
   app.delete('/subjects/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.classesManage) }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    await prisma.subject.update({ where: { id }, data: { isActive: false } });
+    // Hapus PERMANEN: jadwal & jurnal terkait ikut dihapus
+    await prisma.$transaction(async (tx) => {
+      await tx.schedule.deleteMany({ where: { subjectId: id } });
+      await tx.teachingJournal.deleteMany({ where: { subjectId: id } });
+      await tx.subject.delete({ where: { id } });
+    });
     await audit({ userId: request.user!.id, action: 'SUBJECT_DELETED', entity: 'Subject', entityId: id, request });
-    return reply.send({ success: true, message: 'Mapel dinonaktifkan.' });
+    return reply.send({ success: true, message: 'Mapel dihapus permanen.' });
   });
 
   // ===== Tahun Ajaran =====
