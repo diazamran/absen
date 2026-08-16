@@ -120,7 +120,8 @@ npm run dev
 
 ### Panduan Penggunaan (di mana fiturnya?)
 
-**Siswa** (login NISN + tanggal lahir, mis. NISN `121212` + `2009-01-15` — dihalaman login pilih tab **Siswa**; tanpa username/password)
+**Siswa** (login NISN + tanggal lahir, mis. NISN `121212` + `2009-01-15` — di halaman login pilih tab **Siswa**; tanpa username/password)
+- Beranda memiliki menu **Registrasi Wajah** (juga di halaman **Absen** lewat kartu "Wajah belum terdaftar" dan di drawer ☰) — daftar wajah sendiri → status *Menunggu Persetujuan* → disetujui admin.
 - Bottom nav **Absen** → pilih metode: **Absen Wajah**, **QR Code**, **Kartu / NFC**, atau **Manual** (khusus guru/petugas).
 - **Absen Wajah**: kamera depan + frame scan + liveness. Belum terdaftar? Kartu **"Daftar"** muncul otomatis di halaman Absen → siswa mendaftarkan wajahnya sendiri dari HP (sampel + persetujuan) → status *Menunggu Persetujuan* → setelah di-**Setujui** admin, wajah baru bisa dipakai absen.
 - **QR Code**: mode **Pindai QR** (kamera belakang) atau **QR Saya** (tampilkan QR pribadi + tombol *Absen Sekarang* untuk tes tanpa HP kedua).
@@ -140,7 +141,8 @@ npm run dev
   - Data wajah bisa di-**Reset** kapan saja (mis. ada masalah).
 - **Siswa**: identitas memakai **NISN** + **Tanggal Lahir** (dipakai login), tambah/edit lengkap, hapus per siswa, **checkbox hapus massal**, **Import & Export CSV + template** (format sama: NISN, Nama, Kelas, Jurusan, Jenis Kelamin, Tanggal Lahir, No HP, Orang Tua, Card UID).
 - **Guru & Staff**: tambah/edit (termasuk ubah **username**) /nonaktifkan akun, **checkbox hapus massal**, **Import & Export CSV + template**, dan role **Petugas Piket** yang terpisah dari Guru.
-- **Kelas**: tab **Jurusan** (kelola jurusan TKJ/TKR/TPTUP/KULINER), kelas dengan **edit/hapus** + pilih jurusan, mapel, jadwal.
+- **Kelas & Jadwal** (menu **Kelas**): tab **Kelas** (tambah/edit/hapus + **Import/Export CSV** + template, kolom Nama Kelas/Tingkat/Jurusan/Ruang), tab **Jurusan** (TKJ/TKR/TPTUP/KULINER), tab **Mapel** (tambah/edit/hapus + **Import/Export CSV** + template), tab **Jadwal**.
+- **Siswa** login sebagai siswa: beranda menampilkan menu **Registrasi Wajah** langsung (juga di halaman **Absen** dan drawer ☰) — daftar wajah sendiri → menunggu persetujuan admin.
 - **Pengaturan → Aturan Absensi & Lokasi**: set **titik absensi GPS** (latitude/longitude + radius) dan aktifkan "Wajib GPS di area sekolah" — siswa hanya bisa absen di dalam radius itu (diverifikasi server).
 - **Izin**: pengajuan bisa menyertakan **bukti/lampiran** (surat/dokter) — admin melihat tombol **Lihat Bukti**.
 - **Absensi**: monitoring realtime hari ini + tombol **Absen Manual** (fallback, tercatat di audit log).

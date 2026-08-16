@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Cog, Pencil } from 'lucide-react';
-import { api, ApiError } from '../../lib/api';
+import { Plus, Trash2, Cog, Pencil, Upload, Download, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { api, ApiError, downloadCsv } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Input, Field, Select, Segmented, EmptyState, Modal } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
@@ -45,11 +45,15 @@ interface ClassRow {
   homeroomTeacher?: string | null; room?: string | null; studentCount: number;
 }
 
+const CLASS_HEADERS = ['Nama Kelas', 'Tingkat', 'Jurusan', 'Ruang'];
+const CLASS_SAMPLE = ['X-TKJ-1', 'X', 'TKJ', 'Labkom 1'];
+
 function ClassesTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ClassRow | null>(null);
+  const [showImport, setShowImport] = useState(false);
 
   const { data: classes } = useQuery({
     queryKey: ['classes'],
@@ -68,7 +72,12 @@ function ClassesTab() {
 
   return (
     <div>
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex flex-wrap justify-end gap-2">
+        <Button variant="outline" className="px-3 py-2 text-sm" onClick={async () => {
+          try { await downloadCsv('/export/classes', 'kelas.csv'); toast('success', 'Export CSV berhasil diunduh.'); }
+          catch (e) { toast('error', e instanceof ApiError ? e.message : 'Gagal export.'); }
+        }}><Download className="h-4 w-4" /> Export</Button>
+        <Button variant="outline" className="px-3 py-2 text-sm" onClick={() => setShowImport(true)}><Upload className="h-4 w-4" /> Import</Button>
         <Button className="px-3 py-2 text-sm" onClick={() => setFormOpen(true)}><Plus className="h-4 w-4" /> Kelas Baru</Button>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -101,7 +110,107 @@ function ClassesTab() {
       </div>
       {formOpen && <ClassForm majors={majors || []} onClose={() => setFormOpen(false)} />}
       {editing && <ClassForm majors={majors || []} initial={editing} onClose={() => setEditing(null)} />}
+      {showImport && <ClassImport onClose={() => setShowImport(false)} />}
     </div>
+  );
+}
+
+interface ClassPreviewRow {
+  line: number; name: string; grade: string; majorName: string; room: string; errors: string[]; valid: boolean;
+}
+
+function downloadClassTemplate() {
+  const csv = [CLASS_HEADERS.join(','), CLASS_SAMPLE.join(',')].join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'template-import-kelas.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function ClassImport({ onClose }: { onClose: () => void }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<ClassPreviewRow[] | null>(null);
+  const [meta, setMeta] = useState<{ total: number; valid: number; invalid: number } | null>(null);
+
+  const doPreview = useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await api<{ success: boolean; data: { total: number; valid: number; invalid: number; rows: ClassPreviewRow[] } }>('/import/classes/preview', { method: 'POST', formData: form });
+      return res.data;
+    },
+    onSuccess: (data) => { setPreview(data.rows); setMeta({ total: data.total, valid: data.valid, invalid: data.invalid }); },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal membaca file.'),
+  });
+
+  const doConfirm = useMutation({
+    mutationFn: () =>
+      api<{ success: boolean; message: string; data: { created: number; errors: { name: string; error: string }[] } }>('/import/classes/confirm', {
+        method: 'POST',
+        body: { rows: (preview || []).filter((r) => r.valid).map((r) => ({ name: r.name, grade: r.grade, majorName: r.majorName, room: r.room })) },
+      }),
+    onSuccess: (res) => {
+      toast('success', res.message);
+      qc.invalidateQueries({ queryKey: ['classes'] });
+      setPreview(null); setMeta(null); onClose();
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal import.'),
+  });
+
+  return (
+    <Modal open onClose={onClose} title="Import Kelas (CSV)" wide>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between rounded-2xl bg-primary-soft/40 p-3">
+          <p className="text-xs text-muted">Kolom: Nama Kelas, Tingkat (X/XI/XII), Jurusan, Ruang.</p>
+          <Button variant="outline" className="!px-3 !py-1.5 text-xs" onClick={downloadClassTemplate}>
+            <Download className="h-3.5 w-3.5" /> Template
+          </Button>
+        </div>
+        <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => e.target.files?.[0] && doPreview.mutate(e.target.files[0])} />
+        {!preview && (
+          <button onClick={() => fileRef.current?.click()} className="flex w-full flex-col items-center gap-2 rounded-3xl border-2 border-dashed border-line py-10 transition-colors hover:border-primary">
+            <div className="rounded-2xl bg-primary-soft p-3 text-primary"><Upload className="h-6 w-6" /></div>
+            <p className="font-bold text-ink">Pilih file CSV</p>
+            <p className="text-sm text-muted">Pratinjau & validasi per baris sebelum disimpan.</p>
+          </button>
+        )}
+        {preview && meta && (
+          <>
+            <Card className="flex items-center justify-between">
+              <div className="flex gap-4 text-sm">
+                <span className="text-muted">Total: <b className="text-ink">{meta.total}</b></span>
+                <span className="text-emerald-600">Valid: <b>{meta.valid}</b></span>
+                <span className="text-red-500">Error: <b>{meta.invalid}</b></span>
+              </div>
+              <Button variant="outline" className="!px-3 !py-1.5 text-xs" onClick={() => { setPreview(null); setMeta(null); }}>Pilih file lain</Button>
+            </Card>
+            <div className="max-h-72 space-y-1.5 overflow-y-auto">
+              {preview.map((r) => (
+                <div key={r.line} className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm ${r.valid ? 'bg-emerald-50/60 dark:bg-emerald-500/10' : 'bg-red-50/60 dark:bg-red-500/10'}`}>
+                  {r.valid ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" /> : <XCircle className="h-4 w-4 shrink-0 text-red-500" />}
+                  <span className="w-10 text-xs text-muted">#{r.line}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium text-ink">{r.name}</span>
+                  <span className="text-xs text-muted">{r.grade}{r.majorName ? ` · ${r.majorName}` : ''}</span>
+                  {r.errors.length > 0 && <span className="text-xs text-red-500">{r.errors.join('; ')}</span>}
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setPreview(null); setMeta(null); }}>Batal</Button>
+              <Button onClick={() => doConfirm.mutate()} disabled={meta.valid === 0 || doConfirm.isPending}>
+                {doConfirm.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                Import {meta.valid} Kelas
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -191,20 +300,75 @@ function MajorsTab() {
   );
 }
 
+const SUBJECT_HEADERS = ['Nama', 'Kode'];
+const SUBJECT_SAMPLE = ['Dasar-Dasar Program Keahlian TKJ', 'DPK-TKJ'];
+
+interface SubjectRow {
+  id: string; name: string; code?: string | null; color?: string | null;
+}
+
 function SubjectsTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
+  const [editing, setEditing] = useState<SubjectRow | null>(null);
+  const [preview, setPreview] = useState<{ line: number; name: string; code: string; errors: string[]; valid: boolean }[] | null>(null);
+  const [meta, setMeta] = useState<{ total: number; valid: number; invalid: number } | null>(null);
+
   const { data: subjects } = useQuery({
     queryKey: ['subjects'],
-    queryFn: () => api<{ success: boolean; data: { id: string; name: string; code?: string | null; color?: string | null }[] }>('/subjects').then((r) => r.data),
+    queryFn: () => api<{ success: boolean; data: SubjectRow[] }>('/subjects').then((r) => r.data),
   });
+
   const mutation = useMutation({
     mutationFn: () => api('/subjects', { method: 'POST', body: { name, code } }),
     onSuccess: () => { toast('success', 'Mapel ditambahkan.'); qc.invalidateQueries({ queryKey: ['subjects'] }); setName(''); setCode(''); },
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'),
   });
+
+  const doPreview = useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await api<{ success: boolean; data: { total: number; valid: number; invalid: number; rows: { line: number; name: string; code: string; errors: string[]; valid: boolean }[] } }>('/import/subjects/preview', { method: 'POST', formData: form });
+      return res.data;
+    },
+    onSuccess: (data) => { setPreview(data.rows); setMeta({ total: data.total, valid: data.valid, invalid: data.invalid }); },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal membaca file.'),
+  });
+
+  const doConfirm = useMutation({
+    mutationFn: () =>
+      api<{ success: boolean; message: string }>('/import/subjects/confirm', {
+        method: 'POST',
+        body: { rows: (preview || []).filter((r) => r.valid).map((r) => ({ name: r.name, code: r.code })) },
+      }),
+    onSuccess: (res) => {
+      toast('success', res.message);
+      qc.invalidateQueries({ queryKey: ['subjects'] });
+      setPreview(null); setMeta(null);
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal import.'),
+  });
+
+  const downloadTemplate = () => {
+    const csv = [SUBJECT_HEADERS.join(','), SUBJECT_SAMPLE.join(',')].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'template-import-mapel.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const doExport = async () => {
+    try { await downloadCsv('/export/subjects', 'mapel.csv'); toast('success', 'Export CSV berhasil diunduh.'); }
+    catch (e) { toast('error', e instanceof ApiError ? e.message : 'Gagal export.'); }
+  };
+
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <Card>
@@ -214,17 +378,95 @@ function SubjectsTab() {
           <Field label="Kode"><Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="BIO" /></Field>
           <Button className="w-full" onClick={() => mutation.mutate()} disabled={!name}>Simpan</Button>
         </div>
+        <div className="mt-4 flex gap-2">
+          <Button variant="outline" className="flex-1 !px-2 !py-2 text-xs" onClick={doExport}><Download className="h-3.5 w-3.5" /> Export</Button>
+          <Button variant="outline" className="flex-1 !px-2 !py-2 text-xs" onClick={() => fileRef.current?.click()}><Upload className="h-3.5 w-3.5" /> Import</Button>
+        </div>
+        <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => e.target.files?.[0] && doPreview.mutate(e.target.files[0])} />
       </Card>
-      <div className="lg:col-span-2 grid grid-cols-2 gap-3">
-        {subjects?.map((s) => (
-          <Card key={s.id} className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl" style={{ backgroundColor: s.color || '#0d9488' }} />
-            <div>
-              <p className="font-bold text-ink">{s.name}</p>
-              <p className="text-xs text-muted">{s.code}</p>
+      <div className="lg:col-span-2">
+        {preview && meta && (
+          <Card className="mb-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm font-semibold text-ink">Pratinjau Import Mapel</p>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="text-emerald-600">Valid: <b>{meta.valid}</b></span>
+                <span className="text-red-500">Error: <b>{meta.invalid}</b></span>
+                <Button variant="outline" className="!px-2 !py-1 text-xs" onClick={downloadTemplate}><Download className="h-3 w-3" /> Template</Button>
+              </div>
+            </div>
+            <div className="max-h-56 space-y-1.5 overflow-y-auto">
+              {preview.map((r) => (
+                <div key={r.line} className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm ${r.valid ? 'bg-emerald-50/60 dark:bg-emerald-500/10' : 'bg-red-50/60 dark:bg-red-500/10'}`}>
+                  {r.valid ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" /> : <XCircle className="h-4 w-4 shrink-0 text-red-500" />}
+                  <span className="w-10 text-xs text-muted">#{r.line}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium text-ink">{r.name}</span>
+                  <span className="text-xs text-muted">{r.code}</span>
+                  {r.errors.length > 0 && <span className="text-xs text-red-500">{r.errors.join('; ')}</span>}
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex justify-end gap-2">
+              <Button variant="outline" className="!px-3 !py-1.5 text-xs" onClick={() => { setPreview(null); setMeta(null); }}>Batal</Button>
+              <Button className="!px-3 !py-1.5 text-xs" onClick={() => doConfirm.mutate()} disabled={!meta.valid || doConfirm.isPending}>
+                {doConfirm.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Import {meta.valid} Mapel
+              </Button>
             </div>
           </Card>
-        ))}
+        )}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {subjects?.map((s) => (
+            <Card key={s.id} className="flex items-center gap-3">
+              <div className="h-10 w-10 shrink-0 rounded-xl" style={{ backgroundColor: s.color || '#0d9488' }} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-bold text-ink">{s.name}</p>
+                <p className="text-xs text-muted">{s.code}</p>
+              </div>
+              <button onClick={() => setEditing(s)} className="rounded-xl p-2 text-muted hover:bg-primary-soft hover:text-primary" title="Edit"><Pencil className="h-4 w-4" /></button>
+              <button
+                onClick={() => {
+                  if (window.confirm(`Nonaktifkan mapel ${s.name}?`)) {
+                    api(`/subjects/${s.id}`, { method: 'DELETE' })
+                      .then(() => { toast('success', 'Mapel dinonaktifkan.'); qc.invalidateQueries({ queryKey: ['subjects'] }); })
+                      .catch((e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'));
+                  }
+                }}
+                className="rounded-xl p-2 text-muted hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
+                title="Nonaktifkan"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </Card>
+          ))}
+          {subjects?.length === 0 && <div className="col-span-full"><EmptyState icon={Cog} title="Belum ada mapel" /></div>}
+        </div>
+      </div>
+      {editing && (
+        <Modal open onClose={() => setEditing(null)} title={`Edit Mapel — ${editing.name}`}>
+          <SubjectEditForm initial={editing} onClose={() => setEditing(null)} />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function SubjectEditForm({ initial, onClose }: { initial: SubjectRow; onClose: () => void }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [form, setForm] = useState({ name: initial.name, code: initial.code || '', color: initial.color || '' });
+  const mutation = useMutation({
+    mutationFn: () => api(`/subjects/${initial.id}`, { method: 'PUT', body: form }),
+    onSuccess: () => { toast('success', 'Mapel diperbarui.'); qc.invalidateQueries({ queryKey: ['subjects'] }); onClose(); },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'),
+  });
+  return (
+    <div className="space-y-3">
+      <Field label="Nama"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+      <Field label="Kode"><Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} /></Field>
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={onClose}>Batal</Button>
+        <Button onClick={() => mutation.mutate()} disabled={!form.name}>Simpan</Button>
       </div>
     </div>
   );

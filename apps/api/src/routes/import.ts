@@ -374,7 +374,162 @@ export async function importRoutes(app: FastifyInstance) {
     });
   });
 
+  // ===== Import massal Kelas =====
+  const GRADE_MAP: Record<string, string> = { x: 'X', xi: 'XI', xii: 'XII', '10': 'X', '11': 'XI', '12': 'XII' };
+
+  app.post('/import/classes/preview', { preHandler: app.requirePermission(PERMISSION_KEYS.classesManage) }, async (request, reply) => {
+    const data = await request.file();
+    if (!data) throw ApiError.badRequest('FILE_REQUIRED', 'Pilih file CSV terlebih dahulu.');
+    const text = (await data.toBuffer()).toString('utf8').replace(/^\uFEFF/, '');
+    const rows = parseCsv(text);
+    if (rows.length < 2) throw ApiError.badRequest('EMPTY_CSV', 'File CSV kosong atau tidak memiliki data.');
+
+    const headers = rows[0].map((h) => h.trim().toLowerCase());
+    for (const r of ['nama kelas']) {
+      if (!headers.includes(r)) {
+        throw ApiError.badRequest('INVALID_HEADERS', 'Kolom "Nama Kelas" wajib ada. Kolom yang didukung: Nama Kelas, Tingkat, Jurusan, Ruang.');
+      }
+    }
+    const idx = (name: string) => headers.indexOf(name);
+
+    const existingNames = new Set((await prisma.class.findMany({ select: { name: true } })).map((c) => c.name.toLowerCase()));
+    const majors = await prisma.major.findMany({ select: { id: true, name: true } });
+    const majorMap = new Map(majors.map((m) => [m.name.toLowerCase(), m.id]));
+    const ay = await prisma.academicYear.findFirst({ where: { isActive: true } });
+    if (!ay) throw ApiError.badRequest('SETUP_INCOMPLETE', 'Tahun ajaran aktif belum disiapkan.');
+
+    const preview = rows.slice(1).map((r, i) => {
+      const get = (name: string) => (idx(name) >= 0 ? (r[idx(name)] || '').trim() : '');
+      const name = get('nama kelas');
+      const gradeRaw = (get('tingkat') || 'x').toLowerCase();
+      const grade = GRADE_MAP[gradeRaw] || '';
+      const majorName = get('jurusan');
+      const errors: string[] = [];
+      if (!name) errors.push('Nama kelas kosong');
+      else if (existingNames.has(name.toLowerCase())) errors.push('Nama kelas sudah ada');
+      if (!grade) errors.push(`Tingkat "${get('tingkat')}" tidak dikenal (X/XI/XII)`);
+      if (majorName && !majorMap.has(majorName.toLowerCase())) errors.push(`Jurusan "${majorName}" tidak ditemukan`);
+      return { line: i + 2, name, grade, majorName, room: get('ruang'), errors, valid: errors.length === 0 };
+    });
+
+    return reply.send({
+      success: true,
+      data: { total: preview.length, valid: preview.filter((p) => p.valid).length, invalid: preview.filter((p) => !p.valid).length, rows: preview },
+    });
+  });
+
+  app.post('/import/classes/confirm', { preHandler: app.requirePermission(PERMISSION_KEYS.classesManage) }, async (request, reply) => {
+    const body = validate(
+      z.object({
+        rows: z.array(z.object({ name: z.string().min(1), grade: z.string().min(1), majorName: z.string().optional(), room: z.string().optional() })),
+      }),
+      request.body,
+    );
+    const majors = await prisma.major.findMany({ select: { id: true, name: true } });
+    const majorMap = new Map(majors.map((m) => [m.name.toLowerCase(), m.id]));
+    const ay = await prisma.academicYear.findFirst({ where: { isActive: true } });
+    if (!ay) throw ApiError.badRequest('SETUP_INCOMPLETE', 'Tahun ajaran aktif belum disiapkan.');
+
+    let created = 0;
+    const errors: { name: string; error: string }[] = [];
+    for (const row of body.rows) {
+      try {
+        if (await prisma.class.findFirst({ where: { name: row.name } })) {
+          errors.push({ name: row.name, error: 'Nama kelas sudah ada' });
+          continue;
+        }
+        await prisma.class.create({
+          data: {
+            name: row.name,
+            grade: row.grade,
+            majorId: row.majorName ? majorMap.get(row.majorName.toLowerCase()) : undefined,
+            room: row.room || undefined,
+            academicYearId: ay.id,
+          },
+        });
+        created++;
+      } catch (e) {
+        errors.push({ name: row.name, error: (e as Error).message });
+      }
+    }
+    await audit({ userId: request.user!.id, action: 'CLASSES_IMPORTED', entity: 'Class', newValue: { created, failed: errors.length }, request });
+    return reply.send({ success: true, message: `${created} kelas berhasil diimpor.`, data: { created, errors } });
+  });
+
+  // ===== Import massal Mata Pelajaran =====
+  app.post('/import/subjects/preview', { preHandler: app.requirePermission(PERMISSION_KEYS.classesManage) }, async (request, reply) => {
+    const data = await request.file();
+    if (!data) throw ApiError.badRequest('FILE_REQUIRED', 'Pilih file CSV terlebih dahulu.');
+    const text = (await data.toBuffer()).toString('utf8').replace(/^\uFEFF/, '');
+    const rows = parseCsv(text);
+    if (rows.length < 2) throw ApiError.badRequest('EMPTY_CSV', 'File CSV kosong atau tidak memiliki data.');
+
+    const headers = rows[0].map((h) => h.trim().toLowerCase());
+    if (!headers.includes('nama')) {
+      throw ApiError.badRequest('INVALID_HEADERS', 'Kolom "Nama" wajib ada. Kolom yang didukung: Nama, Kode.');
+    }
+    const idx = (name: string) => headers.indexOf(name);
+
+    const existing = new Set((await prisma.subject.findMany({ select: { name: true } })).map((s) => s.name.toLowerCase()));
+    const preview = rows.slice(1).map((r, i) => {
+      const get = (name: string) => (idx(name) >= 0 ? (r[idx(name)] || '').trim() : '');
+      const name = get('nama');
+      const errors: string[] = [];
+      if (!name) errors.push('Nama kosong');
+      else if (existing.has(name.toLowerCase())) errors.push('Mapel sudah ada');
+      return { line: i + 2, name, code: get('kode'), errors, valid: errors.length === 0 };
+    });
+
+    return reply.send({
+      success: true,
+      data: { total: preview.length, valid: preview.filter((p) => p.valid).length, invalid: preview.filter((p) => !p.valid).length, rows: preview },
+    });
+  });
+
+  app.post('/import/subjects/confirm', { preHandler: app.requirePermission(PERMISSION_KEYS.classesManage) }, async (request, reply) => {
+    const body = validate(
+      z.object({ rows: z.array(z.object({ name: z.string().min(1), code: z.string().optional() })) }),
+      request.body,
+    );
+    let created = 0;
+    const errors: { name: string; error: string }[] = [];
+    for (const row of body.rows) {
+      try {
+        if (await prisma.subject.findFirst({ where: { name: row.name } })) {
+          errors.push({ name: row.name, error: 'Mapel sudah ada' });
+          continue;
+        }
+        await prisma.subject.create({ data: { name: row.name, code: row.code || undefined } });
+        created++;
+      } catch (e) {
+        errors.push({ name: row.name, error: (e as Error).message });
+      }
+    }
+    await audit({ userId: request.user!.id, action: 'SUBJECTS_IMPORTED', entity: 'Subject', newValue: { created, failed: errors.length }, request });
+    return reply.send({ success: true, message: `${created} mapel berhasil diimpor.`, data: { created, errors } });
+  });
+
   // ===== Export CSV (format sama dengan template import) =====
+  app.get('/export/classes', { preHandler: app.requirePermission(PERMISSION_KEYS.scheduleRead) }, async (_request, reply) => {
+    const rows = await prisma.class.findMany({
+      where: { isActive: true },
+      include: { major: { select: { name: true } } },
+      orderBy: [{ grade: 'asc' }, { name: 'asc' }],
+    });
+    const csv = toCsv(rows.map((c) => ({ 'Nama Kelas': c.name, Tingkat: c.grade, Jurusan: c.major?.name ?? '', Ruang: c.room ?? '' })));
+    reply.header('Content-Type', 'text/csv; charset=utf-8');
+    reply.header('Content-Disposition', 'attachment; filename="kelas.csv"');
+    return reply.send(csv);
+  });
+
+  app.get('/export/subjects', { preHandler: app.requirePermission(PERMISSION_KEYS.scheduleRead) }, async (_request, reply) => {
+    const rows = await prisma.subject.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } });
+    const csv = toCsv(rows.map((s) => ({ Nama: s.name, Kode: s.code ?? '' })));
+    reply.header('Content-Type', 'text/csv; charset=utf-8');
+    reply.header('Content-Disposition', 'attachment; filename="mapel.csv"');
+    return reply.send(csv);
+  });
+
   app.get('/export/students', { preHandler: app.requirePermission(PERMISSION_KEYS.studentsRead) }, async (_request, reply) => {
     const rows = await prisma.student.findMany({
       where: { isActive: true },

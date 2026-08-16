@@ -289,6 +289,9 @@ export function AppShell() {
               ) : (
                 [
                   { to: '/app/home', label: 'Beranda', icon: <Home className="h-5 w-5" /> },
+                  ...(user?.roleKey === 'STUDENT'
+                    ? [{ to: '/app/face-me', label: 'Registrasi Wajah', icon: <ScanFace className="h-5 w-5" /> }]
+                    : []),
                   { to: '/app/history', label: 'Riwayat', icon: <History className="h-5 w-5" /> },
                   { to: '/app/leave', label: 'Ajukan Izin', icon: <FilePlus2 className="h-5 w-5" /> },
                   ...(user?.roleKey === 'PIKET'

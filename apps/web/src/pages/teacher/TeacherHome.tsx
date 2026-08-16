@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  FilePlus2, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, XCircle, CalendarDays, MapPin, ShieldCheck,
+  FilePlus2, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, XCircle, CalendarDays, MapPin, ShieldCheck, ScanFace,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -37,10 +37,11 @@ export default function TeacherHome() {
 
   const menu = isStudent
     ? [
-        { label: 'Ajukan Izin', icon: <FilePlus2 className="h-6 w-6" />, to: '/app/leave/mine' },
+        { label: 'Registrasi Wajah', icon: <ScanFace className="h-6 w-6" />, to: '/app/face-me' },
         { label: 'Absen Wajah', icon: <Camera className="h-6 w-6" />, to: '/app/absent/face' },
         { label: 'Scan QR', icon: <ScanLine className="h-6 w-6" />, to: '/app/absent/qr' },
         { label: 'Kartu / NFC', icon: <ClipboardList className="h-6 w-6" />, to: '/app/absent/card' },
+        { label: 'Ajukan Izin', icon: <FilePlus2 className="h-6 w-6" />, to: '/app/leave/mine' },
         { label: 'Riwayat', icon: <History className="h-6 w-6" />, to: '/app/history' },
       ]
     : isPiket

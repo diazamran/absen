@@ -107,6 +107,21 @@ export async function akademikRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: subject });
   });
 
+  app.put('/subjects/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.classesManage) }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = validate(z.object({ name: z.string().min(1).optional(), code: z.string().optional(), color: z.string().optional() }), request.body);
+    await prisma.subject.update({ where: { id }, data: body });
+    await audit({ userId: request.user!.id, action: 'SUBJECT_UPDATED', entity: 'Subject', entityId: id, newValue: body, request });
+    return reply.send({ success: true, message: 'Mapel diperbarui.' });
+  });
+
+  app.delete('/subjects/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.classesManage) }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    await prisma.subject.update({ where: { id }, data: { isActive: false } });
+    await audit({ userId: request.user!.id, action: 'SUBJECT_DELETED', entity: 'Subject', entityId: id, request });
+    return reply.send({ success: true, message: 'Mapel dinonaktifkan.' });
+  });
+
   // ===== Tahun Ajaran =====
   app.get('/academic-years', { preHandler: app.requirePermission(PERMISSION_KEYS.scheduleRead) }, async (_request, reply) => {
     const rows = await prisma.academicYear.findMany({ orderBy: { name: 'desc' } });
