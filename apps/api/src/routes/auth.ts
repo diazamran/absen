@@ -18,7 +18,7 @@ const loginSchema = z.object({
 
 const studentLoginSchema = z.object({
   nis: z.string().min(1, 'NISN wajib diisi.'),
-  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal lahir salah (YYYY-MM-DD).'),
+  password: z.string().min(1, 'Password wajib diisi.'),
   deviceId: z.string().optional(),
 });
 
@@ -55,7 +55,7 @@ export async function authRoutes(app: FastifyInstance) {
       throw ApiError.unauthorized('INVALID_CREDENTIALS', 'Username atau password salah.');
     }
     if (user.role.key === 'STUDENT') {
-      throw ApiError.unauthorized('STUDENT_LOGIN_METHOD', 'Siswa login menggunakan NISN dan tanggal lahir.');
+      throw ApiError.unauthorized('STUDENT_LOGIN_METHOD', 'Siswa login menggunakan NISN dan password.');
     }
     const ok = await verifyPassword(body.password, user.passwordHash);
     if (!ok) {
@@ -90,7 +90,7 @@ export async function authRoutes(app: FastifyInstance) {
     });
   });
 
-  // Login siswa: NISN + tanggal lahir (tanpa username/password)
+  // Login siswa: NISN + password (password default: smkn1kras, bisa direset massal)
   app.post('/auth/login-student', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = validate(studentLoginSchema, request.body);
     const student = await prisma.student.findUnique({
@@ -98,15 +98,11 @@ export async function authRoutes(app: FastifyInstance) {
       include: { user: { include: { role: true } } },
     });
     if (!student || !student.user || !student.user.isActive) {
-      throw ApiError.unauthorized('INVALID_CREDENTIALS', 'NISN atau tanggal lahir salah.');
+      throw ApiError.unauthorized('INVALID_CREDENTIALS', 'NISN atau password salah.');
     }
-    if (!student.birthDate) {
-      throw ApiError.badRequest('BIRTHDATE_MISSING', 'Tanggal lahir belum diisi pada data siswa. Hubungi admin / TU untuk melengkapinya.');
-    }
-    const d = student.birthDate;
-    const dob = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
-    if (dob !== body.birthDate.trim()) {
-      throw ApiError.unauthorized('INVALID_CREDENTIALS', 'NISN atau tanggal lahir salah.');
+    const ok = await verifyPassword(body.password, student.user.passwordHash);
+    if (!ok) {
+      throw ApiError.unauthorized('INVALID_CREDENTIALS', 'NISN atau password salah.');
     }
 
     const tokens = await issueTokens(student.user.id, { request, deviceId: body.deviceId });

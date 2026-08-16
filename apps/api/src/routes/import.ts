@@ -8,6 +8,7 @@ import { audit } from '../lib/audit.js';
 import { toCsv } from '../lib/csv.js';
 import { ROLE_LABELS } from '../rbac/permissions.js';
 import { PERMISSION_KEYS } from '../rbac/permissions.js';
+import { config } from '../config.js';
 
 function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
@@ -152,7 +153,7 @@ export async function importRoutes(app: FastifyInstance) {
         const user = await prisma.user.create({
           data: {
             username,
-            passwordHash: await hashPassword('siswa123'),
+            passwordHash: await hashPassword(config.defaultStudentPassword),
             fullName: row.nama,
             phone: row.phone || undefined,
             roleId: studentRole.id,

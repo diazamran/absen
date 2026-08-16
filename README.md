@@ -120,7 +120,7 @@ npm run dev
 
 ### Panduan Penggunaan (di mana fiturnya?)
 
-**Siswa** (login NISN + tanggal lahir, mis. NISN `121212` + `2009-01-15` — di halaman login pilih tab **Siswa**; tanpa username/password)
+**Siswa** (login NISN + password, mis. NISN `121212` + `smkn1kras` — di halaman login pilih tab **Siswa**; password default bisa di-reset massal oleh admin/TU)
 - Beranda memiliki menu **Registrasi Wajah** (juga di halaman **Absen** lewat kartu "Wajah belum terdaftar" dan di drawer ☰) — daftar wajah sendiri → status *Menunggu Persetujuan* → disetujui admin.
 - Bottom nav **Absen** → pilih metode: **Absen Wajah**, **QR Code**, **Kartu / NFC**, atau **Manual** (khusus guru/petugas).
 - **Absen Wajah**: kamera depan + frame scan + liveness. Belum terdaftar? Kartu **"Daftar"** muncul otomatis di halaman Absen → siswa mendaftarkan wajahnya sendiri dari HP (sampel + persetujuan) → status *Menunggu Persetujuan* → setelah di-**Setujui** admin, wajah baru bisa dipakai absen.
@@ -139,7 +139,7 @@ npm run dev
   - **Menunggu Persetujuan** (bagian atas): daftar siswa yang mendaftar wajah dari HP-nya sendiri → tombol **Setujui** (wajah langsung aktif) atau **Reset** (tolak/hapus data).
   - **Daftarkan manual**: pilih siswa → kamera aktif → ambil 1–4 sampel → centang persetujuan → **Simpan Registrasi** (langsung aktif karena dilakukan admin).
   - Data wajah bisa di-**Reset** kapan saja (mis. ada masalah).
-- **Siswa**: identitas memakai **NISN** + **Tanggal Lahir** (dipakai login), tambah/edit lengkap, hapus per siswa, **checkbox hapus massal**, **Import & Export CSV + template** (format sama: NISN, Nama, Kelas, Jurusan, Jenis Kelamin, Tanggal Lahir, No HP, Orang Tua, Card UID).
+- **Siswa**: identitas memakai **NISN** + **Password** (default `smkn1kras`, login siswa memakai NISN + password), tambah/edit lengkap, hapus per siswa, **checkbox hapus massal**, **reset password massal** (ke `smkn1kras`) & per siswa, **Import & Export CSV + template** (format sama: NISN, Nama, Kelas, Jurusan, Jenis Kelamin, Tanggal Lahir, No HP, Orang Tua, Card UID).
 - **Guru & Staff**: tambah/edit (termasuk ubah **username**) /hapus akun, **checkbox hapus massal**, **Import & Export CSV + template**, dan role **Petugas Piket** yang terpisah dari Guru.
 - **Kelas & Jadwal** (menu **Kelas**): tab **Kelas** (tambah/edit/hapus + **checkbox hapus massal** + **Import/Export CSV** + template, kolom Nama Kelas/Tingkat/Jurusan/Ruang), tab **Jurusan** (TKJ/TKR/TPTUP/KULINER), tab **Mapel** (tambah/edit/hapus + **checkbox hapus massal** + **Import/Export CSV** + template), tab **Jadwal**.
 - **Pengaturan → Aturan Absensi**: selain jam batas terlambat, kini ada **Jam Pulang Sekolah**. Siswa yang absen pulang **sebelum jam itu** otomatis ditandai **"Pulang Awal"** di riwayat absensi (badge kuning) — mis. izin lebih awal karena sakit/keperluan.

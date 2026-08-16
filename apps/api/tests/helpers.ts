@@ -128,7 +128,7 @@ export async function seedFixture(): Promise<Fixture> {
   const studentUser = await prisma.user.create({
     data: {
       username: 'siswa_test',
-      passwordHash: await hashPassword('siswa123'),
+      passwordHash: await hashPassword('smkn1kras'),
       fullName: 'Siswa Test',
       roleId: roles.get('STUDENT')!,
     },
@@ -146,7 +146,7 @@ export async function seedFixture(): Promise<Fixture> {
   const { buildApp } = await import('../src/app.js');
   const app = await buildApp();
   const loginAdmin = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'admin_test', password: 'admin123' } });
-  const loginStudent = await app.inject({ method: 'POST', url: '/api/auth/login-student', payload: { nis: '999001', birthDate: '2010-01-01' } });
+  const loginStudent = await app.inject({ method: 'POST', url: '/api/auth/login-student', payload: { nis: '999001', password: 'smkn1kras' } });
   const loginTeacher = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'guru_test', password: 'guru123' } });
   await app.close();
 

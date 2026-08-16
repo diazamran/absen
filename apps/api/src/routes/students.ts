@@ -6,6 +6,7 @@ import { validate } from '../utils/validate.js';
 import { ApiError } from '../utils/errors.js';
 import { audit } from '../lib/audit.js';
 import { PERMISSION_KEYS } from '../rbac/permissions.js';
+import { config } from '../config.js';
 
 const studentCreateSchema = z.object({
   nis: z.string().min(1, 'NIS wajib diisi.'),
@@ -118,7 +119,7 @@ export async function studentRoutes(app: FastifyInstance) {
       throw ApiError.conflict('USERNAME_EXISTS', 'Username sudah digunakan.');
     }
 
-    const password = body.password || 'siswa123';
+    const password = body.password || config.defaultStudentPassword;
     const user = await prisma.user.create({
       data: {
         username,
@@ -174,6 +175,36 @@ export async function studentRoutes(app: FastifyInstance) {
     });
 
     return reply.send({ success: true, message: 'Siswa berhasil ditambahkan.', data: { id: student.id } });
+  });
+
+  // Reset password siswa (massal atau per siswa) ke password default
+  app.post('/students/reset-password', { preHandler: app.requirePermission(PERMISSION_KEYS.studentsUpdate) }, async (request, reply) => {
+    const body = validate(z.object({ ids: z.array(z.string()).optional() }), request.body ?? {});
+    const students = await prisma.student.findMany({
+      where: body.ids && body.ids.length > 0 ? { id: { in: body.ids } } : {},
+      select: { id: true, userId: true, nis: true },
+    });
+    if (students.length === 0) {
+      throw ApiError.notFound('Tidak ada siswa yang dipilih.');
+    }
+    const passwordHash = await hashPassword(config.defaultStudentPassword);
+    const updated = await prisma.user.updateMany({
+      where: { id: { in: students.map((s) => s.userId) } },
+      data: { passwordHash },
+    });
+    await audit({
+      userId: request.user!.id,
+      action: 'STUDENT_PASSWORD_RESET',
+      entity: 'Student',
+      entityId: null,
+      newValue: { count: updated.count, defaultPassword: config.defaultStudentPassword },
+      request,
+    });
+    return reply.send({
+      success: true,
+      message: `${updated.count} password siswa direset ke ${config.defaultStudentPassword}.`,
+      data: { count: updated.count },
+    });
   });
 
   app.put('/students/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.studentsUpdate) }, async (request, reply) => {

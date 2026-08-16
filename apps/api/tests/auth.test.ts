@@ -34,8 +34,8 @@ describe('Autentikasi', () => {
     expect(JSON.parse(res.body).code).toBe('STUDENT_LOGIN_METHOD');
   });
 
-  it('login siswa berhasil dengan NISN + tanggal lahir yang benar', async () => {
-    const res = await app.inject({ method: 'POST', url: '/api/auth/login-student', payload: { nis: '999001', birthDate: '2010-01-01' } });
+  it('login siswa berhasil dengan NISN + password yang benar', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/login-student', payload: { nis: '999001', password: 'smkn1kras' } });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.success).toBe(true);
@@ -44,14 +44,14 @@ describe('Autentikasi', () => {
     expect(body.data.user.student.nis).toBe('999001');
   });
 
-  it('login siswa gagal dengan tanggal lahir salah', async () => {
-    const res = await app.inject({ method: 'POST', url: '/api/auth/login-student', payload: { nis: '999001', birthDate: '2010-02-02' } });
+  it('login siswa gagal dengan password salah', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/login-student', payload: { nis: '999001', password: 'salah' } });
     expect(res.statusCode).toBe(401);
     expect(JSON.parse(res.body).code).toBe('INVALID_CREDENTIALS');
   });
 
   it('login siswa gagal dengan NISN tidak terdaftar', async () => {
-    const res = await app.inject({ method: 'POST', url: '/api/auth/login-student', payload: { nis: '000000', birthDate: '2010-01-01' } });
+    const res = await app.inject({ method: 'POST', url: '/api/auth/login-student', payload: { nis: '000000', password: 'smkn1kras' } });
     expect(res.statusCode).toBe(401);
     expect(JSON.parse(res.body).code).toBe('INVALID_CREDENTIALS');
   });

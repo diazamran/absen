@@ -26,7 +26,7 @@ interface AuthCtx {
   user: MeData | null;
   loading: boolean;
   login: (username: string, password: string, deviceId?: string) => Promise<void>;
-  loginStudent: (nis: string, birthDate: string, deviceId?: string) => Promise<void>;
+  loginStudent: (nis: string, password: string, deviceId?: string) => Promise<void>;
   loginParentOtp: (phone: string, code: string, deviceId?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
@@ -71,10 +71,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     registerDevice(deviceId);
   };
 
-  const loginStudent = async (nis: string, birthDate: string, deviceId?: string) => {
+  const loginStudent = async (nis: string, password: string, deviceId?: string) => {
     const res = await api<{ success: boolean; data: { accessToken: string; refreshToken: string; user: MeData } }>(
       '/auth/login-student',
-      { method: 'POST', body: { nis, birthDate, deviceId } },
+      { method: 'POST', body: { nis, password, deviceId } },
     );
     storeLogin(res.data.accessToken, res.data.refreshToken, res.data.user);
     registerDevice(deviceId);

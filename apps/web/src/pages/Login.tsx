@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ShieldCheck, Users, Baby, Lock, User as UserIcon, KeyRound, MessageCircle, ArrowLeft, Clock, CalendarDays, Hash } from 'lucide-react';
+import { ShieldCheck, Users, Baby, Lock, User as UserIcon, KeyRound, MessageCircle, ArrowLeft, Clock, Hash } from 'lucide-react';
 import { useAuth, deviceId } from '../lib/auth';
 import { useTheme } from '../lib/theme';
 import { useToast } from '../lib/toast';
@@ -21,7 +21,7 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [nis, setNis] = useState('');
-  const [birthDate, setBirthDate] = useState('');
+  const [studentPassword, setStudentPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [otpSent, setOtpSent] = useState(false);
@@ -36,13 +36,13 @@ export default function Login() {
   const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname || '/';
 
   const doStudentLogin = async () => {
-    if (!nis.trim() || !birthDate) {
-      toast('warning', 'NISN dan tanggal lahir wajib diisi.');
+    if (!nis.trim() || !studentPassword) {
+      toast('warning', 'NISN dan password wajib diisi.');
       return;
     }
     setLoading(true);
     try {
-      await loginStudent(nis.trim(), birthDate, deviceId());
+      await loginStudent(nis.trim(), studentPassword, deviceId());
       toast('success', 'Berhasil masuk.');
       navigate(from, { replace: true });
     } catch (e) {
@@ -192,17 +192,17 @@ export default function Login() {
               </>
             ) : role === 'student' ? (
               <>
-                <p className="text-sm text-muted">Login dengan NISN dan tanggal lahir (tanpa password).</p>
+                <p className="text-sm text-muted">Login dengan NISN dan password.</p>
                 <Field label="NISN">
                   <div className="relative">
                     <Hash className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
                     <Input className="pl-10" value={nis} onChange={(e) => setNis(e.target.value)} placeholder="Nomor Induk Siswa Nasional" inputMode="numeric" autoCapitalize="none" />
                   </div>
                 </Field>
-                <Field label="Tanggal Lahir" hint="Format: tahun-bulan-tanggal, sesuai data di sekolah.">
+                <Field label="Password" hint="Password awal: smkn1kras (bisa diubah oleh admin/TU).">
                   <div className="relative">
-                    <CalendarDays className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                    <Input className="pl-10" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && doStudentLogin()} />
+                    <Lock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                    <Input className="pl-10" type="password" value={studentPassword} onChange={(e) => setStudentPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && doStudentLogin()} placeholder="••••••••" autoCapitalize="none" autoComplete="current-password" />
                   </div>
                 </Field>
                 <Button className="w-full py-3" onClick={doStudentLogin} disabled={loading}>

@@ -9,6 +9,8 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   appName: process.env.APP_NAME || 'PresensiKu',
   schoolName: process.env.SCHOOL_NAME || 'SMA Negeri 1 Nusantara',
+  // Password default akun siswa (bisa direset massal dari menu Siswa)
+  defaultStudentPassword: process.env.STUDENT_DEFAULT_PASSWORD || 'smkn1kras',
   apiUrl: process.env.API_URL || 'http://localhost:4000',
   appUrl: process.env.APP_URL || 'http://localhost:5173',
   timezone: process.env.TIMEZONE || 'Asia/Jakarta',

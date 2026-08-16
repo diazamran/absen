@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { GraduationCap, Plus, Search, Upload, Download, Pencil, Trash2, Camera, CreditCard, Loader2 } from 'lucide-react';
+import { GraduationCap, Plus, Search, Upload, Download, Pencil, Trash2, KeyRound, Loader2 } from 'lucide-react';
 import { api, ApiError, downloadCsv } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Input, Field, Select, Modal, Badge, EmptyState } from '../../lib/ui';
@@ -78,6 +78,16 @@ export default function Students() {
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus.'),
   });
 
+  const resetPassword = useMutation({
+    mutationFn: (ids: string[]) => api('/students/reset-password', { method: 'POST', body: { ids } }),
+    onSuccess: (_d, ids) => {
+      toast('success', `Password ${ids.length} siswa direset ke smkn1kras.`);
+      setSelected(new Set());
+      qc.invalidateQueries({ queryKey: ['students'] });
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal reset password.'),
+  });
+
   return (
     <div>
       <PageHeader title="Siswa" subtitle="Kelola data siswa" />
@@ -104,19 +114,31 @@ export default function Students() {
       </div>
 
       {selected.size > 0 && (
-        <div className="mb-3 flex items-center justify-between rounded-2xl border border-red-200 bg-red-50/60 px-4 py-2.5 dark:bg-red-500/10">
-          <p className="text-sm font-semibold text-red-600">{selected.size} siswa dipilih</p>
-          <Button
-            variant="danger"
-            className="!px-3 !py-1.5 text-xs"
-            onClick={() => {
-              if (window.confirm(`Hapus PERMANEN ${selected.size} siswa terpilih? Riwayat absen, izin, dan data wajah ikut terhapus dari database dan tidak bisa dikembalikan.`)) bulkDelete.mutate();
-            }}
-            disabled={bulkDelete.isPending}
-          >
-            {bulkDelete.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-            Hapus Terpilih
-          </Button>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-line/70 bg-primary-soft/60 px-4 py-2.5 dark:bg-primary-500/10">
+          <p className="text-sm font-semibold text-ink">{selected.size} siswa dipilih</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              className="!px-3 !py-1.5 text-xs"
+              onClick={() => {
+                if (window.confirm(`Reset password ${selected.size} siswa terpilih ke smkn1kras? Siswa bisa langsung login dengan NISN + smkn1kras.`)) resetPassword.mutate([...selected]);
+              }}
+              disabled={resetPassword.isPending}
+            >
+              {resetPassword.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
+              Reset Password
+            </Button>
+            <Button
+              variant="danger"
+              className="!px-3 !py-1.5 text-xs"
+              onClick={() => {
+                if (window.confirm(`Hapus PERMANEN ${selected.size} siswa terpilih? Riwayat absen, izin, dan data wajah ikut terhapus dari database dan tidak bisa dikembalikan.`)) bulkDelete.mutate();
+              }}
+              disabled={bulkDelete.isPending}
+            >
+              {bulkDelete.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Hapus Terpilih
+            </Button>
+          </div>
         </div>
       )}
 
@@ -136,7 +158,7 @@ export default function Students() {
             <div className="min-w-0 flex-1">
               <p className="truncate font-bold text-ink">{s.fullName}</p>
               <p className="text-xs text-muted">{s.nis} · {s.className || 'Tanpa kelas'} {s.majorName ? `· ${s.majorName}` : ''}</p>
-              <p className="mt-0.5 truncate font-mono text-[11px] text-primary">Login: NISN {s.nis} + tanggal lahir</p>
+              <p className="mt-0.5 truncate font-mono text-[11px] text-primary">Login: NISN {s.nis}</p>
             </div>
             <div className="hidden items-center gap-1.5 sm:flex">
               {s.faceRegistered ? <Badge status="PRESENT" label="Wajah" /> : <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-muted dark:bg-slate-700">No wajah</span>}
@@ -144,6 +166,15 @@ export default function Students() {
               {!s.isActive && <Badge status="BLOCKED" label="Nonaktif" />}
             </div>
             <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  if (window.confirm(`Reset password ${s.fullName} (NISN ${s.nis}) ke smkn1kras?`)) resetPassword.mutate([s.id]);
+                }}
+                className="rounded-xl p-2 text-muted hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-500/10"
+                title="Reset password ke smkn1kras"
+              >
+                <KeyRound className="h-4 w-4" />
+              </button>
               <button onClick={() => setEditing(s)} className="rounded-xl p-2 text-muted hover:bg-primary-soft hover:text-primary" title="Edit">
                 <Pencil className="h-4 w-4" />
               </button>
@@ -174,11 +205,11 @@ function StudentForm({ onClose, classes }: { onClose: () => void; classes: { id:
   const { toast } = useToast();
   const qc = useQueryClient();
   const [form, setForm] = useState({
-    nis: '', fullName: '', gender: 'MALE', birthDate: '', classId: '', parentName: '', parentPhone: '', cardUid: '',
+    nis: '', fullName: '', gender: 'MALE', birthDate: '', classId: '', parentName: '', parentPhone: '', cardUid: '', password: '',
   });
 
   const mutation = useMutation({
-    mutationFn: () => api('/students', { method: 'POST', body: form }),
+    mutationFn: () => api('/students', { method: 'POST', body: { ...form, password: form.password || undefined } }),
     onSuccess: () => {
       toast('success', 'Siswa berhasil ditambahkan.');
       qc.invalidateQueries({ queryKey: ['students'] });
@@ -192,7 +223,7 @@ function StudentForm({ onClose, classes }: { onClose: () => void; classes: { id:
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="NISN *"><Input value={form.nis} onChange={(e) => setForm({ ...form, nis: e.target.value })} placeholder="Nomor Induk Siswa Nasional" /></Field>
         <Field label="Nama Lengkap *"><Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} placeholder="Nama siswa" /></Field>
-        <Field label="Tanggal Lahir" hint="Dipakai untuk login siswa (NISN + tanggal lahir)"><Input type="date" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} /></Field>
+        <Field label="Tanggal Lahir"><Input type="date" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} /></Field>
         <Field label="Jenis Kelamin">
           <Select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
             <option value="MALE">Laki-laki</option>
@@ -205,6 +236,7 @@ function StudentForm({ onClose, classes }: { onClose: () => void; classes: { id:
             {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </Select>
         </Field>
+        <Field label="Password Awal" hint="Default: smkn1kras (bisa direset massal nanti)"><Input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="smkn1kras" autoComplete="off" /></Field>
         <Field label="Nama Orang Tua"><Input value={form.parentName} onChange={(e) => setForm({ ...form, parentName: e.target.value })} placeholder="Opsional" /></Field>
         <Field label="No WhatsApp Orang Tua"><Input value={form.parentPhone} onChange={(e) => setForm({ ...form, parentPhone: e.target.value })} placeholder="0812…" /></Field>
         <Field label="UID Kartu (opsional)"><Input value={form.cardUid} onChange={(e) => setForm({ ...form, cardUid: e.target.value })} placeholder="04:A2:3B:…" /></Field>
@@ -265,7 +297,7 @@ function StudentEdit({ student, classes, onClose }: { student: StudentRow; class
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="NISN *"><Input value={form.nis} onChange={(e) => setForm({ ...form, nis: e.target.value })} /></Field>
         <Field label="Nama Lengkap *"><Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></Field>
-        <Field label="Tanggal Lahir" hint="Dipakai untuk login siswa (NISN + tanggal lahir)"><Input type="date" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} /></Field>
+        <Field label="Tanggal Lahir"><Input type="date" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} /></Field>
         <Field label="Jenis Kelamin">
           <Select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
             <option value="MALE">Laki-laki</option>
