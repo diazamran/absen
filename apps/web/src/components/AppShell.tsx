@@ -297,6 +297,12 @@ export function AppShell() {
                   ...(user?.roleKey === 'PIKET'
                     ? [{ to: '/app/gate', label: 'Scan Gerbang', icon: <ScanLine className="h-5 w-5" /> }]
                     : [{ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-5 w-5" /> }]),
+                  ...(user?.roleKey === 'PIKET'
+                    ? [
+                        { to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> },
+                        { to: '/app/reports', label: 'Laporan & Cetak', icon: <BarChart3 className="h-5 w-5" /> },
+                      ]
+                    : []),
                   { to: '/app/notifications', label: 'Notifikasi', icon: <Bell className="h-5 w-5" /> },
                   { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-5 w-5" /> },
                 ].map((item) => (

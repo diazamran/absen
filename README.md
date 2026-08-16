@@ -129,7 +129,7 @@ npm run dev
 
 **Guru / Staff / Wali Kelas** (login `guru` / `guru123`)
 - **Petugas Piket** adalah **role tersendiri** (terpisah dari Guru): admin memilih role **Petugas Piket** saat membuat/import akun (atau ubah role lewat Edit). Hanya Petugas Piket & admin yang bisa scan absen siswa di gerbang.
-- Login sebagai Petugas Piket → dashboard menampilkan kartu **"Kamu petugas piket hari ini"** → **Buka Gerbang** — kamera otomatis, scan wajah/QR/kartu untuk mencatat absen siswa di gerbang. Menu/bottom nav **Absen** membuka gerbang.
+- Login sebagai Petugas Piket → dashboard menampilkan kartu **"Kamu petugas piket hari ini"** → **Buka Gerbang** — kamera otomatis, scan wajah/QR/kartu untuk mencatat absen siswa di gerbang. Menu/bottom nav **Absen** membuka gerbang. Petugas Piket juga punya akses **Laporan & Cetak** (reports + export CSV) dan **Persetujuan Izin** (approve/tolak izin siswa) lewat drawer ☰.
 - Guru/Staff/Wali Kelas absen **diri sendiri** lewat bottom nav **Absen** (wajah/QR/kartu) — tidak bisa scan siswa di gerbang.
 - **Kelas** → pilih kelas → validasi kehadiran (bottom sheet ubah status siswa).
 - **Jurnal Mengajar** & menu lain lewat drawer ☰ (kiri atas).

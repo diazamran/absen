@@ -72,25 +72,34 @@ export async function userRoutes(app: FastifyInstance) {
     const role = await prisma.role.findUnique({ where: { key: body.roleKey } });
     if (!role) throw ApiError.badRequest('INVALID_ROLE', 'Role tidak valid.');
 
-    const user = await prisma.user.create({
-      data: {
-        username: body.username,
-        passwordHash: await hashPassword(body.password),
-        fullName: body.fullName,
-        phone: body.phone,
-        email: body.email,
-        roleId: role.id,
-      },
-    });
+    // String kosong dari form (mis. "Mata Pelajaran" belum dipilih) → undefined,
+    // agar relasi Prisma tidak menerima '' (penyebab error 500 saat buat Wali Kelas).
+    const subjectId = body.subjectId || undefined;
+    const nip = body.nip || undefined;
+    const position = body.position || undefined;
 
-    if (body.roleKey === 'TEACHER' || body.roleKey === 'HOMEROOM_TEACHER') {
-      await prisma.teacher.create({
-        data: { userId: user.id, nip: body.nip, position: body.position, subjectId: body.subjectId, isPiket: body.isPiket },
+    // Satu transaksi: jika membuat data guru/staff gagal, akun ikut dibatalkan (tidak tersangkut)
+    const user = await prisma.$transaction(async (tx) => {
+      const u = await tx.user.create({
+        data: {
+          username: body.username,
+          passwordHash: await hashPassword(body.password),
+          fullName: body.fullName,
+          phone: body.phone,
+          email: body.email,
+          roleId: role.id,
+        },
       });
-    } else if (body.roleKey === 'STAFF') {
-      await prisma.staff.create({ data: { userId: user.id, nip: body.nip, position: body.position } });
-    }
-    // PIKET: cukup akun dengan role Petugas Piket (tanpa data guru/staff)
+      if (body.roleKey === 'TEACHER' || body.roleKey === 'HOMEROOM_TEACHER') {
+        await tx.teacher.create({
+          data: { userId: u.id, nip, position, subjectId, isPiket: body.isPiket },
+        });
+      } else if (body.roleKey === 'STAFF') {
+        await tx.staff.create({ data: { userId: u.id, nip, position } });
+      }
+      // PIKET: cukup akun dengan role Petugas Piket (tanpa data guru/staff)
+      return u;
+    });
 
     await audit({
       userId: request.user!.id,
@@ -147,13 +156,13 @@ export async function userRoutes(app: FastifyInstance) {
     if (existing.teacher && (body.nip !== undefined || body.position !== undefined || body.subjectId !== undefined || body.isPiket !== undefined)) {
       await prisma.teacher.update({
         where: { userId: id },
-        data: { nip: body.nip, position: body.position, subjectId: body.subjectId, isPiket: body.isPiket },
+        data: { nip: body.nip || undefined, position: body.position || undefined, subjectId: body.subjectId || undefined, isPiket: body.isPiket },
       });
     }
     if (existing.staff && (body.nip !== undefined || body.position !== undefined)) {
       await prisma.staff.update({
         where: { userId: id },
-        data: { nip: body.nip, position: body.position },
+        data: { nip: body.nip || undefined, position: body.position || undefined },
       });
     }
 

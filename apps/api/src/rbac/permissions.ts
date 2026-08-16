@@ -114,13 +114,16 @@ const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     PERMISSION_KEYS.faceRegister,
   ],
   PIKET: [
-    // Petugas Piket: menjaga gerbang — absen siswa (wajah/QR/kartu) + pantau kehadiran
+    // Petugas Piket: menjaga gerbang (absen siswa wajah/QR/kartu), cetak laporan, approve izin
     PERMISSION_KEYS.dashboardView,
     PERMISSION_KEYS.studentsRead,
     PERMISSION_KEYS.attendanceCreate,
     PERMISSION_KEYS.attendanceRead,
     PERMISSION_KEYS.leaveCreate,
     PERMISSION_KEYS.leaveRead,
+    PERMISSION_KEYS.leaveApprove,
+    PERMISSION_KEYS.reportsRead,
+    PERMISSION_KEYS.exportCreate,
     PERMISSION_KEYS.notificationsRead,
     PERMISSION_KEYS.faceRegister,
     PERMISSION_KEYS.monitorView,
