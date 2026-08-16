@@ -28,6 +28,7 @@ const Gate = lazy(() => import('./pages/teacher/Gate'));
 const ClassAttendance = lazy(() => import('./pages/teacher/ClassAttendance'));
 const Journal = lazy(() => import('./pages/teacher/Journal'));
 const Absent = lazy(() => import('./pages/student/Absent'));
+const FaceMe = lazy(() => import('./pages/student/FaceMe'));
 const FaceScan = lazy(() => import('./pages/student/FaceScan'));
 const QrScan = lazy(() => import('./pages/student/QrScan'));
 const CardTap = lazy(() => import('./pages/student/CardTap'));
@@ -96,6 +97,7 @@ export default function App() {
 
         {/* Siswa */}
         <Route path="absent" element={<Page><Absent /></Page>} />
+        <Route path="face-me" element={<Page><FaceMe /></Page>} />
         <Route path="absent/face" element={<Page><FaceScan /></Page>} />
         <Route path="absent/qr" element={<Page><QrScan /></Page>} />
         <Route path="absent/card" element={<Page><CardTap /></Page>} />

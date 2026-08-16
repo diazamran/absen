@@ -122,7 +122,7 @@ npm run dev
 
 **Siswa** (login `siswa_121212` / `siswa123`)
 - Bottom nav **Absen** → pilih metode: **Absen Wajah**, **QR Code**, **Kartu / NFC**, atau **Manual** (khusus guru/petugas).
-- **Absen Wajah**: kamera depan + frame scan + liveness. Siswa WAJIB didaftarkan wajahnya dulu oleh admin (lihat **Registrasi Wajah** di bawah).
+- **Absen Wajah**: kamera depan + frame scan + liveness. Belum terdaftar? Kartu **"Daftar"** muncul otomatis di halaman Absen → siswa mendaftarkan wajahnya sendiri dari HP (sampel + persetujuan) → status *Menunggu Persetujuan* → setelah di-**Setujui** admin, wajah baru bisa dipakai absen.
 - **QR Code**: mode **Pindai QR** (kamera belakang) atau **QR Saya** (tampilkan QR pribadi + tombol *Absen Sekarang* untuk tes tanpa HP kedua).
 - Bottom nav **Riwayat** (riwayat absensi) dan **Izin** (ajukan izin).
 
@@ -132,7 +132,10 @@ npm run dev
 - **Jurnal Mengajar** & menu lain lewat drawer ☰ (kiri atas).
 
 **Admin / Super Admin** (login `admin` / `admin123`)
-- Sidebar (atau drawer ☰ di HP) → **Registrasi Wajah**: pilih siswa → kamera aktif → ambil 1–4 sampel → centang persetujuan → **Simpan Registrasi**. Data wajah bisa di-**Reset** kapan saja.
+- Sidebar (atau drawer ☰ di HP) → **Registrasi Wajah**:
+  - **Menunggu Persetujuan** (bagian atas): daftar siswa yang mendaftar wajah dari HP-nya sendiri → tombol **Setujui** (wajah langsung aktif) atau **Reset** (tolak/hapus data).
+  - **Daftarkan manual**: pilih siswa → kamera aktif → ambil 1–4 sampel → centang persetujuan → **Simpan Registrasi** (langsung aktif karena dilakukan admin).
+  - Data wajah bisa di-**Reset** kapan saja (mis. ada masalah).
 - **Siswa**: tambah/edit siswa; isi **No WhatsApp Orang Tua** → akun orang tua dibuat otomatis (login via WhatsApp + OTP).
 - **Guru & Staff**: tambah akun dengan role Guru / Wali Kelas / Staff / Admin & TU / Kepala Sekolah.
 - **Absensi**: monitoring realtime hari ini + tombol **Absen Manual** (fallback, tercatat di audit log).
@@ -252,7 +255,7 @@ POST /api/attendance/check-in · /check-out
 POST /api/attendance/face · /qr · /card · /gate · /manual
 GET  /api/attendance/today · /student/:id · /class/:id
 
-POST /api/face/register · DELETE /api/face/:userId
+POST /api/face/register (self → PENDING, admin → aktif) · POST /api/face/:userId/approve · DELETE /api/face/:userId · GET /api/face/pending
 GET  /api/qr/me · /qr/student/:id · POST /api/cards
 POST /api/leave · GET /api/leave · POST /api/leave/:id/approve · /reject
 GET  /api/reports/daily · /monthly · /class/:id · /export
@@ -273,7 +276,7 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 - **Anti-duplikat**: satu absen datang + satu pulang per hari per user (`@@unique([userId, date, type])`), konfigurabel.
 - **QR**: token JWT ditandatangani HMAC-SHA256 + nonce + expiry. QR dinamis 60 detik; QR kartu siswa (fallback) 1 tahun, nonce dirotasi.
 - **Kartu**: UID disimpan sebagai SHA-256, tidak pernah plaintext.
-- **Wajah**: embedding perceptual-hash disimpan; foto mentah tidak disimpan; data biometrik tidak pernah diekspos API; tersedia "Reset Face Data".
+- **Wajah**: embedding perceptual-hash disimpan; foto mentah tidak disimpan; data biometrik tidak pernah diekspos API; registrasi siswa lewat HP berstatus **PENDING** dan baru aktif setelah **disetujui admin** (approve/reset); siswa bisa hapus datanya sendiri (privasi).
 - **RBAC**: daftar role→permission di `src/rbac/permissions.ts`, di-mirror ke tabel DB, dan diterapkan di middleware + service layer (bukan hanya menu UI).
 - **Audit log**: `ATTENDANCE_CREATED`, `ATTENDANCE_MANUAL_CHANGED`, `LEAVE_APPROVED`, `FACE_REGISTERED`, `EXPORT_REPORT`, dll.
 - **Absensi manual** wajib lewat guru/admin dan masuk audit log.

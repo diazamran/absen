@@ -1,7 +1,9 @@
 import { useNavigate } from 'react-router-dom';
-import { Camera, QrCode, CreditCard, ListChecks } from 'lucide-react';
-import { Card } from '../../lib/ui';
+import { useQuery } from '@tanstack/react-query';
+import { Camera, QrCode, CreditCard, ListChecks, ScanFace, Clock } from 'lucide-react';
+import { Card, Button } from '../../lib/ui';
 import { useAuth } from '../../lib/auth';
+import { api } from '../../lib/api';
 
 const METHODS = [
   { key: 'face', label: 'Absen Wajah', desc: 'Kamera depan + deteksi liveness', icon: <Camera className="h-7 w-7" />, to: '/app/absent/face', color: 'from-teal-500 to-emerald-500' },
@@ -15,12 +17,49 @@ export default function Absent() {
   const { user } = useAuth();
   const isStaff = user?.roleKey !== 'STUDENT' && user?.roleKey !== 'PARENT';
 
+  // Status registrasi wajah (khusus siswa)
+  const { data: faceStatus } = useQuery({
+    queryKey: ['face-status', user?.id],
+    queryFn: () => api<{ success: boolean; data: { registered: boolean; pending: boolean } }>(`/face/status/${user!.id}`).then((r) => r.data),
+    enabled: user?.roleKey === 'STUDENT',
+  });
+
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-bold text-ink">ABSEN</h1>
         <p className="text-sm text-muted">Pilih metode absensi yang tersedia.</p>
       </div>
+
+      {user?.roleKey === 'STUDENT' && faceStatus && !faceStatus.registered && !faceStatus.pending && (
+        <Card className="border-primary/30 bg-primary-soft/40">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-white">
+              <ScanFace className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-ink">Wajah belum terdaftar</p>
+              <p className="text-xs text-muted">Daftarkan wajahmu dulu agar bisa absen menggunakan Face Recognition.</p>
+            </div>
+            <Button onClick={() => navigate('/app/face-me')} className="shrink-0">Daftar</Button>
+          </div>
+        </Card>
+      )}
+
+      {user?.roleKey === 'STUDENT' && faceStatus?.pending && (
+        <Card className="border-amber-200 bg-amber-50/60 dark:bg-amber-500/10">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+              <Clock className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-ink">Menunggu persetujuan admin</p>
+              <p className="text-xs text-muted">Registrasi wajahmu sedang diproses oleh admin / TU.</p>
+            </div>
+            <Button variant="outline" onClick={() => navigate('/app/face-me')} className="shrink-0">Cek Status</Button>
+          </div>
+        </Card>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         {METHODS.map((m) => (

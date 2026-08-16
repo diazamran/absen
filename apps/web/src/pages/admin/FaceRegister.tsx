@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ScanFace, Search, Camera, CheckCircle2, Trash2, Loader2, ShieldCheck } from 'lucide-react';
+import { ScanFace, Search, Camera, CheckCircle2, Trash2, Loader2, ShieldCheck, Clock } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Input, Badge, EmptyState, Skeleton } from '../../lib/ui';
@@ -18,11 +18,22 @@ interface StudentRow {
 
 interface FaceStatus {
   registered: boolean;
+  pending: boolean;
   status: string;
   provider: string | null;
   samples: number;
   embeddingsCount: number;
   consentAt: string | null;
+}
+
+interface PendingRow {
+  userId: string;
+  fullName: string;
+  nis: string | null;
+  className: string | null;
+  samples: number;
+  embeddingsCount: number;
+  submittedAt: string;
 }
 
 const MAX_SAMPLES = 4;
@@ -52,9 +63,26 @@ export default function FaceRegister() {
     enabled: !!selected,
   });
 
+  // Daftar wajah yang menunggu persetujuan
+  const { data: pending, isLoading: pendingLoading } = useQuery({
+    queryKey: ['face-pending'],
+    queryFn: () => api<{ success: boolean; data: PendingRow[] }>('/face/pending').then((r) => r.data),
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (userId: string) => api(`/face/${userId}/approve`, { method: 'POST' }),
+    onSuccess: () => {
+      toast('success', 'Registrasi wajah disetujui.');
+      qc.invalidateQueries({ queryKey: ['face-pending'] });
+      qc.invalidateQueries({ queryKey: ['face-status'] });
+      qc.invalidateQueries({ queryKey: ['students'] });
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menyetujui.'),
+  });
+
   // Nyalakan kamera saat siswa dipilih & belum terdaftar
   useEffect(() => {
-    if (!selected || faceStatus?.registered) return;
+    if (!selected || faceStatus?.registered || faceStatus?.pending) return;
     let cancelled = false;
     const init = async () => {
       try {
@@ -98,10 +126,11 @@ export default function FaceRegister() {
   });
 
   const resetMutation = useMutation({
-    mutationFn: () => api(`/face/${selected!.userId}`, { method: 'DELETE' }),
+    mutationFn: (userId: string) => api(`/face/${userId}`, { method: 'DELETE' }),
     onSuccess: () => {
       toast('success', 'Data wajah telah dihapus.');
       qc.invalidateQueries({ queryKey: ['face-status'] });
+      qc.invalidateQueries({ queryKey: ['face-pending'] });
       qc.invalidateQueries({ queryKey: ['students'] });
     },
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus data wajah.'),
@@ -118,6 +147,37 @@ export default function FaceRegister() {
   return (
     <div>
       <PageHeader title="Registrasi Wajah" subtitle="Daftarkan data wajah siswa untuk absensi Face Recognition" />
+
+      {/* Menunggu persetujuan */}
+      {pendingLoading && <Skeleton className="mb-4 h-24 w-full" />}
+      {!pendingLoading && pending && pending.length > 0 && (
+        <Card className="mb-4 border-amber-200 bg-amber-50/50 dark:bg-amber-500/5">
+          <div className="mb-3 flex items-center gap-2">
+            <Clock className="h-5 w-5 text-amber-600" />
+            <p className="font-bold text-ink">Menunggu Persetujuan ({pending.length})</p>
+          </div>
+          <div className="space-y-2">
+            {pending.map((p) => (
+              <div key={p.userId} className="flex flex-wrap items-center gap-3 rounded-2xl border border-line/60 bg-surface p-3 dark:bg-slate-800/70">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-ink">{p.fullName}</p>
+                  <p className="text-xs text-muted">{p.nis ?? '-'} · {p.className ?? '-'} · {p.samples} sampel</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="!px-3 !py-1.5 text-xs" onClick={() => {
+                    if (window.confirm(`Hapus data wajah ${p.fullName}? Siswa harus mendaftar ulang.`)) resetMutation.mutate(p.userId);
+                  }} disabled={resetMutation.isPending}>
+                    <Trash2 className="h-3.5 w-3.5" /> Reset
+                  </Button>
+                  <Button className="!px-3 !py-1.5 text-xs" onClick={() => approveMutation.mutate(p.userId)} disabled={approveMutation.isPending}>
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Setujui
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Pilih siswa */}
       <Card className="mb-4">
@@ -168,36 +228,60 @@ export default function FaceRegister() {
         <>
           {statusLoading ? (
             <Skeleton className="h-32 w-full" />
-          ) : faceStatus?.registered ? (
+          ) : faceStatus?.registered || faceStatus?.pending ? (
             <Card className="space-y-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
-                  <CheckCircle2 className="h-6 w-6" />
+                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${faceStatus.pending ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                  {faceStatus.pending ? <Clock className="h-6 w-6" /> : <CheckCircle2 className="h-6 w-6" />}
                 </div>
                 <div>
-                  <p className="font-bold text-ink">Wajah sudah terdaftar</p>
+                  <p className="font-bold text-ink">{faceStatus.pending ? 'Menunggu persetujuan' : 'Wajah sudah terdaftar'}</p>
                   <p className="text-xs text-muted">
                     Provider: {faceStatus.provider ?? '-'} · Sampel: {faceStatus.samples} · Embedding: {faceStatus.embeddingsCount}
                   </p>
                 </div>
-                <div className="ml-auto"><Badge status="APPROVED" label="Aktif" /></div>
+                <div className="ml-auto"><Badge status={faceStatus.pending ? 'PENDING' : 'APPROVED'} label={faceStatus.pending ? 'Menunggu' : 'Aktif'} /></div>
               </div>
               <p className="text-xs text-muted">
-                Siswa ini sudah bisa melakukan absensi melalui <b>Absen Wajah</b> (login sebagai siswa → menu Absen).
+                {faceStatus.pending ? (
+                  'Siswa mendaftar wajah dari HP-nya sendiri. Setujui agar bisa absen wajah, atau reset bila data bermasalah.'
+                ) : (
+                  <>
+                    Siswa ini sudah bisa melakukan absensi melalui <b>Absen Wajah</b> (login sebagai siswa → menu Absen).
+                  </>
+                )}
               </p>
-              <div className="flex justify-end">
-                <Button
-                  variant="danger"
-                  onClick={() => {
-                    if (window.confirm('Hapus seluruh data wajah siswa ini? Siswa harus mendaftar ulang untuk absen wajah.')) {
-                      resetMutation.mutate();
-                    }
-                  }}
-                  disabled={resetMutation.isPending}
-                >
-                  {resetMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                  Reset Data Wajah
-                </Button>
+              <div className="flex justify-end gap-2">
+                {faceStatus.pending && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (window.confirm('Hapus data wajah siswa ini? Siswa harus mendaftar ulang.')) resetMutation.mutate(selected.userId);
+                    }}
+                    disabled={resetMutation.isPending}
+                  >
+                    <Trash2 className="h-4 w-4" /> Reset
+                  </Button>
+                )}
+                {faceStatus.pending ? (
+                  <Button onClick={() => approveMutation.mutate(selected.userId)} disabled={approveMutation.isPending}>
+                    {approveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    Setujui
+                  </Button>
+                ) : (
+                  <Button
+                    variant="danger"
+                    onClick={() => {
+                      if (window.confirm('Hapus seluruh data wajah siswa ini? Siswa harus mendaftar ulang untuk absen wajah.')) {
+                        resetMutation.mutate(selected.userId);
+                      }
+                    }}
+                    disabled={resetMutation.isPending}
+                  >
+                    {resetMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    Reset Data Wajah
+                  </Button>
+                )}
               </div>
             </Card>
           ) : (

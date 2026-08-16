@@ -18,8 +18,12 @@ import { ApiError } from '../utils/errors.js';
 
 export interface FaceRecognitionProvider {
   readonly name: string;
-  /** Daftarkan beberapa sampel wajah; simpan embedding. */
-  enroll(userId: string, samples: string[]): Promise<{ embedding: number[]; dimensions: number }>;
+  /** Daftarkan beberapa sampel wajah; simpan embedding. status default REGISTERED (langsung aktif). */
+  enroll(
+    userId: string,
+    samples: string[],
+    opts?: { status?: 'REGISTERED' | 'PENDING'; registeredBy?: string | null },
+  ): Promise<{ embedding: number[]; dimensions: number }>;
   /** Verifikasi 1 frame: kembalikan user paling mirip + confidence + hasil liveness. */
   verify(image: string, challenge?: { action?: string; prevImage?: string }): Promise<{
     userId: string | null;
@@ -94,7 +98,11 @@ const THRESHOLD_STRONG = 0.15; // confidence tinggi
 class MockFaceProvider implements FaceRecognitionProvider {
   readonly name = 'mock';
 
-  async enroll(userId: string, samples: string[]): Promise<{ embedding: number[]; dimensions: number }> {
+  async enroll(
+    userId: string,
+    samples: string[],
+    opts?: { status?: 'REGISTERED' | 'PENDING'; registeredBy?: string | null },
+  ): Promise<{ embedding: number[]; dimensions: number }> {
     const grays = samples.map((s) => decodeToGray(s, 8)).filter((g): g is number[] => g !== null);
     if (grays.length < 1) {
       throw ApiError.badRequest('INVALID_IMAGE', 'Wajah belum terlihat jelas. Pastikan pencahayaan cukup dan posisikan wajah di tengah.');
@@ -103,18 +111,20 @@ class MockFaceProvider implements FaceRecognitionProvider {
     const meanGray: number[] = new Array(64).fill(0);
     for (const g of grays) for (let i = 0; i < 64; i++) meanGray[i] += g[i] / grays.length;
     const embedding = averageHash(meanGray);
+    const status = opts?.status ?? 'REGISTERED';
 
     // simpan embedding + profil
     const profile = await prisma.faceProfile.upsert({
       where: { userId },
-      update: { status: 'REGISTERED', samplesCount: samples.length, provider: this.name },
+      update: { status, samplesCount: samples.length, provider: this.name, registeredBy: opts?.registeredBy ?? null },
       create: {
         userId,
         consent: true,
         consentAt: new Date(),
-        status: 'REGISTERED',
+        status,
         provider: this.name,
         samplesCount: samples.length,
+        registeredBy: opts?.registeredBy ?? null,
       },
     });
     await prisma.faceEmbedding.deleteMany({ where: { userId } });
@@ -153,11 +163,16 @@ class MockFaceProvider implements FaceRecognitionProvider {
     }
 
     const embeddings = await prisma.faceEmbedding.findMany({
-      include: { user: { select: { id: true, isActive: true, student: { select: { isActive: true } } } } },
+      include: {
+        faceProfile: { select: { status: true } },
+        user: { select: { id: true, isActive: true, student: { select: { isActive: true } } } },
+      },
     });
 
     let best: { userId: string | null; distance: number } = { userId: null, distance: 1 };
     for (const e of embeddings) {
+      // Hanya profil yang sudah disetujui (REGISTERED) yang bisa dipakai verifikasi
+      if (e.faceProfile?.status !== 'REGISTERED') continue;
       const user = e.user;
       if (!user || !user.isActive) continue;
       if (user.student && !user.student.isActive) continue;
@@ -182,7 +197,11 @@ class MockFaceProvider implements FaceRecognitionProvider {
 /** Provider eksternal placeholder — implementasikan sesuai vendor. */
 class ExternalFaceProvider implements FaceRecognitionProvider {
   readonly name = 'external';
-  async enroll(): Promise<{ embedding: number[]; dimensions: number }> {
+  async enroll(
+    _userId: string,
+    _samples: string[],
+    _opts?: { status?: 'REGISTERED' | 'PENDING'; registeredBy?: string | null },
+  ): Promise<{ embedding: number[]; dimensions: number }> {
     throw ApiError.badRequest('FACE_PROVIDER_NOT_CONFIGURED', 'Provider pengenalan wajah eksternal belum dikonfigurasi.');
   }
   async verify(): Promise<{ userId: string | null; confidence: number; liveness: boolean }> {

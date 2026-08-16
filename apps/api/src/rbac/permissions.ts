@@ -37,6 +37,7 @@ export const PERMISSION_KEYS = {
   auditRead: 'audit:read',
   settingsManage: 'settings:manage',
   faceRegister: 'face:register',
+  faceApprove: 'face:approve',
   faceDelete: 'face:delete',
   monitorView: 'monitor:view',
 } as const;
@@ -88,6 +89,7 @@ const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     PERMISSION_KEYS.reportsRead,
     PERMISSION_KEYS.exportCreate,
     PERMISSION_KEYS.notificationsRead,
+    PERMISSION_KEYS.faceRegister,
     PERMISSION_KEYS.monitorView,
   ],
   TEACHER: [
@@ -100,6 +102,7 @@ const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     PERMISSION_KEYS.journalCreate,
     PERMISSION_KEYS.journalRead,
     PERMISSION_KEYS.notificationsRead,
+    PERMISSION_KEYS.faceRegister,
     PERMISSION_KEYS.monitorView,
   ],
   STAFF: [
@@ -107,6 +110,7 @@ const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     PERMISSION_KEYS.attendanceCreate,
     PERMISSION_KEYS.leaveCreate,
     PERMISSION_KEYS.notificationsRead,
+    PERMISSION_KEYS.faceRegister,
   ],
   STUDENT: [
     PERMISSION_KEYS.dashboardView,
@@ -114,6 +118,7 @@ const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     PERMISSION_KEYS.leaveCreate,
     PERMISSION_KEYS.scheduleRead,
     PERMISSION_KEYS.notificationsRead,
+    PERMISSION_KEYS.faceRegister,
   ],
   PARENT: [
     PERMISSION_KEYS.dashboardView,
