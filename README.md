@@ -146,6 +146,7 @@ npm run dev
 - **Pengaturan → Aturan Absensi & Lokasi**: set **titik absensi GPS** (latitude/longitude + radius) dan aktifkan "Wajib GPS di area sekolah" — siswa hanya bisa absen di dalam radius itu (diverifikasi server).
 - **Izin**: pengajuan bisa menyertakan **bukti/lampiran** (surat/dokter) — admin melihat tombol **Lihat Bukti**.
 - **Absensi**: monitoring realtime hari ini + tombol **Absen Manual** (fallback, tercatat di audit log).
+- **Skala & performa**: rate-limit dihitung **per user** (bukan per IP) — ratusan siswa di belakang 1 IP NAT sekolah tetap mendapat jatah sendiri saat jam ramai; duplikat absen dicegah di database (unique `userId+date+type`) dan race kondisi ditangani (bukan error 500). Foto wajah otomatis dikompresi di HP (maks ~480px JPEG) dan **tidak disimpan** (hanya embedding); bukti izin dikompresi otomatis di sisi klien (maks ~1280px JPEG) sebelum diunggah.
 - **Pengaturan**: nama aplikasi/sekolah, warna tema, aturan absensi (jam terlambat, anti-duplikat, GPS).
 
 **Orang Tua**

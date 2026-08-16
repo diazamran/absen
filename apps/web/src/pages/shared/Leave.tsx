@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FilePlus2, Send, Paperclip, X, Loader2 } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
+import { compressImageFile } from '../../lib/image';
 import { useToast } from '../../lib/toast';
 import { Card, Button, Input, Field, Select, Textarea, Badge, Segmented, EmptyState } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
@@ -37,8 +38,10 @@ export default function Leave() {
     }
     setUploading(true);
     try {
+      // Kompresi otomatis: foto HP (2-5MB) → JPEG ~1280px ±150-400KB
+      const uploadFile = await compressImageFile(file);
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', uploadFile);
       const res = await api<{ success: boolean; data: { url: string } }>('/upload', { method: 'POST', formData });
       setForm((f) => ({ ...f, attachmentUrl: res.data.url }));
       setFileName(file.name);

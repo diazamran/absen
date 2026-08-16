@@ -51,10 +51,21 @@ export async function buildApp(): Promise<FastifyInstance> {
     origin: config.corsOrigin,
     credentials: true,
   });
+
+  // Auth dulu (onRequest global) agar request.user tersedia bagi rate-limit keyGenerator
+  await app.register(authPlugin);
+  await app.register(rbacPlugin);
+
   await app.register(rateLimit, {
     max: 300,
     timeWindow: '1 minute',
     enableDraftSpec: true,
+    // Kunci per USER (bukan per IP): ratusan siswa di belakang 1 IP NAT sekolah
+    // tetap mendapat jatah masing-masing saat jam ramai.
+    keyGenerator: (request) => {
+      const user = (request as { user?: { id: string } }).user;
+      return user?.id ?? request.ip;
+    },
   });
   await app.register(multipart, { limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
 
@@ -64,10 +75,6 @@ export async function buildApp(): Promise<FastifyInstance> {
     root: UPLOADS_DIR,
     prefix: '/uploads/',
   });
-
-  // ===== Plugins =====
-  await app.register(authPlugin);
-  await app.register(rbacPlugin);
 
   // ===== Error handler standar =====
   app.setErrorHandler(errorHandler as never);

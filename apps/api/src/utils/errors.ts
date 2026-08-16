@@ -78,6 +78,20 @@ export function errorHandler(err: unknown, _req: unknown, reply: FastifyReply) {
     });
   }
 
+  // Error lain yang sudah membawa statusCode (mis. 429 dari @fastify/rate-limit
+  // yang berupa Error polos tanpa code) — hormati statusnya, jangan jadi 500.
+  const status = (err as { statusCode?: number }).statusCode;
+  if (typeof status === 'number' && status >= 400 && status < 500) {
+    const isRateLimited = status === 429;
+    return reply.status(status).send({
+      success: false,
+      message: isRateLimited
+        ? 'Terlalu banyak permintaan. Silakan coba beberapa saat lagi.'
+        : (err as Error).message || 'Permintaan tidak dapat diproses.',
+      code: isRateLimited ? 'RATE_LIMITED' : 'REQUEST_ERROR',
+    });
+  }
+
   // eslint-disable-next-line no-console
   console.error('[error]', err);
   return reply.status(500).send({

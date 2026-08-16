@@ -212,31 +212,41 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   });
   if (!target || !target.isActive) throw ApiError.unauthorized('Akun tidak aktif.');
 
-  const attendance = await prisma.attendance.create({
-    data: {
-      userId: targetUserId,
-      studentId: target.student?.id,
-      teacherId: target.teacher?.id,
-      staffId: target.staff?.id,
-      date: dayStart,
-      type,
-      checkIn: type === 'CHECK_IN' ? now : null,
-      checkOut: type === 'CHECK_OUT' ? now : null,
-      status,
-      method,
-      deviceId: input.deviceId,
-      latitude: input.latitude,
-      longitude: input.longitude,
-      accuracy: input.accuracy,
-      locationVerified,
-      faceVerified,
-      livenessVerified,
-      qrVerified,
-      cardVerified,
-      lateMinutes,
-      notes: input.notes,
-    },
-  });
+  let attendance;
+  try {
+    attendance = await prisma.attendance.create({
+      data: {
+        userId: targetUserId,
+        studentId: target.student?.id,
+        teacherId: target.teacher?.id,
+        staffId: target.staff?.id,
+        date: dayStart,
+        type,
+        checkIn: type === 'CHECK_IN' ? now : null,
+        checkOut: type === 'CHECK_OUT' ? now : null,
+        status,
+        method,
+        deviceId: input.deviceId,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        accuracy: input.accuracy,
+        locationVerified,
+        faceVerified,
+        livenessVerified,
+        qrVerified,
+        cardVerified,
+        lateMinutes,
+        notes: input.notes,
+      },
+    });
+  } catch (e) {
+    // Race kondisi: dua permintaan bersamaan untuk user yang sama → satu absen saja
+    if ((e as { code?: string }).code === 'P2002') {
+      const prefix = type === 'CHECK_IN' ? 'Anda sudah melakukan absensi datang hari ini' : 'Anda sudah melakukan absensi pulang hari ini';
+      throw ApiError.conflict('ALREADY_ATTENDANCE', `${prefix}.`);
+    }
+    throw e;
+  }
 
   // ===== Realtime + notifikasi + audit =====
   const className = target.student?.classId ? (await prisma.class.findUnique({ where: { id: target.student.classId }, select: { name: true } }))?.name : null;
@@ -313,21 +323,30 @@ export async function manualAttendance(input: {
   }
 
   const now = new Date();
-  const attendance = await prisma.attendance.create({
-    data: {
-      userId: student.userId,
-      studentId: student.id,
-      date: dayStart,
-      type: input.type,
-      checkIn: input.type === 'CHECK_IN' ? now : null,
-      checkOut: input.type === 'CHECK_OUT' ? now : null,
-      status: input.status,
-      method: 'MANUAL',
-      createdById: input.actor.id,
-      deviceId: input.deviceId,
-      notes: input.notes,
-    },
-  });
+  let attendance;
+  try {
+    attendance = await prisma.attendance.create({
+      data: {
+        userId: student.userId,
+        studentId: student.id,
+        date: dayStart,
+        type: input.type,
+        checkIn: input.type === 'CHECK_IN' ? now : null,
+        checkOut: input.type === 'CHECK_OUT' ? now : null,
+        status: input.status,
+        method: 'MANUAL',
+        createdById: input.actor.id,
+        deviceId: input.deviceId,
+        notes: input.notes,
+      },
+    });
+  } catch (e) {
+    // Race kondisi duplikat → kembalikan pesan yang sama, bukan error 500
+    if ((e as { code?: string }).code === 'P2002') {
+      throw ApiError.conflict('ALREADY_ATTENDANCE', 'Siswa sudah memiliki catatan absensi pada tanggal tersebut.');
+    }
+    throw e;
+  }
 
   const className = student.classId ? (await prisma.class.findUnique({ where: { id: student.classId }, select: { name: true } }))?.name : null;
   emitAttendance({
