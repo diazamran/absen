@@ -37,7 +37,10 @@ function roleMenu(role?: string): NavItem[] {
     items.push({ to: '/app/face-me', label: 'Registrasi Wajah', icon: <ScanFace className="h-5 w-5" /> });
   }
   items.push({ to: '/app/history', label: 'Riwayat', icon: <History className="h-5 w-5" /> });
-  items.push({ to: '/app/leave', label: 'Ajukan Izin', icon: <FilePlus2 className="h-5 w-5" /> });
+  // Petugas Piket: menu izin hanya untuk persetujuan, bukan pengajuan
+  if (role !== 'PIKET') {
+    items.push({ to: '/app/leave', label: 'Ajukan Izin', icon: <FilePlus2 className="h-5 w-5" /> });
+  }
   if (role === 'PIKET') {
     items.push({ to: '/app/gate', label: 'Scan Gerbang', icon: <ScanLine className="h-5 w-5" /> });
     items.push({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
