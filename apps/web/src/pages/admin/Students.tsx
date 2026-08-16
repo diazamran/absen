@@ -124,6 +124,7 @@ export default function Students() {
             <div className="min-w-0 flex-1">
               <p className="truncate font-bold text-ink">{s.fullName}</p>
               <p className="text-xs text-muted">{s.nis} · {s.className || 'Tanpa kelas'} {s.majorName ? `· ${s.majorName}` : ''}</p>
+              <p className="mt-0.5 truncate font-mono text-[11px] text-primary">Login: siswa_{s.nis} / siswa123</p>
             </div>
             <div className="hidden items-center gap-1.5 sm:flex">
               {s.faceRegistered ? <Badge status="PRESENT" label="Wajah" /> : <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-muted dark:bg-slate-700">No wajah</span>}
