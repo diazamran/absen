@@ -30,6 +30,8 @@ RUN npx tsc -p tsconfig.json
 # Runtime
 FROM base AS runtime
 ENV NODE_ENV=production
+# package.json diperlukan agar `npm run db:seed` bisa dibaca di container
+COPY package.json ./
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=deps /app/prisma ./prisma
