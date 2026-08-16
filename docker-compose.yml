@@ -1,5 +1,3 @@
-version: "3.9"
-
 # PresensiKu — Sistem Informasi Absensi Sekolah
 # Jalankan: docker compose up -d --build
 # Akses: http://IP-VPS  (atau http://localhost untuk dev lokal)

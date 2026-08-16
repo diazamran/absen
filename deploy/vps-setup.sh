@@ -71,11 +71,13 @@ fi
 
 # Port aplikasi: bisa diatur via env WEB_PORT (mis. 3000 untuk Caddy eksternal)
 # Saat mode HTTPS container (Caddy di compose), frontend memakai 8080 agar
-# port 80/443 bebas untuk Caddy.
+# port 80/443 bebas untuk Caddy. Jika dijalankan ulang tanpa WEB_PORT,
+# pertahankan nilai yang sudah ada di .env.
 if [[ -n "$DOMAIN" ]]; then
   EFFECTIVE_WEB_PORT="8080"
 else
-  EFFECTIVE_WEB_PORT="${WEB_PORT:-80}"
+  EXISTING_WEB_PORT="$(grep -E '^WEB_PORT=' "$APP_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+  EFFECTIVE_WEB_PORT="${WEB_PORT:-${EXISTING_WEB_PORT:-80}}"
 fi
 
 k="WEB_PORT"
@@ -86,7 +88,8 @@ else
 fi
 echo "   Port web : $EFFECTIVE_WEB_PORT"
 
-# Jika memakai domain: simpan DOMAIN + set URL aplikasi & CORS
+# Jika memakai domain: simpan DOMAIN + set URL aplikasi & CORS.
+# Tanpa domain (mis. Caddy eksternal): pastikan DOMAIN tidak ada di .env.
 if [[ -n "$DOMAIN" ]]; then
   for line in "DOMAIN=$DOMAIN" "APP_URL=https://$DOMAIN" "CORS_ORIGIN=https://$DOMAIN"; do
     k="${line%%=*}"
@@ -97,6 +100,8 @@ if [[ -n "$DOMAIN" ]]; then
     fi
   done
   echo "   Domain: $DOMAIN (HTTPS aktif, APP_URL & CORS diset)"
+else
+  sed -i '/^DOMAIN=/d' "$APP_DIR/.env" 2>/dev/null || true
 fi
 
 # ---------- 4. HTTPS (Caddy) ----------
