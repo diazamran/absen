@@ -10,6 +10,7 @@ const Monitor = lazy(() => import('./pages/Monitor'));
 // Admin
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const AttendanceList = lazy(() => import('./pages/admin/AttendanceList'));
+const FaceRegister = lazy(() => import('./pages/admin/FaceRegister'));
 const Students = lazy(() => import('./pages/admin/Students'));
 const Users = lazy(() => import('./pages/admin/Users'));
 const Classes = lazy(() => import('./pages/admin/Classes'));
@@ -76,6 +77,7 @@ export default function App() {
         <Route path="dashboard" element={<Page><AdminDashboard /></Page>} />
         <Route path="attendance" element={<Page><AttendanceList /></Page>} />
         <Route path="students" element={<Page><Students /></Page>} />
+        <Route path="face-register" element={<Page><FaceRegister /></Page>} />
         <Route path="users" element={<Page><Users /></Page>} />
         <Route path="classes" element={<Page><Classes /></Page>} />
         <Route path="leave" element={<Page><LeaveAdmin /></Page>} />

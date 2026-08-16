@@ -17,7 +17,7 @@ Nama aplikasi, sekolah, warna, logo, dan aturan absensi **sepenuhnya dapat dikon
 | **Orang Tua** | Login WhatsApp + OTP, pantau kehadiran anak, jam datang/pulang, keterlambatan, rekap bulanan |
 | **Izin** | Pengajuan (sakit/izin/cuti/dinas), persetujuan/penolakan + alasan, notifikasi |
 | **Guru** | Dashboard sesi mengajar, validasi kehadiran kelas (bottom sheet), jurnal mengajar |
-| **Admin** | CRUD siswa/guru/kelas/jadwal, import CSV dengan preview + error per baris, export CSV, laporan, perangkat, audit log, pengaturan branding |
+| **Admin** | CRUD siswa/guru/kelas/jadwal, **registrasi wajah** (kamera + sampel + consent + reset), import CSV dengan preview + error per baris, export CSV, laporan, perangkat, audit log, pengaturan branding |
 | **Keamanan** | JWT + refresh rotation, OTP di-hash, password bcrypt, rate limiting, helment/CORS, Zod, audit log, anti-duplikat, waktu server, GPS opsional |
 | **PWA** | Installable, offline cache, manifest, splash, service worker |
 
@@ -117,6 +117,29 @@ npm run dev
 | Orang Tua | WhatsApp `081234567890` | OTP (kode ditampilkan di log server saat development) |
 
 > ⚠️ Password di atas HANYA untuk development — wajib diganti di production.
+
+### Panduan Penggunaan (di mana fiturnya?)
+
+**Siswa** (login `siswa_121212` / `siswa123`)
+- Bottom nav **Absen** → pilih metode: **Absen Wajah**, **QR Code**, **Kartu / NFC**, atau **Manual** (khusus guru/petugas).
+- **Absen Wajah**: kamera depan + frame scan + liveness. Siswa WAJIB didaftarkan wajahnya dulu oleh admin (lihat **Registrasi Wajah** di bawah).
+- **QR Code**: mode **Pindai QR** (kamera belakang) atau **QR Saya** (tampilkan QR pribadi + tombol *Absen Sekarang* untuk tes tanpa HP kedua).
+- Bottom nav **Riwayat** (riwayat absensi) dan **Izin** (ajukan izin).
+
+**Guru / Staff / Wali Kelas** (login `guru` / `guru123`)
+- Bottom nav **Absen** → halaman **Scan Gerbang**: kamera otomatis, scan wajah/QR beruntun untuk siswa yang lewat gerbang.
+- **Kelas** → pilih kelas → validasi kehadiran (bottom sheet ubah status siswa).
+- **Jurnal Mengajar** & menu lain lewat drawer ☰ (kiri atas).
+
+**Admin / Super Admin** (login `admin` / `admin123`)
+- Sidebar (atau drawer ☰ di HP) → **Registrasi Wajah**: pilih siswa → kamera aktif → ambil 1–4 sampel → centang persetujuan → **Simpan Registrasi**. Data wajah bisa di-**Reset** kapan saja.
+- **Siswa**: tambah/edit siswa; isi **No WhatsApp Orang Tua** → akun orang tua dibuat otomatis (login via WhatsApp + OTP).
+- **Guru & Staff**: tambah akun dengan role Guru / Wali Kelas / Staff / Admin & TU / Kepala Sekolah.
+- **Absensi**: monitoring realtime hari ini + tombol **Absen Manual** (fallback, tercatat di audit log).
+- **Pengaturan**: nama aplikasi/sekolah, warna tema, aturan absensi (jam terlambat, anti-duplikat, GPS).
+
+**Orang Tua**
+- Tab **Orang Tua** di halaman login → WhatsApp + OTP → lihat kehadiran anak, jam datang/pulang, keterlambatan, dan rekap bulanan.
 
 ### Menjalankan dengan Docker
 

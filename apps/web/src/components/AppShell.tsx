@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   Home, ScanLine, Users, FileText, LayoutDashboard, GraduationCap, CalendarDays, BookOpen,
   ClipboardList, Smartphone, BarChart3, Bell, ScrollText, Settings, LogOut, Menu, X, ShieldCheck,
-  ClipboardCheck, History, FilePlus2, UserRound, Baby,
+  ClipboardCheck, History, FilePlus2, UserRound, Baby, ScanFace,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useTheme } from '../lib/theme';
@@ -19,6 +19,7 @@ const ADMIN_MENU: NavItem[] = [
   { to: '/app/dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" /> },
   { to: '/app/attendance', label: 'Absensi', icon: <ScanLine className="h-5 w-5" /> },
   { to: '/app/students', label: 'Siswa', icon: <GraduationCap className="h-5 w-5" /> },
+  { to: '/app/face-register', label: 'Registrasi Wajah', icon: <ScanFace className="h-5 w-5" /> },
   { to: '/app/users', label: 'Guru & Staff', icon: <Users className="h-5 w-5" /> },
   { to: '/app/classes', label: 'Kelas', icon: <ClipboardList className="h-5 w-5" /> },
   { to: '/app/leave', label: 'Izin', icon: <FileText className="h-5 w-5" /> },
