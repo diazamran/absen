@@ -43,11 +43,13 @@ function roleMenu(role?: string): NavItem[] {
     items.push({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
     items.push({ to: '/app/reports', label: 'Laporan & Cetak', icon: <BarChart3 className="h-5 w-5" /> });
   } else {
-    // Role lain (siswa/guru/staff): halaman pengajuan sendiri, bukan daftar persetujuan
-    if (role !== 'PARENT') {
+    // Guru: tanpa menu Ajukan Izin & Absen
+    if (role !== 'PARENT' && role !== 'TEACHER') {
       items.push({ to: '/app/leave/mine', label: 'Ajukan Izin', icon: <FilePlus2 className="h-5 w-5" /> });
     }
-    items.push({ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-5 w-5" /> });
+    if (role !== 'TEACHER') {
+      items.push({ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-5 w-5" /> });
+    }
   }
   items.push({ to: '/app/notifications', label: 'Notifikasi', icon: <Bell className="h-5 w-5" /> });
   items.push({ to: '/app/profile', label: 'Profil', icon: <UserRound className="h-5 w-5" /> });
@@ -72,7 +74,6 @@ const BOTTOM_NAV: Record<string, NavItem[]> = {
   TEACHER: [
     { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
     { to: '/app/classes', label: 'Kelas', icon: <GraduationCap className="h-6 w-6" /> },
-    { to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> },
     { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
     { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
   ],

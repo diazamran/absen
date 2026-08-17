@@ -35,6 +35,7 @@ export default function TeacherHome() {
   const isStudent = user?.roleKey === 'STUDENT';
   const isParent = user?.roleKey === 'PARENT';
   const isPiket = user?.roleKey === 'PIKET';
+  const isTeacher = user?.roleKey === 'TEACHER';
 
   const menu = isStudent
     ? [
@@ -51,8 +52,13 @@ export default function TeacherHome() {
           { label: 'Riwayat', icon: <History className="h-6 w-6" />, to: '/app/history' },
         ]
       : [
-          { label: 'Ajukan Izin', icon: <FilePlus2 className="h-6 w-6" />, to: '/app/leave/mine' },
-          { label: 'Absen', icon: <Camera className="h-6 w-6" />, to: '/app/absent' },
+          // Guru: tanpa Ajukan Izin & Absen (cukup jurnal, kelas, riwayat)
+          ...(isTeacher
+            ? []
+            : [
+                { label: 'Ajukan Izin', icon: <FilePlus2 className="h-6 w-6" />, to: '/app/leave/mine' },
+                { label: 'Absen', icon: <Camera className="h-6 w-6" />, to: '/app/absent' },
+              ]),
           { label: 'Jurnal Mengajar', icon: <BookOpen className="h-6 w-6" />, to: '/app/journal' },
           { label: 'Kelas', icon: <ClipboardList className="h-6 w-6" />, to: '/app/classes' },
           { label: 'Riwayat', icon: <History className="h-6 w-6" />, to: '/app/history' },

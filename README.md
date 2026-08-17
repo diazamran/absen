@@ -333,6 +333,7 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 
 ## Log Perubahan
 
+- **Menu Guru disederhanakan** — menu "Ajukan Izin" dan "Absen" dihapus untuk role Guru (beranda, sidebar, drawer, dan bottom nav). Menu Guru kini: Beranda, Jurnal Mengajar, Kelas, Riwayat, Notifikasi, Profil.
 - **Perbaikan Export Excel** — tombol Export Excel sebelumnya gagal karena nama file berakhiran `.excel` (seharusnya `.xlsx`) sehingga format tidak dikenali; kini berhasil mengunduh file `.xlsx` yang valid.
 - **Rekap per Kelas di Laporan** — saat filter kelas "Semua Kelas", laporan kini menampilkan tabel **Rekap per Kelas** (total siswa, hadir, terlambat, izin/sakit, tidak hadir) di halaman maupun di file PDF/Excel yang diexport.
 - **Laporan: Export PDF & Excel (bukan CSV lagi)** — tombol "Export PDF" dan "Export Excel" menggantikan CSV. PDF dicetak landscape dengan ringkasan, tabel rincian, dan **blok tanda tangan** (kota + tanggal, "Petugas Piket,", nama lengkap, dan NIP dari akun yang login — mengikuti format laporan resmi). Excel berisi sheet rapi yang siap diolah.
