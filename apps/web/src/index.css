@@ -43,6 +43,76 @@ body {
   transform: scaleX(-1);
 }
 
+/* ===== Kop kartu QR (nama sekolah + logo) ===== */
+.qr-print-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3mm;
+  margin-bottom: 5mm;
+  padding-bottom: 4mm;
+  border-bottom: 1.5px solid #0f172a;
+}
+.qr-print-head-small {
+  justify-content: flex-start;
+  margin-bottom: 3mm;
+  padding-bottom: 2.5mm;
+}
+.qr-print-logo {
+  width: 12mm;
+  height: 12mm;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.qr-print-logo-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f172a;
+  border-radius: 2mm;
+}
+.qr-print-logo-icon {
+  width: 8mm;
+  height: 8mm;
+  color: #ffffff;
+}
+.qr-print-head-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.25;
+}
+.qr-print-head-small .qr-print-head-text {
+  align-items: flex-start;
+}
+.qr-print-school {
+  font-size: 14pt;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: 0.2px;
+}
+.qr-print-title {
+  font-size: 7pt;
+  font-weight: 600;
+  color: #475569;
+  letter-spacing: 1.5px;
+}
+.qr-print-head-small .qr-print-logo {
+  width: 9mm;
+  height: 9mm;
+}
+.qr-print-head-small .qr-print-logo-icon {
+  width: 6mm;
+  height: 6mm;
+}
+.qr-print-head-small .qr-print-school {
+  font-size: 9pt;
+}
+.qr-print-head-small .qr-print-title {
+  font-size: 5.5pt;
+  letter-spacing: 1px;
+}
+
 /* ===== Kartu kecil ID card 2 x 3,5 cm ===== */
 .qr-small-grid {
   display: grid;
@@ -129,7 +199,11 @@ body {
     width: 100%;
     margin: 0;
     padding: 0;
-    gap: 6mm;
+    background: #fff !important;
+  }
+  #qr-print-area .qr-print-head {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   #qr-print-area .qr-card {
     break-inside: avoid;
@@ -142,7 +216,7 @@ body {
     width: 34mm;
     height: 34mm;
   }
-  #qr-print-area.qr-small-grid {
+  #qr-print-area .qr-small-grid {
     gap: 1.5mm;
     grid-template-columns: repeat(auto-fill, 3.5cm);
   }

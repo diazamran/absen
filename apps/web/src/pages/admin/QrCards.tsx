@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { Printer, QrCode, Loader2, School } from 'lucide-react';
+import { Printer, QrCode, Loader2, School, ShieldCheck } from 'lucide-react';
 import QRCode from 'qrcode';
 import { api } from '../../lib/api';
+import { useTheme } from '../../lib/theme';
 import { Button, Select, EmptyState, Segmented } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
 
@@ -17,6 +18,26 @@ interface QrStudent {
 }
 
 type Layout = 'big' | 'small';
+
+function PrintHead({ compact }: { compact?: boolean }) {
+  const { branding } = useTheme();
+  const schoolName = branding?.schoolName || 'Sekolah';
+  return (
+    <div className={`qr-print-head ${compact ? 'qr-print-head-small' : ''}`}>
+      {branding?.logoUrl ? (
+        <img src={branding.logoUrl} alt="Logo" className="qr-print-logo" />
+      ) : (
+        <div className="qr-print-logo qr-print-logo-tile">
+          <ShieldCheck className="qr-print-logo-icon" />
+        </div>
+      )}
+      <div className="qr-print-head-text">
+        <p className="qr-print-school">{schoolName}</p>
+        <p className="qr-print-title">KARTU ABSENSI SISWA — QR CODE</p>
+      </div>
+    </div>
+  );
+}
 
 export default function QrCards() {
   const [params, setParams] = useSearchParams();
@@ -109,37 +130,43 @@ export default function QrCards() {
       ) : students.length === 0 ? (
         <EmptyState icon={QrCode} title="Tidak ada siswa" description="Belum ada siswa aktif di kelas ini." />
       ) : layout === 'big' ? (
-        <div id="qr-print-area" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {students.map((s) => (
-            <div key={s.studentId} className="qr-card flex flex-col items-center rounded-2xl border border-line bg-white p-3 text-center shadow-card">
-              {s.dataUrl ? (
-                <img src={s.dataUrl} alt={`QR ${s.fullName}`} className="h-28 w-28 rounded-lg bg-white" />
-              ) : (
-                <div className="flex h-28 w-28 items-center justify-center rounded-lg bg-slate-100 text-slate-300">
-                  <QrCode className="h-10 w-10" />
-                </div>
-              )}
-              <p className="mt-2 w-full truncate text-sm font-extrabold text-slate-900" title={s.fullName}>{s.fullName}</p>
-              <p className="text-xs font-semibold text-slate-500">NISN {s.nis}</p>
-              <p className="text-xs text-slate-400">{s.className}</p>
-            </div>
-          ))}
+        <div id="qr-print-area" className="rounded-2xl bg-white p-3 shadow-card sm:p-4">
+          <PrintHead />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {students.map((s) => (
+              <div key={s.studentId} className="qr-card flex flex-col items-center rounded-2xl border border-line bg-white p-3 text-center shadow-card">
+                {s.dataUrl ? (
+                  <img src={s.dataUrl} alt={`QR ${s.fullName}`} className="h-28 w-28 rounded-lg bg-white" />
+                ) : (
+                  <div className="flex h-28 w-28 items-center justify-center rounded-lg bg-slate-100 text-slate-300">
+                    <QrCode className="h-10 w-10" />
+                  </div>
+                )}
+                <p className="mt-2 w-full truncate text-sm font-extrabold text-slate-900" title={s.fullName}>{s.fullName}</p>
+                <p className="text-xs font-semibold text-slate-500">NISN {s.nis}</p>
+                <p className="text-xs text-slate-400">{s.className}</p>
+              </div>
+            ))}
+          </div>
         </div>
       ) : (
-        <div id="qr-print-area" className="qr-small-grid">
-          {students.map((s) => (
-            <div key={s.studentId} className="qr-card-small">
-              {s.dataUrl ? (
-                <img src={s.dataUrl} alt={`QR ${s.fullName}`} />
-              ) : (
-                <div className="qr-small-img-placeholder"><QrCode className="h-6 w-6" /></div>
-              )}
-              <div className="qr-small-text">
-                <p className="qr-small-nis">{s.nis}</p>
-                <p className="qr-small-name" title={s.fullName}>{s.fullName}</p>
+        <div id="qr-print-area" className="rounded-2xl bg-white p-3 shadow-card">
+          <PrintHead compact />
+          <div className="qr-small-grid">
+            {students.map((s) => (
+              <div key={s.studentId} className="qr-card-small">
+                {s.dataUrl ? (
+                  <img src={s.dataUrl} alt={`QR ${s.fullName}`} />
+                ) : (
+                  <div className="qr-small-img-placeholder"><QrCode className="h-6 w-6" /></div>
+                )}
+                <div className="qr-small-text">
+                  <p className="qr-small-nis">{s.nis}</p>
+                  <p className="qr-small-name" title={s.fullName}>{s.fullName}</p>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
