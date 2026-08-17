@@ -20,6 +20,7 @@ interface NavItem {
 const ADMIN_MENU: NavItem[] = [
   { to: '/app/dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" /> },
   { to: '/app/attendance', label: 'Absensi', icon: <ScanLine className="h-5 w-5" /> },
+  { to: '/app/history', label: 'Riwayat', icon: <History className="h-5 w-5" /> },
   { to: '/app/students', label: 'Siswa', icon: <GraduationCap className="h-5 w-5" /> },
   { to: '/app/face-register', label: 'Registrasi Wajah', icon: <ScanFace className="h-5 w-5" /> },
   { to: '/app/users', label: 'Guru & Staff', icon: <Users className="h-5 w-5" /> },
@@ -70,6 +71,7 @@ const BOTTOM_NAV: Record<string, NavItem[]> = {
     { to: '/app/dashboard', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
     { to: '/app/attendance', label: 'Absensi', icon: <ScanLine className="h-6 w-6" /> },
     { to: '/app/students', label: 'Data', icon: <Users className="h-6 w-6" /> },
+    { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
     { to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-6 w-6" /> },
     { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
   ],
@@ -77,6 +79,7 @@ const BOTTOM_NAV: Record<string, NavItem[]> = {
     { to: '/app/dashboard', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
     { to: '/app/attendance', label: 'Absensi', icon: <ScanLine className="h-6 w-6" /> },
     { to: '/app/students', label: 'Data', icon: <Users className="h-6 w-6" /> },
+    { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
     { to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-6 w-6" /> },
     { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
   ],
