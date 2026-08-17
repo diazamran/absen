@@ -331,6 +331,7 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 
 ---
 
+- **Perbaikan: Kehadiran Saya & Riwayat siswa tidak tampil** 🐛 — beranda siswa ("Kehadiran Saya") kini benar-benar menampilkan **jam absen datang + status** setelah absen (sebelumnya selalu "--:-- / Belum absen" karena data dashboard siswa tidak disalurkan ke kartu). Halaman **Riwayat** siswa kini menampilkan data absensinya (rekap bulan + daftar masuk/pulang) — sebelumnya error tersembunyi karena siswa tidak punya akses ke data riwayatnya sendiri; sekarang siswa boleh melihat riwayat **miliknya sendiri** saja (role lain tetap butuh hak akses).
 - **Notifikasi absen lengkap + scan pulang lebih lancar** 📸 — popup hasil absen (wajah & QR) kini menampilkan **nama lengkap, kelas, dan jam absen** (judul membedakan "ABSEN DATANG BERHASIL" / "ABSEN PULANG BERHASIL", plus status Terlambat/Pulang Awal/Tepat waktu). Saat sudah absen, popup kuning **"SUDAH ABSEN DATANG/PULANG"** menampilkan nama, kelas, dan jam absen dari server. Deteksi wajah **pulang** diperbaiki: liveness kini mencoba sampai 3 pasang frame (ambang lebih longgar), dan di mode otomatis kegagalan sementara **tidak lagi memunculkan popup yang menutupi kamera** — cukup petunjuk kecil di bawah kamera lalu scan berlanjut otomatis (popup hanya muncul untuk hasil sukses/sudah absen/wajah tak dikenali, atau saat tombol manual ditekan).
 ## Log Perubahan
 

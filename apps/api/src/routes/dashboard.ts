@@ -280,6 +280,9 @@ export async function dashboardRoutes(app: FastifyInstance) {
             })
           : [];
 
+        const checkInAtt = todayAtt.find((a) => a.type === 'CHECK_IN') ?? null;
+        const checkOutAtt = todayAtt.find((a) => a.type === 'CHECK_OUT') ?? null;
+
         return reply.send({
           success: true,
           data: {
@@ -288,9 +291,21 @@ export async function dashboardRoutes(app: FastifyInstance) {
             student: student
               ? { id: student.id, nis: student.nis, className: student.class?.name ?? null }
               : null,
+            // Kartu "Kehadiran Saya" di beranda siswa membaca myAttendance
+            myAttendance: {
+              checkIn: checkInAtt
+                ? {
+                    status: checkInAtt.status,
+                    statusLabel: STATUS_LABELS[checkInAtt.status],
+                    time: checkInAtt.checkIn ? localTime(checkInAtt.checkIn) : null,
+                    lateMinutes: checkInAtt.lateMinutes,
+                  }
+                : null,
+              checkOut: checkOutAtt ? { time: checkOutAtt.checkOut ? localTime(checkOutAtt.checkOut) : null } : null,
+            },
             today: {
-              checkIn: todayAtt.find((a) => a.type === 'CHECK_IN') ?? null,
-              checkOut: todayAtt.find((a) => a.type === 'CHECK_OUT') ?? null,
+              checkIn: checkInAtt,
+              checkOut: checkOutAtt,
             },
             monthStats: monthCounts,
             schedules: schedule.map((s) => ({

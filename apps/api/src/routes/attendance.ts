@@ -6,7 +6,7 @@ import { issueQrToken } from '../services/qr.js';
 import { validate } from '../utils/validate.js';
 import { ApiError } from '../utils/errors.js';
 import { todayStart, todayEnd, dateKey, localTime, startOfLocalDay, localDateKeyOfStoredDate } from '../lib/time.js';
-import { PERMISSION_KEYS } from '../rbac/permissions.js';
+import { PERMISSION_KEYS, roleHasPermission } from '../rbac/permissions.js';
 
 const proofSchema = z.object({
   descriptor: z.array(z.number()).optional(),
@@ -308,11 +308,15 @@ export async function attendanceRoutes(app: FastifyInstance) {
   });
 
   // ===== Riwayat per siswa =====
-  app.get('/attendance/student/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.attendanceRead) }, async (request, reply) => {
+  // Akses: siswa boleh melihat riwayatnya SENDIRI; role lain harus punya attendanceRead
+  app.get('/attendance/student/:id', { preHandler: app.authenticate }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { month } = request.query as { month?: string };
     const student = await prisma.student.findUnique({ where: { id } });
     if (!student) throw ApiError.notFound('Siswa tidak ditemukan.');
+    if (request.user!.id !== student.userId && !roleHasPermission(request.user!.roleKey, PERMISSION_KEYS.attendanceRead)) {
+      throw ApiError.forbidden('FORBIDDEN', 'Anda tidak memiliki akses ke fitur ini.');
+    }
 
     const start = month ? new Date(`${month}-01T00:00:00+07:00`) : new Date(`${dateKey().slice(0, 7)}-01T00:00:00+07:00`);
     const rows = await prisma.attendance.findMany({
