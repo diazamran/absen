@@ -8,6 +8,7 @@ import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
 import { Card, Button, Badge } from '../../lib/ui';
 import { greeting, STATUS_LABELS } from '../../lib/format';
+import AdminDashboard from '../admin/AdminDashboard';
 
 interface HomeData {
   role: string;
@@ -167,7 +168,11 @@ export default function TeacherHome() {
         ))}
       </div>
 
-      {/* Sesi mengajar */}
+      {/* Dashboard petugas piket — ala admin: statistik seluruh sekolah, tanpa Sesi Mengajar */}
+      {isPiket && <AdminDashboard />}
+
+      {/* Sesi mengajar — khusus guru/wali kelas (petugas piket tidak memerlukannya) */}
+      {!isPiket && !isStudent && !isParent && (
       <div>
         <h2 className="mb-3 font-bold text-ink">Sesi Mengajar</h2>
         {data.schedules.length === 0 ? (
@@ -195,6 +200,7 @@ export default function TeacherHome() {
           </div>
         )}
       </div>
+      )}
 
       {isParent && (
         <Card className="flex items-center gap-3 border-amber-200 bg-amber-50 dark:bg-amber-500/10">

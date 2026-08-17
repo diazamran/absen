@@ -30,6 +30,98 @@ async function statusCounts(dayStart: Date, dayEnd: Date, classId?: string) {
   return counts;
 }
 
+/** Statistik absensi harian seluruh sekolah — dipakai dashboard Admin & Petugas Piket. */
+async function schoolStats(dayStart: Date, dayEnd: Date) {
+  const counts = await statusCounts(dayStart, dayEnd);
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const present = (counts.PRESENT || 0) + (counts.LATE || 0);
+  const percent = total ? Math.round((present / total) * 100) : 0;
+
+  const activeStudents = await prisma.student.count({ where: { isActive: true } });
+  const notYet = Math.max(0, activeStudents - total);
+
+  const recent = await prisma.attendance.findMany({
+    where: { date: { gte: dayStart, lt: dayEnd }, type: 'CHECK_IN' },
+    orderBy: { checkIn: 'desc' },
+    take: 20,
+    include: {
+      user: { select: { fullName: true } },
+      student: { include: { class: { select: { name: true } } } },
+    },
+  });
+
+  const absentToday = await prisma.student.findMany({
+    where: {
+      isActive: true,
+      classId: { not: null },
+      attendance: { none: { date: { gte: dayStart, lt: dayEnd }, type: 'CHECK_IN' } },
+    },
+    include: { user: { select: { fullName: true } }, class: { select: { name: true } } },
+    take: 10,
+    orderBy: { nis: 'asc' },
+  });
+
+  const classCounts = await prisma.class.findMany({
+    where: { isActive: true, academicYear: { isActive: true } },
+    select: {
+      id: true,
+      name: true,
+      _count: { select: { students: { where: { isActive: true } } } },
+      students: {
+        where: {
+          isActive: true,
+          attendance: { some: { date: { gte: dayStart, lt: dayEnd }, type: 'CHECK_IN' } },
+        },
+        select: { id: true },
+      },
+    },
+  });
+
+  return {
+    stats: {
+      total,
+      present,
+      late: counts.LATE || 0,
+      excused: (counts.EXCUSED || 0) + (counts.SICK || 0) + (counts.OFFICIAL_DUTY || 0) + (counts.DISPENSATION || 0) + (counts.LEAVE || 0),
+      absent: counts.ABSENT || 0,
+      notYet,
+      percent,
+      activeStudents,
+    },
+    chart: [
+      { name: 'Hadir', value: counts.PRESENT || 0, color: '#22c55e' },
+      { name: 'Terlambat', value: counts.LATE || 0, color: '#f59e0b' },
+      { name: 'Izin', value: counts.EXCUSED || 0, color: '#3b82f6' },
+      { name: 'Sakit', value: counts.SICK || 0, color: '#a855f7' },
+      { name: 'Dispensasi', value: counts.DISPENSATION || 0, color: '#14b8a6' },
+      { name: 'Tidak Hadir', value: counts.ABSENT || 0, color: '#ef4444' },
+    ],
+    recent: recent.map((r) => ({
+      id: r.id,
+      name: r.user?.fullName ?? '-',
+      nis: r.student?.nis ?? null,
+      className: r.student?.class?.name ?? null,
+      time: r.checkIn ? localTime(r.checkIn) : '-',
+      status: r.status,
+      statusLabel: STATUS_LABELS[r.status],
+      method: r.method,
+      lateMinutes: r.lateMinutes,
+    })),
+    absentToday: absentToday.map((s) => ({
+      id: s.id,
+      name: s.user?.fullName ?? '-',
+      nis: s.nis,
+      className: s.class?.name ?? null,
+    })),
+    classes: classCounts.map((c) => ({
+      id: c.id,
+      name: c.name,
+      total: c._count.students,
+      present: c.students.length,
+    })),
+  };
+}
+
 export async function dashboardRoutes(app: FastifyInstance) {
   app.get('/dashboard', { preHandler: app.authenticate }, async (request, reply) => {
     const userId = request.user!.id;
@@ -55,100 +147,14 @@ export async function dashboardRoutes(app: FastifyInstance) {
       case 'ADMIN':
       case 'SUPER_ADMIN':
       case 'HEADMASTER': {
-        const counts = await statusCounts(dayStart, dayEnd);
-        const total = Object.values(counts).reduce((a, b) => a + b, 0);
-        const present = (counts.PRESENT || 0) + (counts.LATE || 0);
-        const percent = total ? Math.round((present / total) * 100) : 0;
-
-        // total siswa aktif (untuk menghitung belum hadir)
-        const activeStudents = await prisma.student.count({ where: { isActive: true } });
-        const notYet = Math.max(0, activeStudents - total);
-
-        const recent = await prisma.attendance.findMany({
-          where: { date: { gte: dayStart, lt: dayEnd }, type: 'CHECK_IN' },
-          orderBy: { checkIn: 'desc' },
-          take: 20,
-          include: {
-            user: { select: { fullName: true } },
-            student: { include: { class: { select: { name: true } } } },
-          },
-        });
-
-        // siswa tanpa absensi hari ini (belum hadir) — tampilkan beberapa
-        const absentToday = await prisma.student.findMany({
-          where: {
-            isActive: true,
-            classId: { not: null },
-            attendance: { none: { date: { gte: dayStart, lt: dayEnd }, type: 'CHECK_IN' } },
-          },
-          include: { user: { select: { fullName: true } }, class: { select: { name: true } } },
-          take: 10,
-          orderBy: { nis: 'asc' },
-        });
-
-        const classCounts = await prisma.class.findMany({
-          where: { isActive: true, academicYear: { isActive: true } },
-          select: {
-            id: true,
-            name: true,
-            _count: { select: { students: { where: { isActive: true } } } },
-            students: {
-              where: {
-                isActive: true,
-                attendance: { some: { date: { gte: dayStart, lt: dayEnd }, type: 'CHECK_IN' } },
-              },
-              select: { id: true },
-            },
-          },
-        });
-
+        const dash = await schoolStats(dayStart, dayEnd);
         return reply.send({
           success: true,
           data: {
             role: 'ADMIN',
             date: localDate(dayStart),
             dayKey: today,
-            stats: {
-              total,
-              present,
-              late: counts.LATE || 0,
-              excused: (counts.EXCUSED || 0) + (counts.SICK || 0) + (counts.OFFICIAL_DUTY || 0) + (counts.DISPENSATION || 0) + (counts.LEAVE || 0),
-              absent: counts.ABSENT || 0,
-              notYet,
-              percent,
-              activeStudents,
-            },
-            chart: [
-              { name: 'Hadir', value: counts.PRESENT || 0, color: '#22c55e' },
-              { name: 'Terlambat', value: counts.LATE || 0, color: '#f59e0b' },
-              { name: 'Izin', value: counts.EXCUSED || 0, color: '#3b82f6' },
-              { name: 'Sakit', value: counts.SICK || 0, color: '#a855f7' },
-              { name: 'Dispensasi', value: counts.DISPENSATION || 0, color: '#14b8a6' },
-              { name: 'Tidak Hadir', value: counts.ABSENT || 0, color: '#ef4444' },
-            ],
-            recent: recent.map((r) => ({
-              id: r.id,
-              name: r.user?.fullName ?? '-',
-              nis: r.student?.nis ?? null,
-              className: r.student?.class?.name ?? null,
-              time: r.checkIn ? localTime(r.checkIn) : '-',
-              status: r.status,
-              statusLabel: STATUS_LABELS[r.status],
-              method: r.method,
-              lateMinutes: r.lateMinutes,
-            })),
-            absentToday: absentToday.map((s) => ({
-              id: s.id,
-              name: s.user?.fullName ?? '-',
-              nis: s.nis,
-              className: s.class?.name ?? null,
-            })),
-            classes: classCounts.map((c) => ({
-              id: c.id,
-              name: c.name,
-              total: c._count.students,
-              present: c.students.length,
-            })),
+            ...dash,
           },
         });
       }
@@ -223,6 +229,9 @@ export async function dashboardRoutes(app: FastifyInstance) {
             })
           : [];
 
+        // Petugas piket: dashboard penuh ala admin (statistik seluruh sekolah)
+        const dash = user.role.key === 'PIKET' ? await schoolStats(dayStart, dayEnd) : null;
+
         return reply.send({
           success: true,
           data: {
@@ -243,6 +252,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
             })),
             attendanceRules: rules,
             branding,
+            ...(dash ?? {}),
           },
         });
       }
