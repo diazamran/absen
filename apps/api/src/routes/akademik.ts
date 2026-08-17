@@ -8,9 +8,15 @@ import { PERMISSION_KEYS } from '../rbac/permissions.js';
 
 export async function akademikRoutes(app: FastifyInstance) {
   // ===== Kelas =====
-  app.get('/classes', { preHandler: app.requirePermission(PERMISSION_KEYS.scheduleRead) }, async (_request, reply) => {
+  app.get('/classes', { preHandler: app.requirePermission(PERMISSION_KEYS.scheduleRead) }, async (request, reply) => {
+    // Wali kelas hanya melihat kelas yang diwalikannya
+    const user = await prisma.user.findUnique({ where: { id: request.user!.id }, include: { role: true, teacher: true } });
+    const isHomeroom = user?.role.key === 'HOMEROOM_TEACHER' && !!user.teacher;
     const rows = await prisma.class.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        ...(isHomeroom ? { homeroomTeacherId: user.teacher!.id } : {}),
+      },
       include: {
         major: true,
         academicYear: true,

@@ -42,6 +42,10 @@ function roleMenu(role?: string): NavItem[] {
     items.push({ to: '/app/gate', label: 'Scan Gerbang', icon: <ScanLine className="h-5 w-5" /> });
     items.push({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
     items.push({ to: '/app/reports', label: 'Laporan & Cetak', icon: <BarChart3 className="h-5 w-5" /> });
+  } else if (role === 'HOMEROOM_TEACHER') {
+    // Wali kelas: persetujuan izin, laporan (kelasnya sendiri), tanpa Absen
+    items.push({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
+    items.push({ to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-5 w-5" /> });
   } else {
     // Guru: tanpa menu Ajukan Izin & Absen
     if (role !== 'PARENT' && role !== 'TEACHER') {
@@ -80,8 +84,8 @@ const BOTTOM_NAV: Record<string, NavItem[]> = {
   HOMEROOM_TEACHER: [
     { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
     { to: '/app/classes', label: 'Kelas', icon: <GraduationCap className="h-6 w-6" /> },
-    { to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> },
     { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
+    { to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-6 w-6" /> },
     { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
   ],
   STAFF: [

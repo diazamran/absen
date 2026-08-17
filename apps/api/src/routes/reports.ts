@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { prisma } from '../lib/prisma.js';
 import { toCsv } from '../lib/csv.js';
 import { startOfLocalDay, monthRange, dateKey, localTime, todayStart, todayEnd } from '../lib/time.js';
@@ -20,6 +20,20 @@ function statusCountsMap(rows: { status: string }[]): Record<string, number> {
   const m: Record<string, number> = {};
   for (const r of rows) m[r.status] = (m[r.status] || 0) + 1;
   return m;
+}
+
+/** Wali kelas hanya bisa mengakses kelas yang diwalikannya — filter classId dipaksa ke kelasnya. */
+async function scopedClassId(request: FastifyRequest, requested?: string): Promise<string | undefined> {
+  const user = await prisma.user.findUnique({ where: { id: request.user!.id }, include: { role: true, teacher: true } });
+  if (user?.role.key !== 'HOMEROOM_TEACHER') return requested || undefined;
+  const myClass = user.teacher
+    ? await prisma.class.findFirst({
+        where: { homeroomTeacherId: user.teacher.id, isActive: true, academicYear: { isActive: true } },
+        select: { id: true },
+      })
+    : null;
+  // sentinel '__none__' → tanpa data bila wali kelas tidak punya kelas
+  return myClass?.id ?? '__none__';
 }
 
 /** Rekap per kelas: total siswa, hadir, terlambat, izin/sakit, dan tidak hadir pada rentang tanggal. */
@@ -70,16 +84,17 @@ export async function reportRoutes(app: FastifyInstance) {
     const q = request.query as { date?: string; classId?: string };
     const dayStart = q.date ? startOfLocalDay(q.date) : todayStart();
     const dayEnd = new Date(dayStart.getTime() + 24 * 3600_000);
+    const classId = await scopedClassId(request, q.classId);
 
     const rows = await prisma.attendance.findMany({
-      where: { date: { gte: dayStart, lt: dayEnd }, type: 'CHECK_IN', ...(q.classId ? { student: { classId: q.classId } } : {}) },
+      where: { date: { gte: dayStart, lt: dayEnd }, type: 'CHECK_IN', ...(classId ? { student: { classId } } : {}) },
       include: {
         user: { select: { fullName: true } },
         student: { include: { class: true } },
       },
       orderBy: { checkIn: 'asc' },
     });
-    const classSummary = q.classId ? [] : await classRecap(dayStart, dayEnd);
+    const classSummary = classId ? [] : await classRecap(dayStart, dayEnd);
 
     const counts = statusCountsMap(rows);
     const total = rows.length;
@@ -115,12 +130,13 @@ export async function reportRoutes(app: FastifyInstance) {
     const q = request.query as { month?: string; classId?: string; studentId?: string };
     const month = q.month || dateKey().slice(0, 7);
     const { start, end } = monthRange(month);
+    const classId = await scopedClassId(request, q.classId);
 
     const rows = await prisma.attendance.findMany({
       where: {
         type: 'CHECK_IN',
         date: { gte: start, lt: end },
-        ...(q.classId ? { student: { classId: q.classId } } : {}),
+        ...(classId ? { student: { classId } } : {}),
         ...(q.studentId ? { studentId: q.studentId } : {}),
       },
       include: {
@@ -131,7 +147,7 @@ export async function reportRoutes(app: FastifyInstance) {
     });
 
     const counts = statusCountsMap(rows);
-    const classSummary = q.classId ? [] : await classRecap(start, end);
+    const classSummary = classId ? [] : await classRecap(start, end);
     return reply.send({
       success: true,
       data: {
@@ -213,11 +229,12 @@ export async function reportRoutes(app: FastifyInstance) {
       const end = isMonthly
         ? monthRange(q.month || dateKey().slice(0, 7)).end
         : new Date(start.getTime() + 24 * 3600_000);
+      const classId = await scopedClassId(request, q.classId);
       const atts = await prisma.attendance.findMany({
         where: {
           type: 'CHECK_IN',
           date: { gte: start, lt: end },
-          ...(q.classId ? { student: { classId: q.classId } } : {}),
+          ...(classId ? { student: { classId } } : {}),
           ...(q.studentId ? { studentId: q.studentId } : {}),
         },
         include: {

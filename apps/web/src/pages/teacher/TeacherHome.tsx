@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  FilePlus2, FileText, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, XCircle, CalendarDays, MapPin, ShieldCheck, ScanFace,
+  FilePlus2, FileText, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, XCircle, CalendarDays, MapPin, ShieldCheck, ScanFace, BarChart3,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -36,6 +36,7 @@ export default function TeacherHome() {
   const isParent = user?.roleKey === 'PARENT';
   const isPiket = user?.roleKey === 'PIKET';
   const isTeacher = user?.roleKey === 'TEACHER';
+  const isHomeroom = user?.roleKey === 'HOMEROOM_TEACHER';
 
   const menu = isStudent
     ? [
@@ -51,18 +52,27 @@ export default function TeacherHome() {
           { label: 'Persetujuan Izin', icon: <FileText className="h-6 w-6" />, to: '/app/leave' },
           { label: 'Riwayat', icon: <History className="h-6 w-6" />, to: '/app/history' },
         ]
-      : [
-          // Guru: tanpa Ajukan Izin & Absen (cukup jurnal, kelas, riwayat)
-          ...(isTeacher
-            ? []
-            : [
-                { label: 'Ajukan Izin', icon: <FilePlus2 className="h-6 w-6" />, to: '/app/leave/mine' },
-                { label: 'Absen', icon: <Camera className="h-6 w-6" />, to: '/app/absent' },
-              ]),
-          { label: 'Jurnal Mengajar', icon: <BookOpen className="h-6 w-6" />, to: '/app/journal' },
-          { label: 'Kelas', icon: <ClipboardList className="h-6 w-6" />, to: '/app/classes' },
-          { label: 'Riwayat', icon: <History className="h-6 w-6" />, to: '/app/history' },
-        ];
+      : isHomeroom
+        ? [
+            // Wali kelas: persetujuan izin + laporan kelasnya, tanpa Absen
+            { label: 'Persetujuan Izin', icon: <FileText className="h-6 w-6" />, to: '/app/leave' },
+            { label: 'Jurnal Mengajar', icon: <BookOpen className="h-6 w-6" />, to: '/app/journal' },
+            { label: 'Kelas', icon: <ClipboardList className="h-6 w-6" />, to: '/app/classes' },
+            { label: 'Laporan', icon: <BarChart3 className="h-6 w-6" />, to: '/app/reports' },
+            { label: 'Riwayat', icon: <History className="h-6 w-6" />, to: '/app/history' },
+          ]
+        : [
+            // Guru: tanpa Ajukan Izin & Absen (cukup jurnal, kelas, riwayat)
+            ...(isTeacher
+              ? []
+              : [
+                  { label: 'Ajukan Izin', icon: <FilePlus2 className="h-6 w-6" />, to: '/app/leave/mine' },
+                  { label: 'Absen', icon: <Camera className="h-6 w-6" />, to: '/app/absent' },
+                ]),
+            { label: 'Jurnal Mengajar', icon: <BookOpen className="h-6 w-6" />, to: '/app/journal' },
+            { label: 'Kelas', icon: <ClipboardList className="h-6 w-6" />, to: '/app/classes' },
+            { label: 'Riwayat', icon: <History className="h-6 w-6" />, to: '/app/history' },
+          ];
 
   const quickAction = async () => {
     toast('info', 'Buka halaman Absen untuk memilih metode.');

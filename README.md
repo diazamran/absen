@@ -333,6 +333,8 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 
 ## Log Perubahan
 
+- **Menu Wali Kelas disesuaikan** — menu "Absen" dihapus, "Ajukan Izin" diganti **"Persetujuan Izin"**, dan ditambahkan menu **"Laporan"** yang hanya menampilkan kelas walinya (data kelas lain disembunyikan). Wali kelas hanya bisa mencetak laporan murid kelasnya sendiri; piket/admin/superadmin tetap melihat semua kelas.
+- **Riwayat bisa difilter kelas** — halaman Riwayat Absensi kini punya dropdown **"Semua Kelas / per Kelas"** untuk wali kelas, piket, dan admin, plus menampilkan nama & kelas siswa pada setiap baris.
 - **Menu Guru disederhanakan** — menu "Ajukan Izin" dan "Absen" dihapus untuk role Guru (beranda, sidebar, drawer, dan bottom nav). Menu Guru kini: Beranda, Jurnal Mengajar, Kelas, Riwayat, Notifikasi, Profil.
 - **Perbaikan Export Excel** — tombol Export Excel sebelumnya gagal karena nama file berakhiran `.excel` (seharusnya `.xlsx`) sehingga format tidak dikenali; kini berhasil mengunduh file `.xlsx` yang valid.
 - **Rekap per Kelas di Laporan** — saat filter kelas "Semua Kelas", laporan kini menampilkan tabel **Rekap per Kelas** (total siswa, hadir, terlambat, izin/sakit, tidak hadir) di halaman maupun di file PDF/Excel yang diexport.

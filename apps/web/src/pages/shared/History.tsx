@@ -3,13 +3,18 @@ import { useQuery } from '@tanstack/react-query';
 import { History as HistoryIcon } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { Card, Badge, EmptyState } from '../../lib/ui';
+import { Card, Badge, EmptyState, Select } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
 import { STATUS_LABELS, STATUS_COLORS, currentMonthKey, timeLabel } from '../../lib/format';
 
 interface AttRow {
   id: string; date: string; dayKey: string; checkIn?: string | null; checkOut?: string | null;
-  status: string; method: string; lateMinutes: number; earlyLeave?: boolean;
+  status: string; method: string; lateMinutes: number; earlyLeave?: boolean; className?: string | null; name?: string | null;
+}
+
+function timeStr(v?: string | null): string {
+  if (v && /^\d{2}:\d{2}$/.test(v)) return v;
+  return timeLabel(v);
 }
 
 export default function History() {
@@ -25,10 +30,19 @@ export default function History() {
   });
   const [childId, setChildId] = useState('');
 
+  // Filter kelas: wali kelas / piket / admin bisa melihat semua kelas atau per kelas
+  const canFilterClass = !isParent && ['ADMIN', 'SUPER_ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'PIKET'].includes(user?.roleKey || '');
+  const { data: classes } = useQuery({
+    queryKey: ['classes'],
+    queryFn: () => api<{ success: boolean; data: { id: string; name: string }[] }>('/classes').then((r) => r.data),
+    enabled: canFilterClass,
+  });
+  const [classId, setClassId] = useState('');
+
   const studentId = isParent ? childId : undefined;
 
   const { data: rows } = useQuery({
-    queryKey: ['attendance-history', month, studentId],
+    queryKey: ['attendance-history', month, studentId, classId],
     queryFn: async () => {
       if (isParent && !studentId) return [];
       if (isParent) {
@@ -39,9 +53,23 @@ export default function History() {
       // diri sendiri: cari id siswa dari me
       const me = await api<{ success: boolean; data: { student?: { id: string } | null } }>('/auth/me');
       if (!me.data.student) {
-        // guru/staff: pakai laporan bulanan filter user — fallback: kosong dengan pesan
-        const res = await api<{ success: boolean; data: { rows: AttRow[] } }>(`/reports/monthly?month=${month}`);
-        return res.data.rows;
+        // guru/staff/wali/piket/admin: laporan bulanan (bisa difilter kelas)
+        const res = await api<{ success: boolean; data: { rows: { name: string; nis?: string | null; className?: string | null; date: string; time?: string | null; status: string; method: string; lateMinutes: number }[] } }>(
+          `/reports/monthly?month=${month}${classId ? `&classId=${classId}` : ''}`,
+        );
+        return res.data.rows.map((r, i) => ({
+          id: `${r.date}-${r.nis || r.name || i}`,
+          date: r.date,
+          dayKey: r.date,
+          checkIn: r.time ?? null,
+          checkOut: null,
+          status: r.status,
+          method: r.method,
+          lateMinutes: r.lateMinutes,
+          earlyLeave: false,
+          className: r.className ?? null,
+          name: r.name,
+        }));
       }
       const res = await api<{ success: boolean; data: AttRow[] }>(`/attendance/student/${me.data.student.id}?month=${month}`);
       return res.data;
@@ -72,6 +100,15 @@ export default function History() {
         </div>
       )}
 
+      {canFilterClass && (
+        <div className="mb-4">
+          <Select value={classId} onChange={(e) => setClassId(e.target.value)} className="w-full sm:w-64">
+            <option value="">Semua kelas</option>
+            {classes?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </Select>
+        </div>
+      )}
+
       {!isParent || childId ? (
         <>
           {/* Rekap bulan */}
@@ -93,12 +130,13 @@ export default function History() {
                   <span className="text-[10px] uppercase text-muted">{(r.dayKey || r.date || '').slice(5, 7)}</span>
                 </div>
                 <div className="flex-1">
+                  {r.name && <p className="text-sm font-bold text-ink">{r.name}</p>}
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-sm font-semibold text-ink">Masuk {timeLabel(r.checkIn)}</span>
-                    {r.checkOut && <span className="text-xs text-muted">Pulang {timeLabel(r.checkOut)}</span>}
+                    <span className="font-mono text-sm font-semibold text-ink">Masuk {timeStr(r.checkIn)}</span>
+                    {r.checkOut && <span className="text-xs text-muted">Pulang {timeStr(r.checkOut)}</span>}
                     {r.earlyLeave && <Badge status="LATE" label="Pulang Awal" />}
                   </div>
-                  <p className="text-xs text-muted">Metode: {r.method}</p>
+                  <p className="text-xs text-muted">{r.className ? `Kelas ${r.className} · ` : ''}Metode: {r.method}</p>
                 </div>
                 <Badge status={r.status} label={r.status === 'LATE' && r.lateMinutes ? `Terlambat ${r.lateMinutes}m` : STATUS_LABELS[r.status]} />
               </Card>
