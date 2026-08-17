@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   Home, ScanLine, Users, FileText, LayoutDashboard, GraduationCap, CalendarDays, BookOpen,
   ClipboardList, Smartphone, BarChart3, Bell, ScrollText, Settings, LogOut, Menu, X, ShieldCheck,
-  ClipboardCheck, History, FilePlus2, UserRound, Baby, ScanFace,
+  ClipboardCheck, History, FilePlus2, UserRound, Baby, ScanFace, QrCode,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useTheme } from '../lib/theme';
@@ -41,10 +41,12 @@ function roleMenu(role?: string): NavItem[] {
     // Petugas Piket: menu izin hanya untuk persetujuan, bukan pengajuan
     items.push({ to: '/app/gate', label: 'Scan Gerbang', icon: <ScanLine className="h-5 w-5" /> });
     items.push({ to: '/app/attendance', label: 'Absensi Manual', icon: <ClipboardCheck className="h-5 w-5" /> });
+    items.push({ to: '/app/qr-cards', label: 'Kartu QR', icon: <QrCode className="h-5 w-5" /> });
     items.push({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
     items.push({ to: '/app/reports', label: 'Laporan & Cetak', icon: <BarChart3 className="h-5 w-5" /> });
   } else if (role === 'HOMEROOM_TEACHER') {
     // Wali kelas: persetujuan izin, laporan (kelasnya sendiri), tanpa Absen
+    items.push({ to: '/app/qr-cards', label: 'Kartu QR', icon: <QrCode className="h-5 w-5" /> });
     items.push({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
     items.push({ to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-5 w-5" /> });
   } else {

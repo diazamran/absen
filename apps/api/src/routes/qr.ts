@@ -27,4 +27,49 @@ export async function qrRoutes(app: FastifyInstance) {
     });
     return reply.send({ success: true, data: { token, type: 'student-card', expiresInSec: 365 * 24 * 3600 } });
   });
+
+  // ===== Kartu QR absen semua siswa satu kelas (untuk dicetak & ditempel di kartu) =====
+  app.get('/qr/class/:classId', { preHandler: app.requirePermission(PERMISSION_KEYS.studentsRead) }, async (request, reply) => {
+    const { classId } = request.params as { classId: string };
+    const klass = await prisma.class.findUnique({
+      where: { id: classId },
+      include: { students: { where: { isActive: true }, include: { user: { select: { fullName: true } } } } },
+    });
+    if (!klass) throw ApiError.notFound('Kelas tidak ditemukan.');
+
+    // Scope: wali kelas hanya bisa mencetak kelas yang diwalikannya
+    const actor = await prisma.user.findUnique({ where: { id: request.user!.id }, include: { role: true, teacher: true } });
+    if (actor?.role.key === 'HOMEROOM_TEACHER') {
+      const myClass = actor.teacher
+        ? await prisma.class.findFirst({
+            where: { homeroomTeacherId: actor.teacher.id, isActive: true, academicYear: { isActive: true } },
+            select: { id: true },
+          })
+        : null;
+      if (!myClass || myClass.id !== classId) {
+        throw ApiError.forbidden('SCOPE_RESTRICTED', 'Anda hanya dapat mencetak kartu untuk kelas Anda sendiri.');
+      }
+    }
+
+    const students = await Promise.all(
+      klass.students.map(async (s) => ({
+        studentId: s.id,
+        nis: s.nis,
+        fullName: s.user?.fullName ?? '-',
+        className: klass.name,
+        token: await issueQrToken(s.userId, 'student-card'),
+      })),
+    );
+
+    await audit({
+      userId: request.user!.id,
+      action: 'QR_CARDS_ISSUED',
+      entity: 'Class',
+      entityId: classId,
+      newValue: { className: klass.name, count: students.length },
+      request,
+    });
+
+    return reply.send({ success: true, data: { className: klass.name, students } });
+  });
 }

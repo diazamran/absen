@@ -42,3 +42,37 @@ body {
   object-fit: cover;
   transform: scaleX(-1);
 }
+
+/* ===== Cetak kartu QR absen ===== */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  #qr-print-area,
+  #qr-print-area * {
+    visibility: visible !important;
+  }
+  #qr-print-area {
+    position: absolute !important;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    gap: 6mm;
+  }
+  #qr-print-area .qr-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    border: 1px solid #e2e8f0;
+    border-radius: 4mm;
+    padding: 3mm;
+  }
+  #qr-print-area .qr-card img {
+    width: 34mm;
+    height: 34mm;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

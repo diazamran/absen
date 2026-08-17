@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Cog, Pencil, Upload, Download, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Trash2, Cog, Pencil, Upload, Download, Loader2, CheckCircle2, XCircle, Printer } from 'lucide-react';
 import { api, ApiError, downloadCsv } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Input, Field, Select, Segmented, EmptyState, Modal } from '../../lib/ui';
@@ -51,6 +52,7 @@ const CLASS_SAMPLE = ['X-TKJ-1', 'X', 'TKJ', 'Labkom 1'];
 function ClassesTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ClassRow | null>(null);
   const [showImport, setShowImport] = useState(false);
@@ -125,6 +127,9 @@ function ClassesTab() {
               <span className="shrink-0 rounded-xl bg-primary-soft px-3 py-1.5 text-sm font-bold text-primary-dark">{c.studentCount} siswa</span>
             </div>
             <div className="mt-3 flex justify-end gap-1">
+              <button onClick={() => navigate(`/app/qr-cards?classId=${c.id}`)} className="rounded-xl p-2 text-muted hover:bg-primary-soft hover:text-primary" title="Cetak kartu QR absen kelas ini">
+                <Printer className="h-4 w-4" />
+              </button>
               <button onClick={() => setEditing(c)} className="rounded-xl p-2 text-muted hover:bg-primary-soft hover:text-primary" title="Edit">
                 <Pencil className="h-4 w-4" />
               </button>

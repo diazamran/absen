@@ -22,6 +22,7 @@ const Devices = lazy(() => import('./pages/admin/Devices'));
 const Audit = lazy(() => import('./pages/admin/Audit'));
 const Settings = lazy(() => import('./pages/admin/Settings'));
 const ImportStudents = lazy(() => import('./pages/admin/ImportStudents'));
+const QrCards = lazy(() => import('./pages/admin/QrCards'));
 
 // Guru / Staff / Siswa
 const TeacherHome = lazy(() => import('./pages/teacher/TeacherHome'));
@@ -92,6 +93,7 @@ export default function App() {
         <Route path="audit" element={<Page><Audit /></Page>} />
         <Route path="settings" element={<Page><Settings /></Page>} />
         <Route path="import" element={<Page><ImportStudents /></Page>} />
+        <Route path="qr-cards" element={<Page><QrCards /></Page>} />
 
         {/* Guru / Orang tua */}
         <Route path="home" element={<HomeSwitch />} />

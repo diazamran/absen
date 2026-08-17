@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { GraduationCap, Plus, Search, Upload, Download, Pencil, Trash2, KeyRound, Loader2 } from 'lucide-react';
+import { GraduationCap, Plus, Search, Upload, Download, Pencil, Trash2, KeyRound, Loader2, Printer } from 'lucide-react';
 import { api, ApiError, downloadCsv } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Input, Field, Select, Modal, Badge, EmptyState } from '../../lib/ui';
@@ -106,6 +106,9 @@ export default function Students() {
           </Button>
           <Button variant="outline" onClick={() => navigate('/app/import')}>
             <Upload className="h-4 w-4" /> Import
+          </Button>
+          <Button variant="outline" onClick={() => navigate(`/app/qr-cards${classId ? `?classId=${classId}` : ''}`)}>
+            <Printer className="h-4 w-4" /> Kartu QR
           </Button>
           <Button onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4" /> Tambah Siswa
