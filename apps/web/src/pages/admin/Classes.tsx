@@ -301,17 +301,33 @@ function ClassForm({ majors, initial, onClose }: { majors: { id: string; name: s
   );
 }
 
+interface MajorRow {
+  id: string; name: string; code?: string | null;
+}
+
 function MajorsTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [name, setName] = useState('');
+  const [code, setCode] = useState('');
+  const [editing, setEditing] = useState<MajorRow | null>(null);
   const { data: majors } = useQuery({
     queryKey: ['majors'],
-    queryFn: () => api<{ success: boolean; data: { id: string; name: string; code?: string | null }[] }>('/majors').then((r) => r.data),
+    queryFn: () => api<{ success: boolean; data: MajorRow[] }>('/majors').then((r) => r.data),
   });
   const mutation = useMutation({
-    mutationFn: () => api('/majors', { method: 'POST', body: { name } }),
-    onSuccess: () => { toast('success', 'Jurusan ditambahkan.'); qc.invalidateQueries({ queryKey: ['majors'] }); setName(''); },
+    mutationFn: () => api('/majors', { method: 'POST', body: { name, code: code || undefined } }),
+    onSuccess: () => { toast('success', 'Jurusan ditambahkan.'); qc.invalidateQueries({ queryKey: ['majors'] }); setName(''); setCode(''); },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'),
+  });
+  const del = useMutation({
+    mutationFn: (id: string) => api(`/majors/${id}`, { method: 'DELETE' }),
+    onSuccess: () => { toast('success', 'Jurusan dihapus permanen.'); qc.invalidateQueries({ queryKey: ['majors'] }); },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'),
+  });
+  const update = useMutation({
+    mutationFn: (p: MajorRow) => api(`/majors/${p.id}`, { method: 'PUT', body: { name: p.name, code: p.code || undefined } }),
+    onSuccess: () => { toast('success', 'Jurusan diperbarui.'); qc.invalidateQueries({ queryKey: ['majors'] }); setEditing(null); },
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'),
   });
   return (
@@ -320,6 +336,7 @@ function MajorsTab() {
         <h3 className="mb-3 flex items-center gap-2 font-bold text-ink"><Cog className="h-4 w-4" /> Tambah Jurusan</h3>
         <div className="space-y-3">
           <Field label="Nama Jurusan"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="TKJ / TKR / TPTUP / KULINER" /></Field>
+          <Field label="Kode (opsional)"><Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="TKJ" /></Field>
           <Button className="w-full" onClick={() => mutation.mutate()} disabled={!name}>Simpan</Button>
         </div>
       </Card>
@@ -331,10 +348,36 @@ function MajorsTab() {
             </div>
             <p className="font-bold text-ink">{m.name}</p>
             {m.code && <p className="text-xs text-muted">{m.code}</p>}
+            <div className="mt-1 flex gap-1">
+              <button onClick={() => setEditing(m)} className="rounded-xl p-2 text-muted hover:bg-primary-soft hover:text-primary" title="Edit jurusan">
+                <Pencil className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm(`Hapus PERMANEN jurusan ${m.name}? Kelas & siswa yang memakainya akan dikosongkan jurusannya.`)) del.mutate(m.id);
+                }}
+                className="rounded-xl p-2 text-muted hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
+                title="Hapus permanen"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
           </Card>
         ))}
         {majors?.length === 0 && <div className="col-span-full"><EmptyState icon={Cog} title="Belum ada jurusan" /></div>}
       </div>
+      {editing && (
+        <Modal open onClose={() => setEditing(null)} title={`Edit Jurusan — ${editing.name}`}>
+          <div className="space-y-3">
+            <Field label="Nama Jurusan"><Input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></Field>
+            <Field label="Kode (opsional)"><Input value={editing.code || ''} onChange={(e) => setEditing({ ...editing, code: e.target.value })} /></Field>
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setEditing(null)}>Batal</Button>
+            <Button onClick={() => update.mutate(editing)} disabled={!editing.name || update.isPending}>Simpan</Button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -544,28 +587,29 @@ function SubjectEditForm({ initial, onClose }: { initial: SubjectRow; onClose: (
   );
 }
 
+interface ScheduleRow {
+  id: string; day: string; startTime: string; endTime: string; className: string; subjectName: string; teacherName: string; room?: string | null;
+  classId?: string; subjectId?: string; teacherId?: string;
+}
+
 function SchedulesTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ classId: '', subjectId: '', teacherId: '', day: 'MONDAY', startTime: '07:00', endTime: '08:30', room: '' });
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<ScheduleRow | null>(null);
 
   const { data: schedules } = useQuery({
     queryKey: ['schedules'],
-    queryFn: () => api<{ success: boolean; data: { id: string; day: string; startTime: string; endTime: string; className: string; subjectName: string; teacherName: string; room?: string | null }[] }>('/schedules').then((r) => r.data),
+    queryFn: () => api<{ success: boolean; data: ScheduleRow[] }>('/schedules').then((r) => r.data),
   });
   const { data: classes } = useQuery({ queryKey: ['classes'], queryFn: () => api<{ success: boolean; data: { id: string; name: string }[] }>('/classes').then((r) => r.data) });
   const { data: subjects } = useQuery({ queryKey: ['subjects'], queryFn: () => api<{ success: boolean; data: { id: string; name: string }[] }>('/subjects').then((r) => r.data) });
   const { data: teachers } = useQuery({ queryKey: ['teachers'], queryFn: () => api<{ success: boolean; data: { id: string; fullName: string }[] }>('/teachers').then((r) => r.data) });
 
-  const mutation = useMutation({
-    mutationFn: () => api('/schedules', { method: 'POST', body: form }),
-    onSuccess: () => { toast('success', 'Jadwal ditambahkan.'); qc.invalidateQueries({ queryKey: ['schedules'] }); setShowForm(false); },
-    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'),
-  });
   const del = useMutation({
     mutationFn: (id: string) => api(`/schedules/${id}`, { method: 'DELETE' }),
     onSuccess: () => { toast('success', 'Jadwal dihapus.'); qc.invalidateQueries({ queryKey: ['schedules'] }); },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'),
   });
 
   const byDay = DAYS.map((d) => ({ day: d, items: (schedules || []).filter((s) => s.day === d) }));
@@ -590,7 +634,18 @@ function SchedulesTab() {
                       <p className="truncate text-sm font-semibold text-ink">{s.subjectName} · {s.className}</p>
                       <p className="truncate text-xs text-muted">{s.teacherName}{s.room ? ` · ${s.room}` : ''}</p>
                     </div>
-                    <button onClick={() => del.mutate(s.id)} className="text-muted hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
+                    <button onClick={() => setEditing(s)} className="rounded-xl p-2 text-muted hover:bg-primary-soft hover:text-primary" title="Edit jadwal">
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Hapus jadwal ${s.subjectName} · ${s.className} (${DAY_LABELS[s.day]})?`)) del.mutate(s.id);
+                      }}
+                      className="rounded-xl p-2 text-muted hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
+                      title="Hapus jadwal"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -599,30 +654,73 @@ function SchedulesTab() {
         ))}
       </div>
 
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowForm(false)}>
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl bg-surface p-5 shadow-float dark:bg-slate-800" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-4 font-bold text-ink">Jadwal Baru</h3>
-            <div className="space-y-3">
-              <Field label="Kelas"><Select value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })}><option value="">Pilih</option>{classes?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
-              <Field label="Mata Pelajaran"><Select value={form.subjectId} onChange={(e) => setForm({ ...form, subjectId: e.target.value })}><option value="">Pilih</option>{subjects?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></Field>
-              <Field label="Guru"><Select value={form.teacherId} onChange={(e) => setForm({ ...form, teacherId: e.target.value })}><option value="">Pilih</option>{teachers?.map((t) => <option key={t.id} value={t.id}>{t.fullName}</option>)}</Select></Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Hari"><Select value={form.day} onChange={(e) => setForm({ ...form, day: e.target.value })}>{DAYS.map((d) => <option key={d} value={d}>{DAY_LABELS[d]}</option>)}</Select></Field>
-                <Field label="Ruang"><Input value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} /></Field>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Mulai"><Input value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} /></Field>
-                <Field label="Selesai"><Input value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} /></Field>
-              </div>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowForm(false)}>Batal</Button>
-              <Button onClick={() => mutation.mutate()} disabled={!form.classId || !form.subjectId || !form.teacherId}>Simpan</Button>
-            </div>
+      {(showForm || editing) && (
+        <ScheduleForm
+          initial={editing || undefined}
+          classes={classes || []}
+          subjects={subjects || []}
+          teachers={teachers || []}
+          onClose={() => { setShowForm(false); setEditing(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ScheduleForm({ initial, classes, subjects, teachers, onClose }: {
+  initial?: ScheduleRow;
+  classes: { id: string; name: string }[];
+  subjects: { id: string; name: string }[];
+  teachers: { id: string; fullName: string }[];
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    classId: initial?.classId || '',
+    subjectId: initial?.subjectId || '',
+    teacherId: initial?.teacherId || '',
+    day: initial?.day || 'MONDAY',
+    startTime: initial?.startTime || '07:00',
+    endTime: initial?.endTime || '08:30',
+    room: initial?.room || '',
+  });
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      initial
+        ? api(`/schedules/${initial.id}`, { method: 'PUT', body: form })
+        : api('/schedules', { method: 'POST', body: form }),
+    onSuccess: () => {
+      toast('success', initial ? 'Jadwal diperbarui.' : 'Jadwal ditambahkan.');
+      qc.invalidateQueries({ queryKey: ['schedules'] });
+      onClose();
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl bg-surface p-5 shadow-float dark:bg-slate-800" onClick={(e) => e.stopPropagation()}>
+        <h3 className="mb-4 font-bold text-ink">{initial ? `Edit Jadwal — ${initial.subjectName}` : 'Jadwal Baru'}</h3>
+        <div className="space-y-3">
+          <Field label="Kelas"><Select value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })}><option value="">Pilih</option>{classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
+          <Field label="Mata Pelajaran"><Select value={form.subjectId} onChange={(e) => setForm({ ...form, subjectId: e.target.value })}><option value="">Pilih</option>{subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></Field>
+          <Field label="Guru"><Select value={form.teacherId} onChange={(e) => setForm({ ...form, teacherId: e.target.value })}><option value="">Pilih</option>{teachers.map((t) => <option key={t.id} value={t.id}>{t.fullName}</option>)}</Select></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Hari"><Select value={form.day} onChange={(e) => setForm({ ...form, day: e.target.value })}>{DAYS.map((d) => <option key={d} value={d}>{DAY_LABELS[d]}</option>)}</Select></Field>
+            <Field label="Ruang"><Input value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} /></Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Mulai"><Input value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} /></Field>
+            <Field label="Selesai"><Input value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} /></Field>
           </div>
         </div>
-      )}
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>Batal</Button>
+          <Button onClick={() => mutation.mutate()} disabled={!form.classId || !form.subjectId || !form.teacherId || mutation.isPending}>Simpan</Button>
+        </div>
+      </div>
     </div>
   );
 }

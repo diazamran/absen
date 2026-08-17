@@ -105,6 +105,26 @@ export async function akademikRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: major });
   });
 
+  app.put('/majors/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.classesManage) }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = validate(z.object({ name: z.string().min(1).optional(), code: z.string().optional() }), request.body);
+    await prisma.major.update({ where: { id }, data: body });
+    await audit({ userId: request.user!.id, action: 'MAJOR_UPDATED', entity: 'Major', entityId: id, newValue: body, request });
+    return reply.send({ success: true, message: 'Jurusan diperbarui.' });
+  });
+
+  app.delete('/majors/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.classesManage) }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    // Hapus PERMANEN: kelas & siswa yang memakai jurusan ini dikosongkan jurusannya
+    await prisma.$transaction(async (tx) => {
+      await tx.class.updateMany({ where: { majorId: id }, data: { majorId: null } });
+      await tx.student.updateMany({ where: { majorId: id }, data: { majorId: null } });
+      await tx.major.delete({ where: { id } });
+    });
+    await audit({ userId: request.user!.id, action: 'MAJOR_DELETED', entity: 'Major', entityId: id, request });
+    return reply.send({ success: true, message: 'Jurusan dihapus permanen.' });
+  });
+
   // ===== Mata Pelajaran =====
   app.get('/subjects', { preHandler: app.requirePermission(PERMISSION_KEYS.scheduleRead) }, async (_request, reply) => {
     const rows = await prisma.subject.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } });
@@ -195,6 +215,25 @@ export async function akademikRoutes(app: FastifyInstance) {
     const schedule = await prisma.schedule.create({ data: body });
     await audit({ userId: request.user!.id, action: 'SCHEDULE_CREATED', entity: 'Schedule', entityId: schedule.id, request });
     return reply.send({ success: true, data: schedule });
+  });
+
+  app.put('/schedules/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.scheduleManage) }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = validate(
+      z.object({
+        classId: z.string().min(1),
+        subjectId: z.string().min(1),
+        teacherId: z.string().min(1),
+        day: z.enum(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']),
+        startTime: z.string().regex(/^\d{2}:\d{2}$/),
+        endTime: z.string().regex(/^\d{2}:\d{2}$/),
+        room: z.string().optional(),
+      }),
+      request.body,
+    );
+    await prisma.schedule.update({ where: { id }, data: body });
+    await audit({ userId: request.user!.id, action: 'SCHEDULE_UPDATED', entity: 'Schedule', entityId: id, newValue: body, request });
+    return reply.send({ success: true, message: 'Jadwal diperbarui.' });
   });
 
   app.delete('/schedules/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.scheduleManage) }, async (request, reply) => {
