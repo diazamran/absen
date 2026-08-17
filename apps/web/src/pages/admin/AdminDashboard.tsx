@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
-import { Users, CheckCircle2, Clock3, FileQuestion, UserX, Loader2 } from 'lucide-react';
+import { Users, CheckCircle2, Clock3, FileQuestion, UserX, Loader2, ChevronRight } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useSocketEvent, joinDashboard } from '../../lib/socket';
@@ -26,6 +27,7 @@ interface RealtimeEvent {
 export default function AdminDashboard() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [period, setPeriod] = useState<'today' | 'class'>('today');
   const [liveEvents, setLiveEvents] = useState<RealtimeEvent[]>([]);
 
@@ -136,26 +138,35 @@ export default function AdminDashboard() {
         </Card>
       </div>
 
-      {/* Kehadiran per kelas */}
+      {/* Kehadiran per kelas — klik kartu untuk membuka detail absensi kelas */}
       <Card>
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-1 flex items-center justify-between">
           <h3 className="font-bold text-ink">Kehadiran per Kelas</h3>
           <Segmented value={period} onChange={setPeriod} options={[{ value: 'today', label: 'Hari Ini' }, { value: 'class', label: 'Kelas' }]} />
         </div>
+        <p className="mb-3 text-xs text-muted">Klik kartu kelas untuk membuka detail absensi.</p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data.classes.map((c) => {
             const pct = c.total ? Math.round((c.present / c.total) * 100) : 0;
             return (
-              <div key={c.id} className="rounded-xl border border-line/60 p-3.5">
-                <div className="mb-2 flex items-center justify-between">
+              <button
+                key={c.id}
+                onClick={() => navigate(`/app/class/${c.id}`)}
+                title={`Buka detail absensi ${c.name}`}
+                className="group rounded-xl border border-line/60 p-3.5 text-left transition-colors hover:border-primary/50 hover:bg-primary-soft/40 active:scale-[0.99] dark:hover:bg-primary-500/10"
+              >
+                <div className="mb-2 flex items-center justify-between gap-2">
                   <p className="text-sm font-bold text-ink">{c.name}</p>
-                  <span className="text-xs font-semibold text-muted">{c.present}/{c.total} hadir</span>
+                  <span className="flex items-center gap-1 text-xs font-semibold text-muted">
+                    {c.present}/{c.total} hadir
+                    <ChevronRight className="h-3.5 w-3.5 opacity-40 transition-opacity group-hover:opacity-100" />
+                  </span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
                   <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
                 </div>
                 <p className="mt-1.5 text-xs text-muted">{pct}% kehadiran</p>
-              </div>
+              </button>
             );
           })}
         </div>
