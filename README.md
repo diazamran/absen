@@ -231,7 +231,7 @@ npm run typecheck
 npm run build   # build production + PWA service worker
 ```
 
-Cakupan tes: autentikasi, rotasi refresh token, RBAC (forbidden untuk role lain), absensi QR + pencegahan duplikat, check-out tanpa check-in, validasi QR (kedaluwarsa/rusak), validasi kartu, persetujuan/penolakan izin, laporan + export CSV, layanan pengenalan wajah (mock).
+Cakupan tes: autentikasi, rotasi refresh token, RBAC (forbidden untuk role lain), absensi QR + pencegahan duplikat, check-out tanpa check-in, validasi QR (kedaluwarsa/rusak), validasi kartu, persetujuan/penolakan izin, laporan + export CSV, layanan pengenalan wajah (facenet-web: enroll descriptor → verifikasi cocok/tidak cocok).
 
 ---
 
@@ -308,7 +308,7 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 - **Anti-duplikat**: satu absen datang + satu pulang per hari per user (`@@unique([userId, date, type])`), konfigurabel.
 - **QR**: token JWT ditandatangani HMAC-SHA256 + nonce + expiry. QR dinamis 60 detik; QR kartu siswa (fallback) 1 tahun, nonce dirotasi.
 - **Kartu**: UID disimpan sebagai SHA-256, tidak pernah plaintext.
-- **Wajah**: embedding perceptual-hash disimpan; foto mentah tidak disimpan; data biometrik tidak pernah diekspos API; registrasi siswa lewat HP berstatus **PENDING** dan baru aktif setelah **disetujui admin** (approve/reset); siswa bisa hapus datanya sendiri (privasi).
+- **Wajah**: hanya **descriptor FaceNet 128-d** (hasil deteksi di HP) yang dikirim & disimpan; foto mentah tidak pernah dikirim/disimpan; data biometrik tidak pernah diekspos API; registrasi siswa lewat HP berstatus **PENDING** dan baru aktif setelah **disetujui admin** (approve/reset); siswa bisa hapus datanya sendiri (privasi).
 - **RBAC**: daftar role→permission di `src/rbac/permissions.ts`, di-mirror ke tabel DB, dan diterapkan di middleware + service layer (bukan hanya menu UI).
 - **Audit log**: `ATTENDANCE_CREATED`, `ATTENDANCE_MANUAL_CHANGED`, `LEAVE_APPROVED`, `FACE_REGISTERED`, `EXPORT_REPORT`, dll.
 - **Absensi manual** wajib lewat guru/admin dan masuk audit log.
@@ -333,6 +333,9 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 
 ## Log Perubahan
 
+- **Pengenalan wajah diganti total — jauh lebih akurat** 🔥 — sebelumnya sistem membandingkan *hash seluruh frame* (mock, sensitif terhadap cahaya/posisi) sehingga wajah yang sudah direkam sering ditolak saat absen. Sekarang deteksi wajah & ekstraksi ciri wajah (descriptor **FaceNet 128-dimensi**) dilakukan **langsung di HP** memakai face-api.js + TensorFlow.js (WebGL), dan server membandingkan descriptor dengan jarak euclidean + margin anti-salah-kenal. Model wajah (±5 MB) diunduh sekali lalu di-cache. Foto mentah tetap tidak pernah dikirim/disimpan.
+  - ⚠️ **PENTING — siswa yang pernah mendaftar wajah sebelum update ini harus daftar ulang sekali** (data lama `ahash-v1` tidak kompatibel). Sistem otomatis mendeteksi dan menampilkan kartu **"Data wajah lama — perlu daftar ulang"** di menu Registrasi Wajah siswa & admin. Setelah daftar ulang + disetujui admin, absen wajah langsung akurat.
+  - Penyetelan opsional di `.env`: `FACE_MATCH_THRESHOLD` (default 0.6) dan `FACE_MATCH_MARGIN` (default 0.15, cegah salah kenal saat banyak siswa).
 - **Menu Wali Kelas disesuaikan** — menu "Absen" dihapus, "Ajukan Izin" diganti **"Persetujuan Izin"**, dan ditambahkan menu **"Laporan"** yang hanya menampilkan kelas walinya (data kelas lain disembunyikan). Wali kelas hanya bisa mencetak laporan murid kelasnya sendiri; piket/admin/superadmin tetap melihat semua kelas.
 - **Riwayat bisa difilter kelas** — halaman Riwayat Absensi kini punya dropdown **"Semua Kelas / per Kelas"** untuk wali kelas, piket, dan admin, plus menampilkan nama & kelas siswa pada setiap baris.
 - **Menu Guru disederhanakan** — menu "Ajukan Izin" dan "Absen" dihapus untuk role Guru (beranda, sidebar, drawer, dan bottom nav). Menu Guru kini: Beranda, Jurnal Mengajar, Kelas, Riwayat, Notifikasi, Profil.

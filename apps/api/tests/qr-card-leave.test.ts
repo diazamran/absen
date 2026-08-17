@@ -125,15 +125,27 @@ describe('Laporan', () => {
 });
 
 describe('Face Recognition Service', () => {
-  it('provider mock: enroll lalu verifikasi frame cocok', async () => {
+  it('facenet-web: enroll descriptor lalu verifikasi cocok / berbeda', async () => {
     const { faceService } = await import('../src/services/face.js');
-    const { MockImageMaker } = await import('./mock-image.js');
-    const frames = [0, 1, 2].map((i) => MockImageMaker.jpg(i));
-    await faceService.enroll(fx.studentUserId, frames);
-    const result = await faceService.verify(MockImageMaker.jpg(3), { prevImage: MockImageMaker.jpg(2) });
-    expect(result.userId).toBe(fx.studentUserId);
-    expect(result.liveness).toBe(true);
-    expect(result.confidence).toBeGreaterThan(0.5);
+    // Descriptor sintetis 128-d meniru keluaran face-api.js (arah vektor = ciri wajah)
+    const makeDescriptor = (base: number, jitter = 0, alternate = false): number[] =>
+      Array.from({ length: 128 }, (_, i) =>
+        base + (alternate ? (i % 2 === 0 ? 0.5 : -0.5) : 0) + (i % 7) * 0.001 + jitter,
+      );
+
+    await faceService.enroll(fx.studentUserId, [makeDescriptor(0.5), makeDescriptor(0.5, 0.002)]);
+
+    // Wajah sama dengan variasi kecil → dikenali
+    const match = await faceService.verify(makeDescriptor(0.5, 0.004));
+    expect(match.userId).toBe(fx.studentUserId);
+    expect(match.confidence).toBeGreaterThan(0.5);
+
+    // Wajah dengan arah vektor sangat berbeda → tidak dikenali
+    const miss = await faceService.verify(makeDescriptor(0.5, 0, true));
+    expect(miss.userId).toBeNull();
+
+    // Descriptor invalid → ditolak
+    await expect(faceService.verify([1, 2, 3])).rejects.toThrow();
   });
 });
 

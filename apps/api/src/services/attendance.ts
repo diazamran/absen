@@ -21,9 +21,10 @@ import { audit } from '../lib/audit.js';
 import type { AttendanceMethod, AttendanceStatus, AttendanceType } from '@prisma/client';
 
 export interface AttendanceProof {
-  image?: string;
-  prevImage?: string;
-  action?: string;
+  /** Descriptor wajah 128-d hasil deteksi di HP (face-api.js). */
+  descriptor?: number[];
+  /** Liveness ringan (deteksi gerakan 2 frame) diperiksa di HP. */
+  liveness?: boolean;
   token?: string;
   cardUid?: string;
 }
@@ -82,24 +83,22 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   const proof = input.proof || {};
 
   if (method === 'FACE') {
-    const image = proof.image;
-    if (!image) throw ApiError.badRequest('INVALID_IMAGE', 'Wajah belum terlihat jelas.');
-    const result = await faceService.verify(image, {
-      action: proof.action,
-      prevImage: proof.prevImage,
-    });
+    const descriptor = proof.descriptor;
+    if (!descriptor) throw ApiError.badRequest('INVALID_DESCRIPTOR', 'Wajah belum terdeteksi. Posisikan wajah di tengah dan coba lagi.');
+    // Liveness ringan diperiksa di HP (2 frame berjarak sebentar); server menolak bila tidak lolos
+    if (proof.liveness === false) {
+      throw ApiError.badRequest('LIVENESS_FAILED', 'Deteksi gerakan gagal. Coba ulangi sesuai instruksi.');
+    }
+    const result = await faceService.verify(descriptor);
     if (!result.userId) {
       throw ApiError.badRequest('FACE_NOT_RECOGNIZED', 'Wajah tidak dikenali. Silakan coba lagi.');
-    }
-    if (!result.liveness) {
-      throw ApiError.badRequest('LIVENESS_FAILED', 'Deteksi gerakan gagal. Coba ulangi sesuai instruksi.');
     }
     if (!isGateOperator && result.userId !== user.id) {
       throw ApiError.badRequest('FACE_NOT_RECOGNIZED', 'Wajah tidak dikenali.');
     }
     targetUserId = result.userId;
     faceVerified = true;
-    livenessVerified = result.liveness;
+    livenessVerified = true;
   } else if (method === 'QR') {
     const token = proof.token;
     if (!token) throw ApiError.badRequest('INVALID_QR', 'QR Code tidak valid.');
@@ -131,14 +130,17 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
       const res = await verifyCard(proof.cardUid);
       targetUserId = res.userId;
       cardVerified = true;
-    } else if (proof.image) {
-      const result = await faceService.verify(proof.image, { action: proof.action, prevImage: proof.prevImage });
-      if (!result.userId || !result.liveness) {
+    } else if (proof.descriptor) {
+      if (proof.liveness === false) {
+        throw ApiError.badRequest('LIVENESS_FAILED', 'Deteksi gerakan gagal. Coba ulangi sesuai instruksi.');
+      }
+      const result = await faceService.verify(proof.descriptor);
+      if (!result.userId) {
         throw ApiError.badRequest('FACE_NOT_RECOGNIZED', 'Wajah tidak dikenali.');
       }
       targetUserId = result.userId;
       faceVerified = true;
-      livenessVerified = result.liveness;
+      livenessVerified = true;
     } else {
       throw ApiError.badRequest('INVALID_PROOF', 'Metode absen tidak valid.');
     }

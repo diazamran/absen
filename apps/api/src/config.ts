@@ -44,7 +44,9 @@ export const config = {
     publicUrl: process.env.STORAGE_PUBLIC_URL || '',
   },
 
-  faceProvider: process.env.FACE_RECOGNITION_PROVIDER || 'mock',
+  faceProvider: process.env.FACE_RECOGNITION_PROVIDER || 'facenet-web',
+  faceMatchThreshold: num(process.env.FACE_MATCH_THRESHOLD, 0.6),
+  faceMatchMargin: num(process.env.FACE_MATCH_MARGIN, 0.15),
   whatsappProvider: process.env.WHATSAPP_PROVIDER || 'none',
   whatsappApiKey: process.env.WHATSAPP_API_KEY || '',
 

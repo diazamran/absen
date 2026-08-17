@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2, XCircle, Loader2, Camera, RefreshCw } from 'lu
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { startCamera, stopCamera, captureFrame } from '../../lib/camera';
+import { detectFaceDescriptor, framesHaveMotion, initFaceModels, isFaceModelReady } from '../../lib/face';
 import { Segmented, Badge, Button } from '../../lib/ui';
 import { STATUS_LABELS } from '../../lib/format';
 
@@ -14,12 +15,12 @@ export default function FaceScan() {
   const { toast } = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const prevFrameRef = useRef<string | null>(null);
 
   const [type, setType] = useState<Type>('CHECK_IN');
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [scanning, setScanning] = useState(false);
+  const [modelsLoading, setModelsLoading] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string; fullName?: string; time?: string; status?: string; lateMinutes?: number } | null>(null);
 
   useEffect(() => {
@@ -40,24 +41,44 @@ export default function FaceScan() {
     };
   }, []);
 
+  // Panaskan model wajah diam-diam saat halaman dibuka
+  useEffect(() => {
+    initFaceModels().catch(() => {
+      // tidak fatal; doScan akan mencoba lagi
+    });
+  }, []);
+
   const doScan = async () => {
     const video = videoRef.current;
     if (!video || scanning) return;
     setScanning(true);
     setResult(null);
+    if (!isFaceModelReady()) setModelsLoading(true);
     try {
-      // Frame 1
+      // Liveness ringan: 2 frame berjarak sebentar harus ada sedikit pergerakan
       const frame1 = captureFrame(video);
       await new Promise((r) => setTimeout(r, 350));
-      // Frame 2 (untuk liveness: deteksi pergerakan)
       const frame2 = captureFrame(video);
       if (!frame1 || !frame2) {
         toast('warning', 'Wajah belum terlihat jelas. Pastikan pencahayaan cukup.');
         return;
       }
+      const motion = await framesHaveMotion(frame1, frame2);
+      if (!motion) {
+        setResult({ ok: false, message: 'Deteksi gerakan gagal. Gerakkan kepala sedikit lalu coba lagi.' });
+        return;
+      }
+
+      // Deteksi wajah & ekstrak descriptor di HP (bukan kirim foto ke server)
+      const descriptor = await detectFaceDescriptor(video);
+      if (!descriptor) {
+        setResult({ ok: false, message: 'Wajah tidak terdeteksi. Pastikan wajah di tengah & pencahayaan cukup.' });
+        return;
+      }
+
       const res = await api<{ success: boolean; message: string; data: { fullName: string; time: string; status: string; lateMinutes: number } }>('/attendance/face', {
         method: 'POST',
-        body: { type, image: frame2, prevImage: frame1, deviceId: 'web' },
+        body: { type, descriptor: Array.from(descriptor), liveness: true, deviceId: 'web' },
       });
       setResult({ ok: true, message: 'ABSEN BERHASIL', ...res.data });
     } catch (e) {
@@ -65,6 +86,7 @@ export default function FaceScan() {
       setResult({ ok: false, message: msg });
     } finally {
       setScanning(false);
+      setModelsLoading(false);
       setTimeout(() => setResult(null), 3500);
     }
   };
@@ -113,11 +135,12 @@ export default function FaceScan() {
       <div className="flex justify-center bg-black py-5">
         <button
           onClick={doScan}
-          disabled={!ready || scanning}
+          disabled={!ready || scanning || modelsLoading}
           className="relative flex h-20 w-20 items-center justify-center rounded-full border-4 border-primary text-white transition-transform active:scale-95 disabled:opacity-50"
         >
-          {scanning ? <Loader2 className="h-9 w-9 animate-spin" /> : <Camera className="h-9 w-9" />}
+          {scanning || modelsLoading ? <Loader2 className="h-9 w-9 animate-spin" /> : <Camera className="h-9 w-9" />}
         </button>
+        {modelsLoading && <p className="mt-2 text-center text-xs text-white/70">Menyiapkan model wajah… (±5 MB, sekali saja)</p>}
       </div>
 
       {/* Hasil */}

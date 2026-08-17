@@ -9,6 +9,7 @@ import { useToast } from '../../lib/toast';
 import { Button } from '../../lib/ui';
 import { useSocketEvent, joinDashboard } from '../../lib/socket';
 import { startCamera, stopCamera, captureFrame, decodeQrFromVideo } from '../../lib/camera';
+import { detectFaceDescriptor, initFaceModels, isFaceModelReady } from '../../lib/face';
 import { Badge } from '../../lib/ui';
 import { STATUS_LABELS } from '../../lib/format';
 
@@ -31,12 +32,12 @@ export default function Gate() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const busyRef = useRef(false);
-  const lastFrameRef = useRef<string | null>(null);
 
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<Result | null>(null);
   const [scanCount, setScanCount] = useState(0);
+  const [modelsLoading, setModelsLoading] = useState(false);
 
   const { data: stats } = useQuery({
     queryKey: ['dashboard'],
@@ -53,11 +54,16 @@ export default function Gate() {
     let cancelled = false;
     const init = async () => {
       try {
+        // Panaskan model wajah paralel dengan kamera agar scan pertama cepat
+        setModelsLoading(true);
+        initFaceModels().catch(() => {});
         const stream = await startCamera(videoRef.current!, 'environment');
         streamRef.current = stream;
         if (!cancelled) setReady(true);
       } catch {
         if (!cancelled) setError('Kamera tidak dapat diakses. Periksa izin kamera pada browser.');
+      } finally {
+        if (!cancelled) setModelsLoading(false);
       }
     };
     init();
@@ -100,15 +106,15 @@ export default function Gate() {
             setTimeout(() => setResult(null), 3500);
           }
         }
-        // 2) wajah: butuh 2 frame untuk liveness
+        // 2) wajah: deteksi + ekstrak descriptor langsung di HP petugas
         else {
-          const frame = captureFrame(video);
-          if (frame && lastFrameRef.current && frame !== lastFrameRef.current) {
+          const descriptor = await detectFaceDescriptor(video);
+          if (descriptor) {
             busyRef.current = true;
             try {
               const res = await api<{ success: boolean; data: Omit<Result, 'ok'> }>('/attendance/gate', {
                 method: 'POST',
-                body: { method: 'GATE', proof: { image: frame, prevImage: lastFrameRef.current } },
+                body: { method: 'GATE', proof: { descriptor: Array.from(descriptor), liveness: true } },
               });
               setResult({ ...res.data, ok: true });
               setScanCount((c) => c + 1);
@@ -121,7 +127,6 @@ export default function Gate() {
               setTimeout(() => setResult(null), 3500);
             }
           }
-          lastFrameRef.current = frame;
         }
       }
       setTimeout(loop, 1500);
@@ -185,7 +190,7 @@ export default function Gate() {
           </div>
         </div>
         <p className="absolute inset-x-0 bottom-4 text-center text-sm font-medium text-white/90">
-          Arahkan wajah / QR / kartu siswa ke kamera
+          {modelsLoading || !isFaceModelReady() ? 'Menyiapkan model wajah… (±5 MB, sekali saja)' : 'Arahkan wajah / QR / kartu siswa ke kamera'}
         </p>
       </div>
 

@@ -1,191 +1,165 @@
 /**
- * LAYANAN PENGENALAN WAJAH
- * -------------------------
- * Antarmuka provider yang jelas + implementasi mock yang BENAR-BENAR BEKERJA
- * untuk development/demo (perceptual hash dari frame kamera, tanpa dependency native).
+ * LAYANAN PENGENALAN WAJAH (provider: facenet-web)
+ * -------------------------------------------------
+ * Deteksi wajah & ekstraksi descriptor dilakukan DI BROWSER (HP/PC siswa)
+ * menggunakan face-api.js + TensorFlow.js. Server hanya:
+ *   - menyimpan descriptor (128 angka) saat registrasi, dan
+ *   - membandingkan descriptor (jarak euclidean) saat verifikasi.
  *
- * Untuk production, ganti provider dengan implementasi nyata (face-api.js,
- * AWS Rekognition, dsb.) tanpa mengubah kode lain — cukup ubah FACE_RECOGNITION_PROVIDER
- * dan implementasikan interface FaceRecognitionProvider.
- *
- * Privasi: embedding disimpan, foto mentah TIDAK disimpan. Embedding tidak pernah
- * diekspos lewat API publik.
+ * Foto mentah TIDAK pernah dikirim ke server & tidak disimpan.
+ * Privasi: hanya representasi matematis wajah (embedding) yang disimpan.
  */
 import type { FastifyRequest } from 'fastify';
-import jpeg from 'jpeg-js';
 import { prisma } from '../lib/prisma.js';
 import { ApiError } from '../utils/errors.js';
 
+export const FACENET_DIMENSIONS = 128;
+export const FACENET_VERSION = 'facenet-v1';
+
 export interface FaceRecognitionProvider {
   readonly name: string;
-  /** Daftarkan beberapa sampel wajah; simpan embedding. status default REGISTERED (langsung aktif). */
+  /** Daftarkan beberapa descriptor wajah (hasil deteksi di browser). */
   enroll(
     userId: string,
-    samples: string[],
+    descriptors: number[][],
     opts?: { status?: 'REGISTERED' | 'PENDING'; registeredBy?: string | null },
-  ): Promise<{ embedding: number[]; dimensions: number }>;
-  /** Verifikasi 1 frame: kembalikan user paling mirip + confidence + hasil liveness. */
-  verify(image: string, challenge?: { action?: string; prevImage?: string }): Promise<{
-    userId: string | null;
-    confidence: number;
-    liveness: boolean;
-  }>;
+  ): Promise<{ dimensions: number; samples: number }>;
+  /** Verifikasi 1 descriptor → user paling mirip + confidence. */
+  verify(
+    descriptor: number[],
+    opts?: { threshold?: number; margin?: number },
+  ): Promise<{ userId: string | null; confidence: number }>;
   deleteEmbeddings(userId: string): Promise<void>;
 }
 
-/** Ubah base64 image (JPEG) menjadi buffer. */
-function base64ToBuffer(dataUrl: string): Buffer {
-  const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-  return Buffer.from(base64, 'base64');
-}
-
-/** Decode JPEG → grid luminance (grayscale) berukuran kecil. Mendukung PNG secara best-effort. */
-export function decodeToGray(dataUrl: string, size = 8): number[] | null {
-  const buf = base64ToBuffer(dataUrl);
-  try {
-    let width: number;
-    let height: number;
-    let data: Buffer;
-    if (buf[0] === 0xff && buf[1] === 0xd8) {
-      const img = jpeg.decode(buf, { useTArray: true });
-      width = img.width;
-      height = img.height;
-      data = Buffer.from(img.data);
-    } else if (buf[0] === 0x89 && buf[1] === 0x50) {
-      // PNG minimal: gunakan hash biner sebagai fallback (provider nyata untuk akurasi penuh)
-      return null;
-    } else {
-      return null;
+/** Validasi descriptor 128-d (angka finite). */
+function assertDescriptors(descriptors: number[][]): void {
+  if (!Array.isArray(descriptors) || descriptors.length < 1 || descriptors.length > 8) {
+    throw ApiError.badRequest('INVALID_DESCRIPTORS', 'Jumlah sampel wajah harus 1–8.');
+  }
+  for (const d of descriptors) {
+    if (!Array.isArray(d) || d.length !== FACENET_DIMENSIONS || !d.every((v) => typeof v === 'number' && Number.isFinite(v))) {
+      throw ApiError.badRequest('INVALID_DESCRIPTOR', 'Data wajah tidak valid. Silakan ambil ulang sampel wajah.');
     }
-    if (!width || !height) return null;
-    // nearest-neighbor resize ke size x size
-    const out: number[] = new Array(size * size);
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        const sx = Math.min(width - 1, Math.floor((x / size) * width));
-        const sy = Math.min(height - 1, Math.floor((y / size) * height));
-        const i = (sy * width + sx) * 4;
-        // luminance: 0.299R + 0.587G + 0.114B
-        out[y * size + x] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-      }
-    }
-    return out;
-  } catch {
-    return null;
   }
 }
 
-/** Average hash (aHash) dari luminance grid → array bit 0/1. */
-function averageHash(gray: number[]): number[] {
-  const mean = gray.reduce((a, b) => a + b, 0) / gray.length;
-  return gray.map((v) => (v >= mean ? 1 : 0));
+/** L2-normalisasi vektor (jarak euclidean jadi konsisten dengan cosine similarity). */
+function normalize(v: number[]): number[] {
+  let norm = 0;
+  for (const x of v) norm += x * x;
+  norm = Math.sqrt(norm);
+  if (norm === 0) return v;
+  return v.map((x) => x / norm);
 }
 
-function hamming(a: number[], b: number[]): number {
-  let d = 0;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) d++;
-  return d / a.length;
+function euclidean(a: number[], b: number[]): number {
+  let sum = 0;
+  for (let i = 0; i < a.length; i++) {
+    const d = a[i] - b[i];
+    sum += d * d;
+  }
+  return Math.sqrt(sum);
 }
 
-const THRESHOLD_MATCH = 0.3; // di bawah ini = cocok
-const THRESHOLD_STRONG = 0.15; // confidence tinggi
+const DEFAULT_THRESHOLD = 0.6; // jarak euclidean maksimum dianggap "cocok" (konvensi face-api)
+const DEFAULT_MARGIN = 0.15; // user kedua harus lebih jauh minimal ini (cegah false positive saat banyak siswa)
 
 /**
- * Provider mock — berfungsi penuh untuk development:
- * - embedding = average hash dari frame (tahan terhadap perbedaan kecil pencahayaan/kompresi)
- * - liveness = deteksi pergerakan antar 2 frame (challenge dasar)
+ * Provider nyata: descriptor dihitung di browser (face-api.js), dibandingkan di server.
+ * Embedding lama (ahash-v1, mock lama) otomatis diabaikan karena version-nya beda.
  */
-class MockFaceProvider implements FaceRecognitionProvider {
-  readonly name = 'mock';
+class FaceNetWebProvider implements FaceRecognitionProvider {
+  readonly name = 'facenet-web';
 
   async enroll(
     userId: string,
-    samples: string[],
+    descriptors: number[][],
     opts?: { status?: 'REGISTERED' | 'PENDING'; registeredBy?: string | null },
-  ): Promise<{ embedding: number[]; dimensions: number }> {
-    const grays = samples.map((s) => decodeToGray(s, 8)).filter((g): g is number[] => g !== null);
-    if (grays.length < 1) {
-      throw ApiError.badRequest('INVALID_IMAGE', 'Wajah belum terlihat jelas. Pastikan pencahayaan cukup dan posisikan wajah di tengah.');
-    }
-    // rata-rata hash dari semua sampel untuk stabilitas
-    const meanGray: number[] = new Array(64).fill(0);
-    for (const g of grays) for (let i = 0; i < 64; i++) meanGray[i] += g[i] / grays.length;
-    const embedding = averageHash(meanGray);
+  ): Promise<{ dimensions: number; samples: number }> {
+    assertDescriptors(descriptors);
     const status = opts?.status ?? 'REGISTERED';
 
-    // simpan embedding + profil
     const profile = await prisma.faceProfile.upsert({
       where: { userId },
-      update: { status, samplesCount: samples.length, provider: this.name, registeredBy: opts?.registeredBy ?? null },
+      update: { status, samplesCount: descriptors.length, provider: this.name, registeredBy: opts?.registeredBy ?? null },
       create: {
         userId,
         consent: true,
         consentAt: new Date(),
         status,
         provider: this.name,
-        samplesCount: samples.length,
+        samplesCount: descriptors.length,
         registeredBy: opts?.registeredBy ?? null,
       },
     });
+
+    // Ganti seluruh embedding lama dengan yang baru (data wajah lama otomatis terhapus)
     await prisma.faceEmbedding.deleteMany({ where: { userId } });
-    await prisma.faceEmbedding.create({
-      data: {
+    await prisma.faceEmbedding.createMany({
+      data: descriptors.map((d) => ({
         faceProfileId: profile.id,
         userId,
-        embedding: embedding as unknown as object,
-        dimensions: 64,
-        version: 'ahash-v1',
-      },
+        embedding: d as unknown as object,
+        dimensions: FACENET_DIMENSIONS,
+        version: FACENET_VERSION,
+      })),
     });
-    return { embedding, dimensions: 64 };
+
+    return { dimensions: FACENET_DIMENSIONS, samples: descriptors.length };
   }
 
   async verify(
-    image: string,
-    challenge?: { action?: string; prevImage?: string },
-  ): Promise<{ userId: string | null; confidence: number; liveness: boolean }> {
-    const gray = decodeToGray(image, 8);
-    if (!gray) {
-      throw ApiError.badRequest('INVALID_IMAGE', 'Wajah belum terlihat jelas. Pastikan pencahayaan cukup dan posisikan wajah di tengah.');
+    descriptor: number[],
+    opts?: { threshold?: number; margin?: number },
+  ): Promise<{ userId: string | null; confidence: number }> {
+    if (!Array.isArray(descriptor) || descriptor.length !== FACENET_DIMENSIONS || !descriptor.every((v) => typeof v === 'number' && Number.isFinite(v))) {
+      throw ApiError.badRequest('INVALID_DESCRIPTOR', 'Wajah belum terdeteksi dengan baik. Posisikan wajah di tengah dan coba lagi.');
     }
-    const hash = averageHash(gray);
-
-    // Liveness dasar: jika ada frame sebelumnya, pastikan ada pergerakan (frame tidak identik)
-    let liveness = true;
-    if (challenge?.prevImage) {
-      const prevGray = decodeToGray(challenge.prevImage, 8);
-      if (prevGray) {
-        const prevHash = averageHash(prevGray);
-        const motion = hamming(prevHash, hash);
-        // frame hampir identik (kertas foto / layar) → kemungkinan spoof
-        liveness = motion > 0.02;
-      }
-    }
+    const probe = normalize(descriptor);
+    const threshold = opts?.threshold ?? DEFAULT_THRESHOLD;
+    const margin = opts?.margin ?? DEFAULT_MARGIN;
 
     const embeddings = await prisma.faceEmbedding.findMany({
+      where: { version: FACENET_VERSION },
       include: {
         faceProfile: { select: { status: true } },
         user: { select: { id: true, isActive: true, student: { select: { isActive: true } } } },
       },
     });
 
-    let best: { userId: string | null; distance: number } = { userId: null, distance: 1 };
+    // Cari jarak terkecil per user (best distance tiap orang)
+    const bestByUser = new Map<string, number>();
     for (const e of embeddings) {
-      // Hanya profil yang sudah disetujui (REGISTERED) yang bisa dipakai verifikasi
       if (e.faceProfile?.status !== 'REGISTERED') continue;
       const user = e.user;
       if (!user || !user.isActive) continue;
       if (user.student && !user.student.isActive) continue;
       const emb = e.embedding as number[];
-      const d = hamming(hash, emb);
-      if (d < best.distance) best = { userId: user.id, distance: d };
+      if (!Array.isArray(emb) || emb.length !== FACENET_DIMENSIONS) continue;
+      const d = euclidean(probe, normalize(emb));
+      const cur = bestByUser.get(user.id);
+      if (cur === undefined || d < cur) bestByUser.set(user.id, d);
     }
 
-    if (best.userId === null || best.distance > THRESHOLD_MATCH) {
-      return { userId: null, confidence: 0, liveness };
+    // Urutkan user dari yang paling mirip
+    const ranked = [...bestByUser.entries()].sort((a, b) => a[1] - b[1]);
+    if (ranked.length === 0) {
+      return { userId: null, confidence: 0 };
     }
-    const confidence = best.distance <= THRESHOLD_STRONG ? 0.97 : 0.82;
-    return { userId: best.userId, confidence, liveness };
+
+    const [bestUserId, bestDist] = ranked[0];
+    const secondDist = ranked[1]?.[1];
+    if (bestDist > threshold) {
+      return { userId: null, confidence: 0 };
+    }
+    // Cegah salah kenal: user kedua tidak boleh terlalu dekat juga
+    if (secondDist !== undefined && secondDist - bestDist < margin) {
+      return { userId: null, confidence: 0 };
+    }
+
+    const confidence = Math.max(0.5, Math.min(0.99, 0.99 - (bestDist / threshold) * 0.49));
+    return { userId: bestUserId, confidence };
   }
 
   async deleteEmbeddings(userId: string): Promise<void> {
@@ -197,14 +171,10 @@ class MockFaceProvider implements FaceRecognitionProvider {
 /** Provider eksternal placeholder — implementasikan sesuai vendor. */
 class ExternalFaceProvider implements FaceRecognitionProvider {
   readonly name = 'external';
-  async enroll(
-    _userId: string,
-    _samples: string[],
-    _opts?: { status?: 'REGISTERED' | 'PENDING'; registeredBy?: string | null },
-  ): Promise<{ embedding: number[]; dimensions: number }> {
+  async enroll(): Promise<{ dimensions: number; samples: number }> {
     throw ApiError.badRequest('FACE_PROVIDER_NOT_CONFIGURED', 'Provider pengenalan wajah eksternal belum dikonfigurasi.');
   }
-  async verify(): Promise<{ userId: string | null; confidence: number; liveness: boolean }> {
+  async verify(): Promise<{ userId: string | null; confidence: number }> {
     throw ApiError.badRequest('FACE_PROVIDER_NOT_CONFIGURED', 'Provider pengenalan wajah eksternal belum dikonfigurasi.');
   }
   async deleteEmbeddings(): Promise<void> {
@@ -213,16 +183,13 @@ class ExternalFaceProvider implements FaceRecognitionProvider {
 }
 
 function createProvider(name: string): FaceRecognitionProvider {
-  switch (name) {
-    case 'mock':
-      return new MockFaceProvider();
-    default:
-      return new ExternalFaceProvider();
-  }
+  // 'mock' lama dipetakan ke facenet-web (descriptor di browser)
+  if (name === 'facenet-web' || name === 'mock') return new FaceNetWebProvider();
+  return new ExternalFaceProvider();
 }
 
 export const faceService: FaceRecognitionProvider = createProvider(
-  process.env.FACE_RECOGNITION_PROVIDER || 'mock',
+  process.env.FACE_RECOGNITION_PROVIDER || 'facenet-web',
 );
 
 /** Pilih field ip/user-agent dengan aman. */

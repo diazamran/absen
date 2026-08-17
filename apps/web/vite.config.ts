@@ -54,12 +54,24 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // Chunk pengenalan wajah (face-api + TensorFlow.js) lebih besar dari default 2 MiB
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         navigateFallback: '/index.html',
         runtimeCaching: [
           {
             urlPattern: /^https?:\/\/.*\/api\/(settings|meta|health)/,
             handler: 'NetworkFirst',
             options: { cacheName: 'api-cache', expiration: { maxEntries: 20, maxAgeSeconds: 300 } },
+          },
+          {
+            // Model wajah (face-api): muat sekali, cache agar scan berikutnya instan
+            urlPattern: /\/models\/.*\.(bin|json)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'face-models',
+              cacheableResponse: { statuses: [0, 200] },
+              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
           },
         ],
       },

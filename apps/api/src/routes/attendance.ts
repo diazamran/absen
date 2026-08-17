@@ -9,9 +9,8 @@ import { todayStart, todayEnd, dateKey, localTime, startOfLocalDay } from '../li
 import { PERMISSION_KEYS } from '../rbac/permissions.js';
 
 const proofSchema = z.object({
-  image: z.string().optional(),
-  prevImage: z.string().optional(),
-  action: z.string().optional(),
+  descriptor: z.array(z.number()).optional(),
+  liveness: z.boolean().optional(),
   token: z.string().optional(),
   cardUid: z.string().optional(),
 });
@@ -96,9 +95,8 @@ export async function attendanceRoutes(app: FastifyInstance) {
     const body = validate(
       z.object({
         type: z.enum(['CHECK_IN', 'CHECK_OUT']).default('CHECK_IN'),
-        image: z.string().min(1),
-        prevImage: z.string().optional(),
-        action: z.string().optional(),
+        descriptor: z.array(z.number()).min(1),
+        liveness: z.boolean().optional(),
         deviceId: z.string().optional(),
         latitude: z.number().optional(),
         longitude: z.number().optional(),
@@ -110,7 +108,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
       actor: { id: request.user!.id, roleKey: request.user!.roleKey, request },
       type: body.type,
       method: 'FACE',
-      proof: { image: body.image, prevImage: body.prevImage, action: body.action },
+      proof: { descriptor: body.descriptor, liveness: body.liveness },
       deviceId: body.deviceId,
       latitude: body.latitude,
       longitude: body.longitude,

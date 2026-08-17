@@ -18,7 +18,7 @@ export async function faceRoutes(app: FastifyInstance) {
     const body = validate(
       z.object({
         userId: z.string().optional(),
-        samples: z.array(z.string().min(10)).min(1).max(8),
+        descriptors: z.array(z.array(z.number())).min(1).max(8),
         consent: z.boolean().default(true),
       }),
       request.body,
@@ -37,7 +37,7 @@ export async function faceRoutes(app: FastifyInstance) {
     // Registrasi oleh approver → langsung aktif; selain itu menunggu persetujuan admin
     const status = isApprover ? ('REGISTERED' as const) : ('PENDING' as const);
 
-    const result = await faceService.enroll(targetId, body.samples, {
+    const result = await faceService.enroll(targetId, body.descriptors, {
       status,
       registeredBy: isApprover ? request.user!.id : null,
     });
@@ -50,7 +50,7 @@ export async function faceRoutes(app: FastifyInstance) {
       action: 'FACE_REGISTERED',
       entity: 'FaceProfile',
       entityId: targetId,
-      newValue: { samples: body.samples.length, provider: faceService.name, consent: body.consent, status },
+      newValue: { samples: body.descriptors.length, provider: faceService.name, consent: body.consent, status },
       request,
     });
 
@@ -59,7 +59,7 @@ export async function faceRoutes(app: FastifyInstance) {
       message: status === 'PENDING' ? 'Registrasi wajah dikirim. Menunggu persetujuan admin.' : 'Registrasi wajah berhasil.',
       data: {
         userId: targetId,
-        samples: body.samples.length,
+        samples: body.descriptors.length,
         dimensions: result.dimensions,
         provider: faceService.name,
         status,
@@ -133,6 +133,7 @@ export async function faceRoutes(app: FastifyInstance) {
       where: { userId },
       include: { embeddings: { select: { id: true, dimensions: true, version: true, createdAt: true } } },
     });
+    const latestVersion = profile?.embeddings[0]?.version ?? null;
     return reply.send({
       success: true,
       data: {
@@ -143,6 +144,9 @@ export async function faceRoutes(app: FastifyInstance) {
         samples: profile?.samplesCount ?? 0,
         consentAt: profile?.consentAt ?? null,
         embeddingsCount: profile?.embeddings.length ?? 0,
+        // Wajah terdaftar dengan versi LAMA (mock ahash) → harus daftar ulang agar bisa dipakai
+        needsReenroll: !!profile && profile.status === 'REGISTERED' && profile.provider !== 'facenet-web',
+        version: latestVersion,
         // Data biometrik tidak pernah diekspos
       },
     });

@@ -6,6 +6,7 @@ import { useToast } from '../../lib/toast';
 import { Button, Card, Input, Badge, EmptyState, Skeleton } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
 import { startCamera, stopCamera, captureFrame } from '../../lib/camera';
+import { detectFaceDescriptor, initFaceModels, isFaceModelReady } from '../../lib/face';
 
 interface StudentRow {
   id: string;
@@ -24,6 +25,7 @@ interface FaceStatus {
   samples: number;
   embeddingsCount: number;
   consentAt: string | null;
+  needsReenroll?: boolean;
 }
 
 interface PendingRow {
@@ -46,10 +48,12 @@ export default function FaceRegister() {
 
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<StudentRow | null>(null);
-  const [samples, setSamples] = useState<string[]>([]);
+  const [descriptors, setDescriptors] = useState<number[][]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [consent, setConsent] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const [ready, setReady] = useState(false);
+  const [modelsLoading, setModelsLoading] = useState(false);
 
   const { data: results } = useQuery({
     queryKey: ['students', search],
@@ -102,22 +106,41 @@ export default function FaceRegister() {
     };
   }, [selected?.userId, faceStatus?.registered]);
 
-  const capture = () => {
+  // Panaskan model wajah diam-diam agar sampel pertama cepat
+  useEffect(() => {
+    initFaceModels().catch(() => {
+      // tidak fatal; capture akan mencoba lagi
+    });
+  }, []);
+
+  const capture = async () => {
     const video = videoRef.current;
-    if (!video || samples.length >= MAX_SAMPLES) return;
-    const frame = captureFrame(video);
-    if (!frame) {
-      toast('warning', 'Wajah belum terlihat jelas. Pastikan pencahayaan cukup.');
-      return;
+    if (!video || descriptors.length >= MAX_SAMPLES || modelsLoading) return;
+    if (!isFaceModelReady()) setModelsLoading(true);
+    try {
+      // Deteksi wajah & ekstrak descriptor langsung di browser
+      const descriptor = await detectFaceDescriptor(video);
+      if (!descriptor) {
+        toast('warning', 'Wajah tidak terdeteksi. Pastikan wajah siswa terlihat jelas, pencahayaan cukup, dan posisikan wajah di tengah.');
+        return;
+      }
+      const frame = captureFrame(video);
+      setDescriptors((s) => [...s, Array.from(descriptor)]);
+      if (frame) setPreviews((p) => [...p, frame]);
+      toast('success', `Sampel ${descriptors.length + 1} diambil.`);
+    } catch {
+      toast('error', 'Gagal memproses wajah. Coba lagi.');
+    } finally {
+      setModelsLoading(false);
     }
-    setSamples((s) => [...s, frame]);
   };
 
   const registerMutation = useMutation({
-    mutationFn: () => api('/face/register', { method: 'POST', body: { userId: selected!.userId, samples, consent } }),
+    mutationFn: () => api('/face/register', { method: 'POST', body: { userId: selected!.userId, descriptors, consent } }),
     onSuccess: () => {
       toast('success', 'Registrasi wajah berhasil.');
-      setSamples([]);
+      setDescriptors([]);
+      setPreviews([]);
       setConsent(false);
       qc.invalidateQueries({ queryKey: ['face-status'] });
       qc.invalidateQueries({ queryKey: ['students'] });
@@ -138,7 +161,8 @@ export default function FaceRegister() {
 
   const pick = (s: StudentRow) => {
     setSelected(s);
-    setSamples([]);
+    setDescriptors([]);
+    setPreviews([]);
     setConsent(false);
     setCameraError('');
     setSearch('');
@@ -238,6 +262,7 @@ export default function FaceRegister() {
                   <p className="font-bold text-ink">{faceStatus.pending ? 'Menunggu persetujuan' : 'Wajah sudah terdaftar'}</p>
                   <p className="text-xs text-muted">
                     Provider: {faceStatus.provider ?? '-'} · Sampel: {faceStatus.samples} · Embedding: {faceStatus.embeddingsCount}
+                    {faceStatus.needsReenroll && ' · ⚠️ Data LAMA, perlu daftar ulang'}
                   </p>
                 </div>
                 <div className="ml-auto"><Badge status={faceStatus.pending ? 'PENDING' : 'APPROVED'} label={faceStatus.pending ? 'Menunggu' : 'Aktif'} /></div>
@@ -302,21 +327,21 @@ export default function FaceRegister() {
                         <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-red-300">{cameraError}</div>
                       )}
                     </div>
-                    <Button className="mt-3 w-full" onClick={capture} disabled={!ready || samples.length >= MAX_SAMPLES}>
-                      <Camera className="h-4 w-4" />
-                      Ambil Sampel ({samples.length}/{MAX_SAMPLES})
+                    <Button className="mt-3 w-full" onClick={capture} disabled={!ready || descriptors.length >= MAX_SAMPLES || modelsLoading}>
+                      {modelsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                      {modelsLoading ? 'Menyiapkan model wajah…' : `Ambil Sampel (${descriptors.length}/${MAX_SAMPLES})`}
                     </Button>
                   </div>
 
                   <div>
                     <p className="mb-2 text-xs font-medium text-muted">Sampel yang diambil</p>
                     <div className="grid grid-cols-2 gap-2">
-                      {samples.map((s, i) => (
+                      {previews.map((s, i) => (
                         <div key={i} className="overflow-hidden rounded-xl border border-line">
                           <img src={s} alt={`Sampel ${i + 1}`} className="aspect-square w-full object-cover" />
                         </div>
                       ))}
-                      {samples.length === 0 && (
+                      {previews.length === 0 && (
                         <div className="col-span-2">
                           <EmptyState icon={Camera} title="Belum ada sampel" description="Arahkan wajah siswa ke kamera, lalu tekan tombol Ambil Sampel." />
                         </div>
@@ -350,7 +375,7 @@ export default function FaceRegister() {
                 <div className="flex justify-end">
                   <Button
                     onClick={() => registerMutation.mutate()}
-                    disabled={samples.length === 0 || !consent || registerMutation.isPending}
+                    disabled={descriptors.length === 0 || !consent || registerMutation.isPending}
                   >
                     {registerMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanFace className="h-4 w-4" />}
                     Simpan Registrasi

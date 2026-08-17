@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Camera, CheckCircle2, Clock, Loader2, ScanFace, ShieldCheck, Trash2 } from 'lucide-react';
+import { Camera, CheckCircle2, Clock, Loader2, RefreshCw, ScanFace, ShieldCheck, Trash2 } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
 import { Button, Card, EmptyState } from '../../lib/ui';
 import { startCamera, stopCamera, captureFrame } from '../../lib/camera';
+import { detectFaceDescriptor, initFaceModels, isFaceModelReady } from '../../lib/face';
 
 interface FaceStatus {
   registered: boolean;
@@ -15,6 +16,7 @@ interface FaceStatus {
   samples: number;
   embeddingsCount: number;
   consentAt: string | null;
+  needsReenroll?: boolean;
 }
 
 const MAX_SAMPLES = 4;
@@ -26,11 +28,14 @@ export default function FaceMe() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const [samples, setSamples] = useState<string[]>([]);
+  const [descriptors, setDescriptors] = useState<number[][]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [consent, setConsent] = useState(false);
   const [ready, setReady] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const [justSubmitted, setJustSubmitted] = useState(false);
+  const [reEnroll, setReEnroll] = useState(false);
+  const [modelsLoading, setModelsLoading] = useState(false);
 
   const { data: status, isLoading } = useQuery({
     queryKey: ['face-status', user?.id],
@@ -38,7 +43,14 @@ export default function FaceMe() {
     enabled: !!user,
   });
 
-  const needsCamera = !status?.registered && !status?.pending && !justSubmitted;
+  const needsCamera = reEnroll || (!status?.registered && !status?.pending && !justSubmitted);
+
+  // Panaskan model wajah diam-diam saat halaman terbuka agar sampel pertama cepat
+  useEffect(() => {
+    initFaceModels().catch(() => {
+      // gagal muat di sini tidak fatal; capture akan mencoba lagi
+    });
+  }, []);
 
   useEffect(() => {
     if (!needsCamera) return;
@@ -61,32 +73,48 @@ export default function FaceMe() {
     };
   }, [needsCamera]);
 
-  const capture = () => {
+  const capture = async () => {
     const video = videoRef.current;
-    if (!video || samples.length >= MAX_SAMPLES) return;
-    const frame = captureFrame(video);
-    if (!frame) {
-      toast('warning', 'Wajah belum terlihat jelas. Pastikan pencahayaan cukup dan posisikan wajah di tengah.');
-      return;
+    if (!video || descriptors.length >= MAX_SAMPLES || modelsLoading) return;
+    if (!isFaceModelReady()) setModelsLoading(true);
+    try {
+      // Deteksi wajah & ekstrak descriptor (diproses di HP, bukan dikirim ke server)
+      const descriptor = await detectFaceDescriptor(video);
+      if (!descriptor) {
+        toast('warning', 'Wajah tidak terdeteksi. Pastikan wajah terlihat jelas, pencahayaan cukup, dan posisikan wajah di tengah.');
+        return;
+      }
+      const frame = captureFrame(video);
+      setDescriptors((s) => [...s, Array.from(descriptor)]);
+      if (frame) setPreviews((p) => [...p, frame]);
+      toast('success', `Sampel ${descriptors.length + 1} diambil.`);
+    } catch {
+      toast('error', 'Gagal memproses wajah. Coba lagi.');
+    } finally {
+      setModelsLoading(false);
     }
-    setSamples((s) => [...s, frame]);
   };
 
   const reset = useMutation({
     mutationFn: () => api(`/face/${user!.id}`, { method: 'DELETE' }),
     onSuccess: () => {
       toast('success', 'Data wajah kamu telah dihapus.');
+      setReEnroll(false);
+      setDescriptors([]);
+      setPreviews([]);
       qc.invalidateQueries({ queryKey: ['face-status'] });
     },
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus data wajah.'),
   });
 
   const submit = useMutation({
-    mutationFn: () => api('/face/register', { method: 'POST', body: { samples, consent } }),
+    mutationFn: () => api('/face/register', { method: 'POST', body: { descriptors, consent } }),
     onSuccess: () => {
       toast('success', 'Registrasi wajah dikirim. Menunggu persetujuan admin.');
       setJustSubmitted(true);
-      setSamples([]);
+      setReEnroll(false);
+      setDescriptors([]);
+      setPreviews([]);
       setConsent(false);
       qc.invalidateQueries({ queryKey: ['face-status'] });
     },
@@ -102,7 +130,8 @@ export default function FaceMe() {
 
       {isLoading && <Card><EmptyState icon={Loader2} title="Memuat status…" /></Card>}
 
-      {!isLoading && status?.registered && (
+      {/* Terdaftar & versi baru (aktif) */}
+      {!isLoading && status?.registered && !status?.needsReenroll && !reEnroll && (
         <Card className="space-y-3">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
@@ -128,6 +157,29 @@ export default function FaceMe() {
         </Card>
       )}
 
+      {/* Terdaftar tapi versi LAMA → wajib daftar ulang */}
+      {!isLoading && status?.registered && status?.needsReenroll && !reEnroll && (
+        <Card className="space-y-3 border-amber-200 bg-amber-50/60 dark:bg-amber-500/10">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+              <RefreshCw className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="font-bold text-ink">Data wajah lama — perlu daftar ulang</p>
+              <p className="text-sm text-muted">
+                Mesin pengenalan wajah sudah diperbarui menjadi lebih akurat. Data lama tidak bisa dipakai lagi,
+                silakan daftar ulang sekali (dengan pencahayaan cukup & beberapa sudut) agar wajahmu dikenali.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={() => setReEnroll(true)}>
+              <RefreshCw className="h-4 w-4" /> Daftar Ulang Sekarang
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {!isLoading && (status?.pending || justSubmitted) && (
         <Card className="space-y-3 border-amber-200 bg-amber-50/60 dark:bg-amber-500/10">
           <div className="flex items-center gap-3">
@@ -147,7 +199,7 @@ export default function FaceMe() {
         </Card>
       )}
 
-      {!isLoading && !status?.registered && !status?.pending && !justSubmitted && (
+      {!isLoading && needsCamera && (
         <>
           <Card>
             <p className="mb-2 text-sm font-semibold text-ink">1. Ambil Sampel Wajah</p>
@@ -162,20 +214,27 @@ export default function FaceMe() {
                     <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-red-300">{cameraError}</div>
                   )}
                 </div>
-                <Button className="mt-3 w-full" onClick={capture} disabled={!ready || samples.length >= MAX_SAMPLES}>
-                  <Camera className="h-4 w-4" />
-                  Ambil Sampel ({samples.length}/{MAX_SAMPLES})
+                <Button className="mt-3 w-full" onClick={capture} disabled={!ready || descriptors.length >= MAX_SAMPLES || modelsLoading}>
+                  {modelsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                  {modelsLoading
+                    ? 'Menyiapkan model wajah…'
+                    : `Ambil Sampel (${descriptors.length}/${MAX_SAMPLES})`}
                 </Button>
+                {!isFaceModelReady() && !modelsLoading && (
+                  <p className="mt-2 text-center text-[11px] text-muted">
+                    Sampel pertama memuat model wajah (±5 MB, sekali saja).
+                  </p>
+                )}
               </div>
               <div>
                 <p className="mb-2 text-xs font-medium text-muted">Sampel yang diambil</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {samples.map((s, i) => (
+                  {previews.map((s, i) => (
                     <div key={i} className="overflow-hidden rounded-xl border border-line">
                       <img src={s} alt={`Sampel ${i + 1}`} className="aspect-square w-full object-cover" />
                     </div>
                   ))}
-                  {samples.length === 0 && (
+                  {previews.length === 0 && (
                     <div className="col-span-2">
                       <EmptyState icon={Camera} title="Belum ada sampel" description="Posisikan wajah di tengah layar, lalu tekan Ambil Sampel. Ambil beberapa sampel dari sudut sedikit berbeda." />
                     </div>
@@ -202,8 +261,13 @@ export default function FaceMe() {
               />
               Saya menyetujui pendaftaran data wajah saya untuk keperluan absensi sekolah.
             </label>
-            <div className="flex justify-end">
-              <Button onClick={() => submit.mutate()} disabled={samples.length === 0 || !consent || submit.isPending}>
+            <div className="flex justify-end gap-2">
+              {reEnroll && (
+                <Button variant="outline" onClick={() => { setReEnroll(false); setDescriptors([]); setPreviews([]); }}>
+                  Batal
+                </Button>
+              )}
+              <Button onClick={() => submit.mutate()} disabled={descriptors.length === 0 || !consent || submit.isPending}>
                 {submit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanFace className="h-4 w-4" />}
                 Kirim untuk Persetujuan
               </Button>
