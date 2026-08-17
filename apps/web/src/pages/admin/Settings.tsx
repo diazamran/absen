@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Palette, Building2, Clock3, Bell, Save, Check, Upload, Loader2, X } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
-import { compressImageFile } from '../../lib/image';
+import { prepareLogoFile } from '../../lib/image';
 import { useTheme } from '../../lib/theme';
 import { useToast } from '../../lib/toast';
 import { Card, Button, Input, Field } from '../../lib/ui';
@@ -42,13 +42,13 @@ export default function Settings() {
     }
     setUploadingLogo(true);
     try {
-      // Logo kecil tapi tajam: maks 512px, kualitas 0.88
-      const uploadFile = await compressImageFile(file, 512, 0.88);
+      // Deteksi transparansi otomatis: logo transparan tetap PNG, tanpa transparansi → JPEG
+      const { file: uploadFile, transparent } = await prepareLogoFile(file, 512, 0.88);
       const formData = new FormData();
       formData.append('file', uploadFile);
       const res = await api<{ success: boolean; data: { url: string } }>('/settings/logo', { method: 'POST', formData });
       setB('logoUrl', res.data.url);
-      toast('success', 'Logo sekolah berhasil diunggah.');
+      toast(transparent ? 'info' : 'success', transparent ? 'Logo transparan terdeteksi — disimpan sebagai PNG agar tetap bening di kartu QR.' : 'Logo sekolah berhasil diunggah.');
       qc.invalidateQueries({ queryKey: ['settings'] });
       localStorage.removeItem('presensiku_branding');
     } catch (e) {
@@ -87,7 +87,7 @@ export default function Settings() {
           <div className="space-y-3">
             <Field
               label="Logo Sekolah"
-              hint="JPG/PNG/WEBP, maks 5 MB. Dipakai di kop kartu QR, halaman login, dan aplikasi."
+              hint="JPG/PNG/WEBP, maks 5 MB. Logo transparan otomatis dipertahankan (PNG) agar bening di kop kartu QR."
             >
               <div className="flex items-center gap-4">
                 <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-line bg-slate-50 p-1 dark:bg-slate-900">
