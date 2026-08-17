@@ -43,8 +43,78 @@ body {
   transform: scaleX(-1);
 }
 
+/* ===== Kartu kecil ID card 2 x 3,5 cm ===== */
+.qr-small-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 3.5cm);
+  gap: 2mm;
+  justify-content: start;
+  align-items: stretch;
+}
+.qr-card-small {
+  display: flex;
+  align-items: center;
+  gap: 1.2mm;
+  width: 3.5cm;
+  height: 2cm;
+  padding: 1.2mm;
+  border: 1px solid #e2e8f0;
+  border-radius: 1.5mm;
+  background: #fff;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.qr-card-small img {
+  width: 1.72cm;
+  height: 1.72cm;
+  flex-shrink: 0;
+  border-radius: 0.5mm;
+  background: #fff;
+}
+.qr-small-img-placeholder {
+  width: 1.72cm;
+  height: 1.72cm;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  color: #cbd5e1;
+}
+.qr-small-text {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.qr-small-nis {
+  font-size: 6.5pt;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.qr-small-name {
+  font-size: 5.5pt;
+  color: #475569;
+  line-height: 1.2;
+  margin-top: 0.5mm;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+
 /* ===== Cetak kartu QR absen ===== */
 @media print {
+  @page {
+    size: A4;
+    margin: 8mm;
+  }
   body * {
     visibility: hidden !important;
   }
@@ -71,6 +141,15 @@ body {
   #qr-print-area .qr-card img {
     width: 34mm;
     height: 34mm;
+  }
+  #qr-print-area.qr-small-grid {
+    gap: 1.5mm;
+    grid-template-columns: repeat(auto-fill, 3.5cm);
+  }
+  #qr-print-area .qr-card-small {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    border: 1px solid #cbd5e1;
   }
   .no-print {
     display: none !important;
