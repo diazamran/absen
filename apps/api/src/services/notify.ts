@@ -9,6 +9,7 @@ import { prisma } from '../lib/prisma.js';
 import type { NotificationChannel } from '@prisma/client';
 import { config } from '../config.js';
 import { audit } from '../lib/audit.js';
+import { emitNotification } from '../realtime/emitter.js';
 
 export interface NotificationInput {
   userId: string;
@@ -18,10 +19,10 @@ export interface NotificationInput {
   data?: unknown;
 }
 
-/** Buat notifikasi in-app + kirim via provider eksternal bila dikonfigurasi. */
+/** Buat notifikasi in-app + kirim realtime (WebSocket) + provider eksternal bila dikonfigurasi. */
 export async function sendNotification(input: NotificationInput): Promise<void> {
   const channel = input.channel ?? 'IN_APP';
-  await prisma.notification.create({
+  const created = await prisma.notification.create({
     data: {
       userId: input.userId,
       title: input.title,
@@ -30,6 +31,9 @@ export async function sendNotification(input: NotificationInput): Promise<void> 
       data: input.data === undefined ? undefined : (input.data as object),
     },
   });
+
+  // Realtime: langsung muncul di halaman Notifikasi / badge pengguna yang sedang online
+  emitNotification(input.userId, { id: created.id, title: input.title, body: input.body, data: input.data ?? null });
 
   if (channel !== 'IN_APP') {
     await sendExternal(input);

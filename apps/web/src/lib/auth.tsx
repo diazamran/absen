@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { api, setTokens, clearTokens, restoreSession } from './api';
+import { joinUserRoom } from './socket';
 
 export interface MeData {
   id: string;
@@ -57,6 +58,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     })();
   }, []);
+
+  // Gabung ke room WebSocket pribadi → notifikasi realtime langsung diterima
+  useEffect(() => {
+    if (user?.id) joinUserRoom(user.id);
+  }, [user?.id]);
 
   const storeLogin = (access: string, refresh: string, u: MeData) => {
     setTokens(access, refresh);

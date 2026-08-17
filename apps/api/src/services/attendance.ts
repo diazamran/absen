@@ -301,6 +301,19 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
         { type: 'late', attendanceId: attendance.id },
       );
     }
+    // Notifikasi in-app untuk SISWA itu sendiri (muncul realtime di halaman Notifikasi)
+    const detail =
+      type === 'CHECK_IN'
+        ? status === 'LATE'
+          ? `pukul ${localTime(now)} — Terlambat ${lateMinutes} menit`
+          : `pukul ${localTime(now)}`
+        : `pukul ${localTime(now)}${earlyLeave ? ' (Pulang Awal)' : ''}`;
+    await sendNotification({
+      userId: targetUserId,
+      title: 'Absensi Berhasil',
+      body: `Kamu absen ${label} ${detail}.`,
+      data: { type: 'attendance', attendanceId: attendance.id },
+    });
   }
 
   await audit({
@@ -419,6 +432,16 @@ export async function manualAttendance(input: {
     lateMinutes: attendance.lateMinutes ?? 0,
   });
 
+  // Beri tahu siswa bahwa catatan absensinya tercatat/dikoreksi petugas
+  if (student.user) {
+    await sendNotification({
+      userId: student.userId,
+      title: existing ? 'Absensi Dikoreksi' : 'Absensi Tercatat',
+      body: `Absensi ${input.type === 'CHECK_IN' ? 'datang' : 'pulang'} kamu ${existing ? 'diperbarui' : 'tercatat'} ${checkIn ? `pukul ${localTime(checkIn)}` : checkOut ? `pukul ${localTime(checkOut)}` : ''} (${attendance.status}).`,
+      data: { type: 'attendance', attendanceId: attendance.id },
+    });
+  }
+
   await audit({
     userId: input.actor.id,
     action: existing ? 'ATTENDANCE_MANUAL_UPDATED' : 'ATTENDANCE_MANUAL_CHANGED',
@@ -471,6 +494,16 @@ export async function updateAttendance(input: {
     method: updated.method,
     lateMinutes: updated.lateMinutes ?? 0,
   });
+
+  // Beri tahu siswa bahwa catatannya dikoreksi
+  if (record.user) {
+    await sendNotification({
+      userId: record.userId,
+      title: 'Absensi Dikoreksi',
+      body: `Catatan absensimu diperbarui (${localTime(updated.checkIn ?? updated.checkOut ?? updated.date)}) — status ${updated.status}.`,
+      data: { type: 'attendance', attendanceId: updated.id },
+    });
+  }
 
   await audit({
     userId: input.actor.id,

@@ -333,6 +333,7 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 
 ## Log Perubahan
 
+- **Notifikasi absensi siswa realtime** 🔔 — saat siswa absen **datang** / **pulang**, siswa sekarang menerima notifikasi in-app **"Absensi Berhasil"** (mis. "Kamu absen datang pukul 07:05 — Terlambat 5 menit"), lengkap dengan **badge angka belum dibaca** di ikon lonceng dan **muncul langsung tanpa reload** (WebSocket: aplikasi otomatis bergabung ke room pribadi, notifikasi dikirim realtime). Siswa juga diberi tahu saat petugas **mencatat / mengoreksi** absensinya ("Absensi Tercatat" / "Absensi Dikoreksi"). Notifikasi orang tua tetap berjalan seperti sebelumnya.
 - **Teks notifikasi siswa** — dashboard notifikasi siswa kini menampilkan "Notifikasi absensi murid akan muncul di sini." (role lain tetap "anak/guru").
 - **Profil siswa dirapikan** — baris "@username · NISN …" dihilangkan dari kartu profil siswa (username otomatis `siswa_121212` tidak perlu ditampilkan); guru/staf tetap menampilkan NIP. Profile kini: Nama, Role, Kelas.
 - **Batas waktu absen datang & pulang cepat di Pengaturan** ⏰ — dua aturan baru di **Pengaturan → Aturan Absensi**:

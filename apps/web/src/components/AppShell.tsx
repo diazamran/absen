@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Home, ScanLine, Users, FileText, LayoutDashboard, GraduationCap, CalendarDays, BookOpen,
   ClipboardList, Smartphone, BarChart3, Bell, ScrollText, Settings, LogOut, Menu, X, ShieldCheck,
@@ -7,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useTheme } from '../lib/theme';
+import { api } from '../lib/api';
 import { cn, greeting } from '../lib/format';
 
 interface NavItem {
@@ -233,6 +235,14 @@ export function AppShell() {
   const isAdmin = user?.roleKey === 'ADMIN' || user?.roleKey === 'SUPER_ADMIN' || user?.roleKey === 'HEADMASTER';
   const bottomNav = BOTTOM_NAV[user?.roleKey || ''] || BOTTOM_NAV.STUDENT;
 
+  // Badge notifikasi belum dibaca (sinkron dengan halaman Notifikasi via query key yang sama)
+  const { data: notifData } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: () => api<{ success: boolean; data: { unread: number } }>('/notifications').then((r) => r.data),
+    refetchInterval: 30_000,
+  });
+  const unreadCount = notifData?.unread ?? 0;
+
   const doLogout = async () => {
     setMobileMenu(false);
     await logout();
@@ -258,6 +268,11 @@ export function AppShell() {
             <Clock />
             <button onClick={() => navigate('/app/notifications')} className="relative rounded-xl p-2 text-muted hover:bg-slate-100 dark:hover:bg-slate-800">
               <Bell className="h-5 w-5" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
           </div>
         </header>
