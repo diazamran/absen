@@ -478,3 +478,40 @@ export async function updateAttendance(input: {
 
   return updated;
 }
+
+/**
+ * Hapus bersih catatan absensi siswa dari database (bukan menonaktifkan).
+ * Hanya SUPER_ADMIN / ADMIN / PIKET / wali kelas (kelasnya sendiri) yang boleh.
+ */
+export async function deleteAttendance(input: {
+  actor: { id: string; request: FastifyRequest };
+  attendanceId: string;
+}): Promise<{ id: string }> {
+  const record = await prisma.attendance.findUnique({
+    where: { id: input.attendanceId },
+    include: { student: { include: { class: true } }, user: true },
+  });
+  if (!record) throw ApiError.notFound('Catatan absensi tidak ditemukan.');
+  await assertCanManageAttendance(input.actor.request, record.student?.classId ?? null);
+
+  await prisma.attendance.delete({ where: { id: record.id } });
+
+  await audit({
+    userId: input.actor.id,
+    action: 'ATTENDANCE_DELETED',
+    entity: 'Attendance',
+    entityId: record.id,
+    newValue: {
+      student: record.student ? { id: record.student.id, nis: record.student.nis, className: record.student.class?.name ?? null } : null,
+      type: record.type,
+      status: record.status,
+      method: record.method,
+      checkIn: record.checkIn ? localTime(record.checkIn) : null,
+      checkOut: record.checkOut ? localTime(record.checkOut) : null,
+      date: localDateKeyOfStoredDate(record.date),
+    },
+    request: input.actor.request,
+  });
+
+  return { id: record.id };
+}

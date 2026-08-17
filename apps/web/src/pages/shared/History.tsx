@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { History as HistoryIcon } from 'lucide-react';
-import { api } from '../../lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { History as HistoryIcon, Trash2 } from 'lucide-react';
+import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { useToast } from '../../lib/toast';
 import { Card, Badge, EmptyState, Select } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
 import { STATUS_LABELS, STATUS_COLORS, currentMonthKey, timeLabel } from '../../lib/format';
 
 interface AttRow {
-  id: string; date: string; dayKey: string; checkIn?: string | null; checkOut?: string | null;
+  id?: string; nis?: string | null; date: string; dayKey: string; checkIn?: string | null; checkOut?: string | null;
   status: string; method: string; lateMinutes: number; earlyLeave?: boolean; className?: string | null; name?: string | null;
 }
 
@@ -19,7 +20,20 @@ function timeStr(v?: string | null): string {
 
 export default function History() {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const [month, setMonth] = useState(currentMonthKey());
+
+  // Admin / piket / wali kelas bisa menghapus bersih catatan absensi siswa
+  const canDelete = ['ADMIN', 'SUPER_ADMIN', 'PIKET', 'HOMEROOM_TEACHER'].includes(user?.roleKey || '');
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api(`/attendance/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      toast('success', 'Catatan absensi dihapus dari database.');
+      qc.invalidateQueries({ queryKey: ['attendance-history'] });
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus catatan.'),
+  });
 
   // Orang tua melihat riwayat anak
   const isParent = user?.roleKey === 'PARENT';
@@ -54,11 +68,12 @@ export default function History() {
       const me = await api<{ success: boolean; data: { student?: { id: string } | null } }>('/auth/me');
       if (!me.data.student) {
         // guru/staff/wali/piket/admin: laporan bulanan (bisa difilter kelas)
-        const res = await api<{ success: boolean; data: { rows: { name: string; nis?: string | null; className?: string | null; date: string; time?: string | null; status: string; method: string; lateMinutes: number }[] } }>(
+        const res = await api<{ success: boolean; data: { rows: { id?: string; name: string; nis?: string | null; className?: string | null; date: string; time?: string | null; status: string; method: string; lateMinutes: number }[] } }>(
           `/reports/monthly?month=${month}${classId ? `&classId=${classId}` : ''}`,
         );
         return res.data.rows.map((r, i) => ({
-          id: `${r.date}-${r.nis || r.name || i}`,
+          id: r.id ?? `${r.date}-${r.nis || r.name || i}`,
+          nis: r.nis ?? null,
           date: r.date,
           dayKey: r.date,
           checkIn: r.time ?? null,
@@ -122,25 +137,39 @@ export default function History() {
           </div>
 
           <div className="space-y-2">
-            {rows?.map((r) => (
-              <Card key={r.id} className="flex items-center gap-3 p-3.5">
-                <div className="flex flex-col items-center rounded-xl bg-slate-50 px-3 py-1.5 dark:bg-slate-900">
-                  {/* dayKey bisa tidak ada pada laporan bulanan guru/staff — fallback ke date */}
-                  <span className="text-sm font-bold text-ink">{(r.dayKey || r.date || '').slice(8)}</span>
-                  <span className="text-[10px] uppercase text-muted">{(r.dayKey || r.date || '').slice(5, 7)}</span>
-                </div>
-                <div className="flex-1">
-                  {r.name && <p className="text-sm font-bold text-ink">{r.name}</p>}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-sm font-semibold text-ink">Masuk {timeStr(r.checkIn)}</span>
-                    {r.checkOut && <span className="text-xs text-muted">Pulang {timeStr(r.checkOut)}</span>}
-                    {r.earlyLeave && <Badge status="LATE" label="Pulang Awal" />}
+            {rows?.map((r) => {
+              const delId = canDelete ? r.id : undefined;
+              return (
+                <Card key={r.id || `${r.date}-${r.nis || r.name || 0}`} className="flex items-center gap-3 p-3.5">
+                  <div className="flex flex-col items-center rounded-xl bg-slate-50 px-3 py-1.5 dark:bg-slate-900">
+                    {/* dayKey bisa tidak ada pada laporan bulanan guru/staff — fallback ke date */}
+                    <span className="text-sm font-bold text-ink">{(r.dayKey || r.date || '').slice(8)}</span>
+                    <span className="text-[10px] uppercase text-muted">{(r.dayKey || r.date || '').slice(5, 7)}</span>
                   </div>
-                  <p className="text-xs text-muted">{r.className ? `Kelas ${r.className} · ` : ''}Metode: {r.method}</p>
-                </div>
-                <Badge status={r.status} label={r.status === 'LATE' && r.lateMinutes ? `Terlambat ${r.lateMinutes}m` : STATUS_LABELS[r.status]} />
-              </Card>
-            ))}
+                  <div className="flex-1">
+                    {r.name && <p className="text-sm font-bold text-ink">{r.name}</p>}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-sm font-semibold text-ink">Masuk {timeStr(r.checkIn)}</span>
+                      {r.checkOut && <span className="text-xs text-muted">Pulang {timeStr(r.checkOut)}</span>}
+                      {r.earlyLeave && <Badge status="LATE" label="Pulang Awal" />}
+                    </div>
+                    <p className="text-xs text-muted">{r.className ? `Kelas ${r.className} · ` : ''}Metode: {r.method}</p>
+                  </div>
+                  <Badge status={r.status} label={r.status === 'LATE' && r.lateMinutes ? `Terlambat ${r.lateMinutes}m` : STATUS_LABELS[r.status]} />
+                  {delId && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Hapus PERMANEN catatan absen ${r.name || ''} (${(r.dayKey || r.date || '').slice(8)}/${(r.dayKey || r.date || '').slice(5, 7)}, Masuk ${timeStr(r.checkIn)})? Data akan terhapus bersih dari database dan tidak bisa dikembalikan.`)) deleteMutation.mutate(delId);
+                      }}
+                      className="rounded-xl p-2 text-muted transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
+                      title="Hapus catatan absen"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </Card>
+              );
+            })}
             {rows?.length === 0 && <EmptyState icon={HistoryIcon} title="Belum ada riwayat" description="Belum ada data absensi pada bulan ini." />}
           </div>
         </>

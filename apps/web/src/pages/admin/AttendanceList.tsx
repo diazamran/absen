@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ScanLine, Search, ClipboardEdit, Filter, Pencil } from 'lucide-react';
+import { ScanLine, Search, ClipboardEdit, Filter, Pencil, Trash2 } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Card, Input, Select, Button, Badge, Modal, Field, EmptyState } from '../../lib/ui';
@@ -51,6 +51,17 @@ export default function AttendanceList() {
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menyimpan perubahan.'),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api(`/attendance/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      toast('success', 'Catatan absensi dihapus dari database.');
+      qc.invalidateQueries({ queryKey: ['attendance-today'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['attendance-history'] });
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus catatan.'),
+  });
+
   return (
     <div>
       <PageHeader
@@ -90,6 +101,15 @@ export default function AttendanceList() {
               title="Koreksi absen siswa"
             >
               <Pencil className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => {
+                if (window.confirm(`Hapus PERMANEN catatan absen ${r.name} (${r.time || '-'})? Data akan terhapus bersih dari database dan tidak bisa dikembalikan.`)) deleteMutation.mutate(r.id);
+              }}
+              className="rounded-xl p-2 text-muted transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
+              title="Hapus catatan absen"
+            >
+              <Trash2 className="h-4 w-4" />
             </button>
           </Card>
         ))}

@@ -3,6 +3,7 @@ import { prisma } from '../src/lib/prisma.js';
 import { seedFixture, type Fixture } from './helpers.js';
 import { buildApp } from '../src/app.js';
 import { issueQrToken } from '../src/services/qr.js';
+import { startOfLocalDay } from '../src/lib/time.js';
 
 let fx: Fixture;
 let app: Awaited<ReturnType<typeof buildApp>>;
@@ -74,6 +75,30 @@ describe('Mesin Absensi', () => {
       where: { OR: [{ action: 'ATTENDANCE_MANUAL_CHANGED' }, { action: 'ATTENDANCE_MANUAL_UPDATED' }] },
     });
     expect(auditCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it('hapus bersih catatan absensi via DELETE + audit log', async () => {
+    const created = await prisma.attendance.create({
+      data: {
+        userId: fx.studentUserId,
+        studentId: fx.studentId,
+        date: startOfLocalDay('2026-08-10'),
+        type: 'CHECK_IN',
+        checkIn: new Date('2026-08-10T01:00:00Z'),
+        status: 'PRESENT',
+        method: 'MANUAL',
+      },
+    });
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/attendance/${created.id}`,
+      headers: { authorization: `Bearer ${fx.adminToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const gone = await prisma.attendance.findUnique({ where: { id: created.id } });
+    expect(gone).toBeNull();
+    const auditCount = await prisma.auditLog.count({ where: { action: 'ATTENDANCE_DELETED', entityId: created.id } });
+    expect(auditCount).toBe(1);
   });
 
   it('koreksi absen via PATCH mengubah status catatan yang sudah ada + audit log', async () => {

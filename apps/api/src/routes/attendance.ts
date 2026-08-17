@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { recordAttendance, manualAttendance, updateAttendance } from '../services/attendance.js';
+import { recordAttendance, manualAttendance, updateAttendance, deleteAttendance } from '../services/attendance.js';
 import { issueQrToken } from '../services/qr.js';
 import { validate } from '../utils/validate.js';
 import { ApiError } from '../utils/errors.js';
@@ -265,6 +265,13 @@ export async function attendanceRoutes(app: FastifyInstance) {
       notes: body.notes,
     });
     return reply.send({ success: true, message: 'Catatan absensi diperbarui.', data: result });
+  });
+
+  // ===== Hapus bersih catatan absensi siswa =====
+  app.delete('/attendance/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.attendanceManage) }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const result = await deleteAttendance({ actor: { id: request.user!.id, request }, attendanceId: id });
+    return reply.send({ success: true, message: 'Catatan absensi dihapus.', data: result });
   });
 
   // ===== Daftar absensi hari ini =====

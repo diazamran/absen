@@ -147,7 +147,7 @@ npm run dev
 - **Siswa** login sebagai siswa: beranda menampilkan menu **Registrasi Wajah** langsung (juga di halaman **Absen** dan drawer ☰) — daftar wajah sendiri → menunggu persetujuan admin.
 - **Pengaturan → Aturan Absensi & Lokasi**: set **titik absensi GPS** (latitude/longitude + radius) dan aktifkan "Wajib GPS di area sekolah" — siswa hanya bisa absen di dalam radius itu (diverifikasi server).
 - **Izin**: pengajuan bisa menyertakan **bukti/lampiran** (surat/dokter) — admin melihat tombol **Lihat Bukti**.
-- **Absensi**: monitoring realtime hari ini + tombol **Absen Manual** + ikon **pensil** di tiap baris untuk **koreksi absen siswa** (ubah status, jam datang/pulang, catatan) — semua tercatat di audit log.
+- **Absensi**: monitoring realtime hari ini + tombol **Absen Manual** + ikon **pensil** untuk **koreksi absen siswa** (ubah status, jam datang/pulang, catatan) dan ikon **hapus** untuk **menghapus bersih** catatan absensi (dengan konfirmasi) — semua tercatat di audit log.
 - **Skala & performa**: rate-limit dihitung **per user** (bukan per IP) — ratusan siswa di belakang 1 IP NAT sekolah tetap mendapat jatah sendiri saat jam ramai; duplikat absen dicegah di database (unique `userId+date+type`) dan race kondisi ditangani (bukan error 500). Foto wajah otomatis dikompresi di HP (maks ~480px JPEG) dan **tidak disimpan** (hanya embedding); bukti izin dikompresi otomatis di sisi klien (maks ~1280px JPEG) sebelum diunggah.
 - **Pengaturan**: nama aplikasi/sekolah, warna tema, aturan absensi (jam terlambat, anti-duplikat, GPS).
 
@@ -333,6 +333,7 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 
 ## Log Perubahan
 
+- **Hapus bersih catatan absensi siswa** 🗑️ — tombol **hapus** (ikon tempat sampah) kini tersedia di **Absensi Hari Ini** dan **Riwayat Absensi** untuk Super Admin, Admin, Petugas Piket, dan Wali Kelas (kelasnya sendiri). Selalu ada **konfirmasi** sebelum menghapus, dan catatan **benar-benar dihapus dari database** (bukan dinonaktifkan) — riwayat/statistik langsung diperbarui dan setiap penghapusan tercatat di **Audit Log** (`ATTENDANCE_DELETED` dengan detail siswa, tanggal, status, dan jam).
 - **Absen Manual & Koreksi Absen Siswa** ✏️ — sekarang **Super Admin, Admin, dan Petugas Piket** bisa mencatat absen manual siswa sekaligus **mengubah/mengoreksi catatan absensi yang sudah ada** (status, jam datang, jam pulang, catatan):
   - Menu **Absen Manual** baru untuk Petugas Piket (beranda & sidebar/drawer ☰) → halaman Absensi dengan tombol "Absen Manual" (cari siswa → pilih status/tanggal/jam) dan ikon **pensil** di tiap baris untuk **koreksi** status/jam siswa.
   - Absen manual kini **upsert**: jika siswa sudah punya catatan pada tanggal & tipe yang sama, catatan itu diperbarui (tidak lagi ditolak) — berlaku juga untuk validasi kehadiran wali kelas.

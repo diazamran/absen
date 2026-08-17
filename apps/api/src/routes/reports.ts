@@ -163,6 +163,7 @@ export async function reportRoutes(app: FastifyInstance) {
           ABSENT: counts.ABSENT || 0,
         },
         rows: rows.map((r) => ({
+          id: r.id,
           name: r.user?.fullName ?? '-',
           nis: r.student?.nis ?? null,
           className: r.student?.class?.name ?? null,
