@@ -45,12 +45,9 @@ export default function Profile() {
         <div className="min-w-0 flex-1">
           <p className="text-lg font-extrabold text-ink">{user?.fullName}</p>
           <p className="text-sm text-muted">{user?.roleName}</p>
-          <p className="text-xs text-muted">
-            @{user?.username}
-            {user?.student?.nis && ` · NISN ${user.student.nis}`}
-            {user?.teacher?.nip && ` · NIP ${user.teacher.nip}`}
-            {user?.staff?.nip && ` · NIP ${user.staff.nip}`}
-          </p>
+          {(user?.teacher?.nip || user?.staff?.nip) && (
+            <p className="text-xs text-muted">@{user?.username} · NIP {user?.teacher?.nip ?? user?.staff?.nip}</p>
+          )}
           {user?.student?.className && <p className="text-xs text-muted">Kelas {user.student.className}</p>}
         </div>
       </Card>
