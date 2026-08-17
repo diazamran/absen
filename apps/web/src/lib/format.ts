@@ -4,6 +4,7 @@ export const STATUS_LABELS: Record<string, string> = {
   EXCUSED: 'Izin',
   SICK: 'Sakit',
   OFFICIAL_DUTY: 'Dinas',
+  DISPENSATION: 'Dispensasi',
   ABSENT: 'Tidak Hadir',
   LEAVE: 'Cuti',
 };
@@ -14,6 +15,7 @@ export const STATUS_COLORS: Record<string, string> = {
   EXCUSED: '#3b82f6',
   SICK: '#a855f7',
   OFFICIAL_DUTY: '#06b6d4',
+  DISPENSATION: '#14b8a6',
   ABSENT: '#ef4444',
   LEAVE: '#6366f1',
 };

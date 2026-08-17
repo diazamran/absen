@@ -18,6 +18,7 @@ enum AttendanceStatus {
   EXCUSED // Izin
   SICK // Sakit
   OFFICIAL_DUTY // Dinas
+  DISPENSATION // Dispensasi
   ABSENT // Tidak hadir / alpa
   LEAVE // Cuti
 }

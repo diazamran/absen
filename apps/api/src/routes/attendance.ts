@@ -27,7 +27,7 @@ const checkSchema = z.object({
 
 const manualSchema = z.object({
   studentId: z.string().min(1),
-  status: z.enum(['PRESENT', 'LATE', 'EXCUSED', 'SICK', 'OFFICIAL_DUTY', 'ABSENT', 'LEAVE']),
+  status: z.enum(['PRESENT', 'LATE', 'EXCUSED', 'SICK', 'OFFICIAL_DUTY', 'DISPENSATION', 'ABSENT', 'LEAVE']),
   type: z.enum(['CHECK_IN', 'CHECK_OUT']).default('CHECK_IN'),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   checkIn: z.string().regex(/^\d{2}:\d{2}$/).optional(),
@@ -37,7 +37,7 @@ const manualSchema = z.object({
 });
 
 const updateSchema = z.object({
-  status: z.enum(['PRESENT', 'LATE', 'EXCUSED', 'SICK', 'OFFICIAL_DUTY', 'ABSENT', 'LEAVE']).optional(),
+  status: z.enum(['PRESENT', 'LATE', 'EXCUSED', 'SICK', 'OFFICIAL_DUTY', 'DISPENSATION', 'ABSENT', 'LEAVE']).optional(),
   checkIn: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   checkOut: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   notes: z.string().optional(),

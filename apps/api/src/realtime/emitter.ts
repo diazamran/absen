@@ -15,7 +15,7 @@ export interface AttendanceRealtimeEvent {
   nis?: string | null;
   className?: string | null;
   time: string; // HH:mm WIB
-  status: 'PRESENT' | 'LATE' | 'EXCUSED' | 'SICK' | 'OFFICIAL_DUTY' | 'ABSENT' | 'LEAVE';
+  status: 'PRESENT' | 'LATE' | 'EXCUSED' | 'SICK' | 'OFFICIAL_DUTY' | 'DISPENSATION' | 'ABSENT' | 'LEAVE';
   method: string;
   lateMinutes: number;
 }

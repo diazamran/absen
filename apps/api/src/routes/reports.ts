@@ -12,6 +12,7 @@ const STATUS_LABELS: Record<string, string> = {
   EXCUSED: 'Izin',
   SICK: 'Sakit',
   OFFICIAL_DUTY: 'Dinas',
+  DISPENSATION: 'Dispensasi',
   ABSENT: 'Tidak Hadir',
   LEAVE: 'Cuti',
 };
@@ -55,7 +56,7 @@ async function classRecap(start: Date, end: Date) {
     set.add(a.status);
     byStudent.set(a.studentId, set);
   }
-  const EXCUSED = new Set(['EXCUSED', 'SICK', 'OFFICIAL_DUTY', 'LEAVE']);
+  const EXCUSED = new Set(['EXCUSED', 'SICK', 'OFFICIAL_DUTY', 'DISPENSATION', 'LEAVE']);
   return classes.map((c) => {
     const total = c.students.length;
     const present = c.students.filter((s) => {
@@ -109,6 +110,7 @@ export async function reportRoutes(app: FastifyInstance) {
           EXCUSED: counts.EXCUSED || 0,
           SICK: counts.SICK || 0,
           OFFICIAL_DUTY: counts.OFFICIAL_DUTY || 0,
+          DISPENSATION: counts.DISPENSATION || 0,
           ABSENT: counts.ABSENT || 0,
         },
         rows: rows.map((r) => ({
@@ -160,6 +162,7 @@ export async function reportRoutes(app: FastifyInstance) {
           EXCUSED: counts.EXCUSED || 0,
           SICK: counts.SICK || 0,
           OFFICIAL_DUTY: counts.OFFICIAL_DUTY || 0,
+          DISPENSATION: counts.DISPENSATION || 0,
           ABSENT: counts.ABSENT || 0,
         },
         rows: rows.map((r) => ({
@@ -209,7 +212,7 @@ export async function reportRoutes(app: FastifyInstance) {
         total: list.length,
         present: counts.PRESENT || 0,
         late: counts.LATE || 0,
-        excused: (counts.EXCUSED || 0) + (counts.SICK || 0) + (counts.OFFICIAL_DUTY || 0) + (counts.LEAVE || 0),
+        excused: (counts.EXCUSED || 0) + (counts.SICK || 0) + (counts.OFFICIAL_DUTY || 0) + (counts.DISPENSATION || 0) + (counts.LEAVE || 0),
         absent: counts.ABSENT || 0,
         attendanceRate: list.length ? Math.round(((counts.PRESENT || 0) + (counts.LATE || 0)) / list.length * 100) : 0,
       };

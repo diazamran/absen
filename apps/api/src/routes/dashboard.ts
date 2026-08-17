@@ -9,6 +9,7 @@ const STATUS_LABELS: Record<string, string> = {
   EXCUSED: 'Izin',
   SICK: 'Sakit',
   OFFICIAL_DUTY: 'Dinas',
+  DISPENSATION: 'Dispensasi',
   ABSENT: 'Tidak Hadir',
   LEAVE: 'Cuti',
 };
@@ -111,7 +112,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
               total,
               present,
               late: counts.LATE || 0,
-              excused: (counts.EXCUSED || 0) + (counts.SICK || 0) + (counts.OFFICIAL_DUTY || 0) + (counts.LEAVE || 0),
+              excused: (counts.EXCUSED || 0) + (counts.SICK || 0) + (counts.OFFICIAL_DUTY || 0) + (counts.DISPENSATION || 0) + (counts.LEAVE || 0),
               absent: counts.ABSENT || 0,
               notYet,
               percent,
@@ -122,6 +123,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
               { name: 'Terlambat', value: counts.LATE || 0, color: '#f59e0b' },
               { name: 'Izin', value: counts.EXCUSED || 0, color: '#3b82f6' },
               { name: 'Sakit', value: counts.SICK || 0, color: '#a855f7' },
+              { name: 'Dispensasi', value: counts.DISPENSATION || 0, color: '#14b8a6' },
               { name: 'Tidak Hadir', value: counts.ABSENT || 0, color: '#ef4444' },
             ],
             recent: recent.map((r) => ({

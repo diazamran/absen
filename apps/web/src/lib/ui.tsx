@@ -78,6 +78,7 @@ const BADGE_COLORS: Record<string, string> = {
   EXCUSED: 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
   SICK: 'bg-purple-50 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300',
   OFFICIAL_DUTY: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300',
+  DISPENSATION: 'bg-teal-50 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300',
   ABSENT: 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300',
   LEAVE: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300',
   PENDING: 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',

@@ -11,7 +11,7 @@ import { PageHeader } from '../../components/AppShell';
 import { STATUS_LABELS, STATUS_COLORS, currentMonthKey, todayJakartaKey } from '../../lib/format';
 import { exportReportPdf, exportReportExcel, formatLongDate, type ReportExportRow } from '../../lib/reportExport';
 
-interface Summary { PRESENT: number; LATE: number; EXCUSED: number; SICK: number; OFFICIAL_DUTY: number; ABSENT: number; }
+interface Summary { PRESENT: number; LATE: number; EXCUSED: number; SICK: number; OFFICIAL_DUTY: number; DISPENSATION: number; ABSENT: number; }
 interface ClassSummaryRow { className: string; total: number; present: number; late: number; excused: number; absent: number; }
 interface ReportData {
   summary: Summary;
@@ -25,6 +25,7 @@ const SUMMARY_KEYS: { key: keyof Summary; label: string }[] = [
   { key: 'EXCUSED', label: 'Izin' },
   { key: 'SICK', label: 'Sakit' },
   { key: 'OFFICIAL_DUTY', label: 'Dinas' },
+  { key: 'DISPENSATION', label: 'Dispensasi' },
   { key: 'ABSENT', label: 'Tidak Hadir' },
 ];
 
@@ -153,7 +154,7 @@ export default function Reports() {
                   <th className="px-3 py-2">Total Siswa</th>
                   <th className="px-3 py-2">Hadir</th>
                   <th className="px-3 py-2">Terlambat</th>
-                  <th className="px-3 py-2">Izin / Sakit</th>
+                  <th className="px-3 py-2">Izin / Sakit / Dispensasi</th>
                   <th className="px-3 py-2">Tidak Hadir</th>
                 </tr>
               </thead>
