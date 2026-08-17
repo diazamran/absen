@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  FilePlus2, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, XCircle, CalendarDays, MapPin, ShieldCheck, ScanFace, GraduationCap,
+  FilePlus2, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, XCircle, CalendarDays, MapPin, ShieldCheck, ScanFace,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -79,16 +79,12 @@ export default function TeacherHome() {
 
   return (
     <div className="space-y-5">
-      {/* Sambutan */}
+      {/* Sambutan — 3 baris: sapaan, nama lengkap, kelas (kecil) */}
       <div className="rounded-3xl bg-gradient-to-br from-primary to-primary-dark p-5 text-white shadow-float">
         <p className="text-sm font-medium opacity-90">{greeting()},</p>
-        <h1 className="text-2xl font-extrabold">{user?.fullName?.split(' ').slice(0, 2).join(' ')}</h1>
-        <p className="mt-1 text-sm opacity-80">{data.date}</p>
+        <h1 className="text-2xl font-extrabold">{user?.fullName}</h1>
         {isStudent && data.student?.className && (
-          <div className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-white/15 px-4 py-2 backdrop-blur">
-            <GraduationCap className="h-4 w-4" />
-            <span className="font-bold">{data.student.className}</span>
-          </div>
+          <p className="mt-1 text-sm font-medium opacity-80">{data.student.className}</p>
         )}
         {data.myClass && (
           <div className="mt-4 flex items-center justify-between rounded-2xl bg-white/15 px-4 py-3 backdrop-blur">
