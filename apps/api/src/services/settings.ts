@@ -6,6 +6,10 @@ export interface AttendanceRules {
   lateAfterMinute: number;
   checkOutAfterHour: number; // jam pulang (jam)
   checkOutAfterMinute: number; // jam pulang (menit)
+  checkInDeadlineHour: number; // batas akhir absen datang (jam) — 23 = tidak dibatasi
+  checkInDeadlineMinute: number; // batas akhir absen datang (menit) — 59 = tidak dibatasi
+  earlyLeaveBeforeHour: number; // mulai dihitung pulang awal (jam)
+  earlyLeaveBeforeMinute: number; // mulai dihitung pulang awal (menit)
   duplicatePrevention: boolean;
   locationEnabled: boolean;
   radiusMeters: number;
@@ -33,6 +37,11 @@ export async function getAttendanceRules(): Promise<AttendanceRules> {
     lateAfterMinute: Number(v.lateAfterMinute ?? config.lateAfterMinute),
     checkOutAfterHour: Number(v.checkOutAfterHour ?? config.checkOutAfterHour),
     checkOutAfterMinute: Number(v.checkOutAfterMinute ?? config.checkOutAfterMinute),
+    checkInDeadlineHour: Number(v.checkInDeadlineHour ?? config.checkInDeadlineHour),
+    checkInDeadlineMinute: Number(v.checkInDeadlineMinute ?? config.checkInDeadlineMinute),
+    // Pulang awal: default ikut jam pulang sekolah kalau belum diatur terpisah
+    earlyLeaveBeforeHour: Number(v.earlyLeaveBeforeHour ?? v.checkOutAfterHour ?? config.checkOutAfterHour),
+    earlyLeaveBeforeMinute: Number(v.earlyLeaveBeforeMinute ?? v.checkOutAfterMinute ?? config.checkOutAfterMinute),
     duplicatePrevention: v.duplicatePrevention !== false,
     locationEnabled: v.locationEnabled === true || (v.locationEnabled === undefined && config.locationEnabled),
     radiusMeters: Number(v.radiusMeters ?? config.locationRadiusMeters),

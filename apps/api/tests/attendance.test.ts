@@ -101,6 +101,41 @@ describe('Mesin Absensi', () => {
     expect(auditCount).toBe(1);
   });
 
+  it('batas akhir absen datang: check-in setelah jam batas ditolak', async () => {
+    // Atur batas akhir absen datang = 00:00 (sudah lewat hari ini)
+    await prisma.schoolSetting.upsert({
+      where: { key: 'attendanceRules' },
+      update: { value: { checkInDeadlineHour: 0, checkInDeadlineMinute: 0 } },
+      create: { key: 'attendanceRules', value: { checkInDeadlineHour: 0, checkInDeadlineMinute: 0 } },
+    });
+    try {
+      // siswa baru (belum ada catatan hari ini) supaya lolos cek duplikat dulu
+      const role = await prisma.role.findUnique({ where: { key: 'STUDENT' } });
+      const user = await prisma.user.create({
+        data: { username: 'siswa_deadline', passwordHash: await (await import('../src/lib/crypto.js')).hashPassword('siswa123'), fullName: 'Siswa Deadline', roleId: role!.id },
+      });
+      await prisma.student.create({ data: { userId: user.id, nis: '999003' } });
+      const { recordAttendance } = await import('../src/services/attendance.js');
+      await expect(
+        recordAttendance({
+          actor: { id: user.id, roleKey: 'STUDENT', request: { ip: '127.0.0.1' } as never },
+          type: 'CHECK_IN',
+          method: 'QR',
+          proof: { token: await issueQrToken(user.id, 'dynamic') },
+        }),
+      ).rejects.toMatchObject({ code: 'CHECK_IN_DEADLINE_PASSED' });
+    } finally {
+      await prisma.schoolSetting.delete({ where: { key: 'attendanceRules' } }).catch(() => {});
+    }
+    // Default: batas datang 23:59 (tidak dibatasi), pulang awal ikut jam pulang sekolah
+    const { getAttendanceRules } = await import('../src/services/settings.js');
+    const rules = await getAttendanceRules();
+    expect(rules.checkInDeadlineHour).toBe(23);
+    expect(rules.checkInDeadlineMinute).toBe(59);
+    expect(rules.earlyLeaveBeforeHour).toBe(rules.checkOutAfterHour);
+    expect(rules.earlyLeaveBeforeMinute).toBe(rules.checkOutAfterMinute);
+  });
+
   it('koreksi absen via PATCH mengubah status catatan yang sudah ada + audit log', async () => {
     // siswa sudah punya check-in dari tes pertama → ambil id-nya
     const existing = await prisma.attendance.findFirst({

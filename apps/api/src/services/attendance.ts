@@ -175,10 +175,10 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
     if (!checkIn) {
       throw ApiError.badRequest('NO_CHECK_IN', 'Absensi pulang hanya bisa dilakukan setelah absensi datang.');
     }
-    // Pulang sebelum jam pulang sekolah → ditandai "pulang awal"
-    const jamPulang = rules.checkOutAfterHour * 60 + rules.checkOutAfterMinute;
+    // Pulang sebelum batas "mulai dihitung pulang awal" (default: jam pulang sekolah) → ditandai "pulang awal"
+    const batasPulangAwal = rules.earlyLeaveBeforeHour * 60 + rules.earlyLeaveBeforeMinute;
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    if (nowMinutes < jamPulang) {
+    if (nowMinutes < batasPulangAwal) {
       earlyLeave = true;
     }
   }
@@ -203,10 +203,20 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   let status: AttendanceStatus = 'PRESENT';
   let lateMinutes = 0;
   if (type === 'CHECK_IN') {
-    const threshold = localTimeToUtc(today, `${String(rules.lateAfterHour).padStart(2, '0')}:${String(rules.lateAfterMinute).padStart(2, '0')}`);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const threshold = localTimeToUtc(today, `${pad(rules.lateAfterHour)}:${pad(rules.lateAfterMinute)}`);
     if (now.getTime() > threshold.getTime()) {
       status = 'LATE';
       lateMinutes = Math.max(1, Math.round((now.getTime() - threshold.getTime()) / 60000));
+    }
+    // Batas akhir absen datang — setelah jam ini siswa tidak bisa absen datang sendiri
+    // (dianggap tidak hadir; koreksi manual oleh admin/piket/wali kelas tetap bisa)
+    const deadline = localTimeToUtc(today, `${pad(rules.checkInDeadlineHour)}:${pad(rules.checkInDeadlineMinute)}`);
+    if (now.getTime() > deadline.getTime()) {
+      throw ApiError.badRequest(
+        'CHECK_IN_DEADLINE_PASSED',
+        `Absen datang sudah ditutup pukul ${pad(rules.checkInDeadlineHour)}:${pad(rules.checkInDeadlineMinute)}. Hubungi petugas piket/administrator untuk koreksi.`,
+      );
     }
   } else {
     // status pulang mengikuti status datang hari itu

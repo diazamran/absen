@@ -153,17 +153,30 @@ export default function Settings() {
         <Card>
           <h3 className="mb-3 flex items-center gap-2 font-bold text-ink"><Clock3 className="h-4 w-4" /> Aturan Absensi & Lokasi</h3>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Jam batas terlambat"><Input type="number" value={Number(r.lateAfterHour ?? 7)} onChange={(e) => setR('lateAfterHour', Number(e.target.value))} /></Field>
+            <Field label="Jam batas terlambat" hint="Setelah jam ini, absen datang dihitung Terlambat.">
+              <Input type="number" value={Number(r.lateAfterHour ?? 7)} onChange={(e) => setR('lateAfterHour', Number(e.target.value))} />
+            </Field>
             <Field label="Menit"><Input type="number" value={Number(r.lateAfterMinute ?? 0)} onChange={(e) => setR('lateAfterMinute', Number(e.target.value))} /></Field>
-            <Field label="Jam pulang sekolah"><Input type="number" value={Number(r.checkOutAfterHour ?? 15)} onChange={(e) => setR('checkOutAfterHour', Number(e.target.value))} /></Field>
+            <Field label="Batas akhir absen datang" hint="Setelah jam ini, siswa TIDAK BISA absen datang sendiri (dianggap tidak hadir — koreksi manual oleh petugas). 23:59 = tidak dibatasi.">
+              <Input type="number" value={Number(r.checkInDeadlineHour ?? 23)} onChange={(e) => setR('checkInDeadlineHour', Number(e.target.value))} />
+            </Field>
+            <Field label="Menit"><Input type="number" value={Number(r.checkInDeadlineMinute ?? 59)} onChange={(e) => setR('checkInDeadlineMinute', Number(e.target.value))} /></Field>
+            <Field label="Jam pulang sekolah" hint="Jam selesai kegiatan sekolah (dipakai di laporan).">
+              <Input type="number" value={Number(r.checkOutAfterHour ?? 15)} onChange={(e) => setR('checkOutAfterHour', Number(e.target.value))} />
+            </Field>
             <Field label="Menit"><Input type="number" value={Number(r.checkOutAfterMinute ?? 30)} onChange={(e) => setR('checkOutAfterMinute', Number(e.target.value))} /></Field>
+            <Field label="Mulai dihitung Pulang Awal" hint={'Siswa yang absen pulang SEBELUM jam ini ditandai "Pulang Awal". Kosongkan = ikut jam pulang sekolah.'}>
+              <Input type="number" value={Number(r.earlyLeaveBeforeHour ?? r.checkOutAfterHour ?? 15)} onChange={(e) => setR('earlyLeaveBeforeHour', Number(e.target.value))} />
+            </Field>
+            <Field label="Menit"><Input type="number" value={Number(r.earlyLeaveBeforeMinute ?? r.checkOutAfterMinute ?? 30)} onChange={(e) => setR('earlyLeaveBeforeMinute', Number(e.target.value))} /></Field>
             <label className="flex items-center gap-2 pt-5 text-sm font-medium text-ink">
               <input type="checkbox" checked={r.duplicatePrevention !== false} onChange={(e) => setR('duplicatePrevention', e.target.checked)} className="h-4 w-4 accent-teal-600" />
               Cegah absen ganda
             </label>
           </div>
           <p className="mt-2 text-xs leading-relaxed text-muted">
-            Siswa yang absen pulang <b>sebelum jam pulang sekolah</b> otomatis ditandai <b>"Pulang Awal"</b> di riwayat absensi (mis. izin lebih awal).
+            Contoh: batas terlambat <b>07:00</b>, batas akhir absen datang <b>12:00</b> → siswa yang datang 07:30 ditandai <b>Terlambat</b>, siswa yang mencoba absen datang setelah 12:00 ditolak (perlu koreksi manual petugas).
+            Siswa yang absen pulang <b>sebelum jam "Mulai dihitung Pulang Awal"</b> otomatis ditandai <b>"Pulang Awal"</b> di riwayat absensi.
           </p>
           <div className="mt-4 rounded-2xl border border-line/70 bg-slate-50/60 p-3 dark:bg-slate-900/40">
             <p className="mb-2 text-sm font-semibold text-ink">📍 Titik Absensi (GPS)</p>

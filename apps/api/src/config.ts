@@ -30,6 +30,9 @@ export const config = {
   lateAfterMinute: num(process.env.LATE_AFTER_MINUTE, 0),
   checkOutAfterHour: num(process.env.CHECK_OUT_AFTER_HOUR, 15),
   checkOutAfterMinute: num(process.env.CHECK_OUT_AFTER_MINUTE, 30),
+  // Batas akhir absen datang — 23:59 = tidak dibatasi (siswa bisa absen datang kapan saja, tetap ditandai Terlambat)
+  checkInDeadlineHour: num(process.env.CHECK_IN_DEADLINE_HOUR, 23),
+  checkInDeadlineMinute: num(process.env.CHECK_IN_DEADLINE_MINUTE, 59),
   locationEnabled: process.env.LOCATION_ENABLED === 'true',
   locationRadiusMeters: num(process.env.LOCATION_RADIUS_METERS, 100),
   schoolLatitude: num(process.env.SCHOOL_LATITUDE, -6.2088),
