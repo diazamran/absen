@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, UserRound } from 'lucide-react';
+import { ArrowLeft, UserRound, CheckCircle2, Clock3, FileQuestion, UserX } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
-import { Card, Badge, Button, BottomSheet, Segmented, EmptyState } from '../../lib/ui';
+import { Card, Badge, Button, BottomSheet, Segmented, EmptyState, StatCard } from '../../lib/ui';
 import { STATUS_LABELS, STATUS_COLORS, timeLabel, todayJakartaKey } from '../../lib/format';
 
 interface StudentRow {
@@ -45,6 +45,17 @@ export default function ClassAttendance() {
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menyimpan.'),
   });
 
+  const stats = useMemo(() => {
+    const list = klass ?? [];
+    const excusedSet = new Set(['EXCUSED', 'SICK', 'OFFICIAL_DUTY', 'DISPENSATION', 'LEAVE']);
+    return {
+      present: list.filter((s) => s.status === 'PRESENT').length,
+      late: list.filter((s) => s.status === 'LATE').length,
+      excused: list.filter((s) => excusedSet.has(s.status)).length,
+      absent: list.filter((s) => s.status === 'ABSENT').length,
+    };
+  }, [klass]);
+
   const filtered = klass?.filter((s) => (tab === 'present' ? s.status !== 'ABSENT' : tab === 'absent' ? s.status === 'ABSENT' : true));
 
   return (
@@ -56,6 +67,16 @@ export default function ClassAttendance() {
           <p className="text-sm text-muted">Validasi kehadiran · {date}</p>
         </div>
       </div>
+
+      {/* Ringkasan statistik kelas */}
+      {!isLoading && klass && (
+        <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard label="Hadir" value={stats.present} icon={CheckCircle2} color="#22c55e" />
+          <StatCard label="Terlambat" value={stats.late} icon={Clock3} color="#f59e0b" />
+          <StatCard label="Izin / Sakit" value={stats.excused} icon={FileQuestion} color="#3b82f6" />
+          <StatCard label="Belum" value={stats.absent} icon={UserX} color="#64748b" />
+        </div>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <Segmented
