@@ -20,8 +20,10 @@ export default function QrScan() {
   const streamRef = useRef<MediaStream | null>(null);
   const busyRef = useRef(false);
 
+  const isStudent = user?.roleKey === 'STUDENT';
   const [type, setType] = useState<Type>('CHECK_IN');
-  const [mode, setMode] = useState<Mode>('scan');
+  // Siswa hanya melihat QR miliknya sendiri (bukan memindai QR)
+  const [mode, setMode] = useState<Mode>(isStudent ? 'show' : 'scan');
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [myQr, setMyQr] = useState('');
@@ -106,14 +108,13 @@ export default function QrScan() {
       </div>
 
       <div className="flex flex-col items-center gap-3 px-4 pb-3">
-        <Segmented
-          value={mode}
-          onChange={setMode}
-          options={[
-            { value: 'scan', label: 'Pindai QR' },
-            ...(user?.roleKey === 'STUDENT' ? [{ value: 'show' as Mode, label: 'QR Saya' }] : []),
-          ]}
-        />
+        {!isStudent && (
+          <Segmented
+            value={mode}
+            onChange={setMode}
+            options={[{ value: 'scan', label: 'Pindai QR' }]}
+          />
+        )}
         <Segmented
           value={type}
           onChange={setType}

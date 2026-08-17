@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  FilePlus2, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, XCircle, CalendarDays, MapPin, ShieldCheck, ScanFace,
+  FilePlus2, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, XCircle, CalendarDays, MapPin, ShieldCheck, ScanFace, GraduationCap,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -18,6 +18,7 @@ interface HomeData {
   } | null;
   schedules: { id: string; subject: string; className: string; classId: string; startTime: string; endTime: string; room: string | null }[];
   myClass?: { id: string; name: string; studentCount: number } | null;
+  student?: { id: string; nis: string; className: string | null } | null;
   attendanceRules?: { lateAfterHour: number; lateAfterMinute: number };
 }
 
@@ -39,8 +40,7 @@ export default function TeacherHome() {
     ? [
         { label: 'Registrasi Wajah', icon: <ScanFace className="h-6 w-6" />, to: '/app/face-me' },
         { label: 'Absen Wajah', icon: <Camera className="h-6 w-6" />, to: '/app/absent/face' },
-        { label: 'Scan QR', icon: <ScanLine className="h-6 w-6" />, to: '/app/absent/qr' },
-        { label: 'Kartu / NFC', icon: <ClipboardList className="h-6 w-6" />, to: '/app/absent/card' },
+        { label: 'QR Saya', icon: <ScanLine className="h-6 w-6" />, to: '/app/absent/qr' },
         { label: 'Ajukan Izin', icon: <FilePlus2 className="h-6 w-6" />, to: '/app/leave/mine' },
         { label: 'Riwayat', icon: <History className="h-6 w-6" />, to: '/app/history' },
       ]
@@ -84,6 +84,12 @@ export default function TeacherHome() {
         <p className="text-sm font-medium opacity-90">{greeting()},</p>
         <h1 className="text-2xl font-extrabold">{user?.fullName?.split(' ').slice(0, 2).join(' ')}</h1>
         <p className="mt-1 text-sm opacity-80">{data.date}</p>
+        {isStudent && data.student?.className && (
+          <div className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-white/15 px-4 py-2 backdrop-blur">
+            <GraduationCap className="h-4 w-4" />
+            <span className="font-bold">{data.student.className}</span>
+          </div>
+        )}
         {data.myClass && (
           <div className="mt-4 flex items-center justify-between rounded-2xl bg-white/15 px-4 py-3 backdrop-blur">
             <div>

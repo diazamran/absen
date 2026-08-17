@@ -37,15 +37,16 @@ function roleMenu(role?: string): NavItem[] {
     items.push({ to: '/app/face-me', label: 'Registrasi Wajah', icon: <ScanFace className="h-5 w-5" /> });
   }
   items.push({ to: '/app/history', label: 'Riwayat', icon: <History className="h-5 w-5" /> });
-  // Petugas Piket: menu izin hanya untuk persetujuan, bukan pengajuan
-  if (role !== 'PIKET') {
-    items.push({ to: '/app/leave', label: 'Ajukan Izin', icon: <FilePlus2 className="h-5 w-5" /> });
-  }
   if (role === 'PIKET') {
+    // Petugas Piket: menu izin hanya untuk persetujuan, bukan pengajuan
     items.push({ to: '/app/gate', label: 'Scan Gerbang', icon: <ScanLine className="h-5 w-5" /> });
     items.push({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
     items.push({ to: '/app/reports', label: 'Laporan & Cetak', icon: <BarChart3 className="h-5 w-5" /> });
   } else {
+    // Role lain (siswa/guru/staff): halaman pengajuan sendiri, bukan daftar persetujuan
+    if (role !== 'PARENT') {
+      items.push({ to: '/app/leave/mine', label: 'Ajukan Izin', icon: <FilePlus2 className="h-5 w-5" /> });
+    }
     items.push({ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-5 w-5" /> });
   }
   items.push({ to: '/app/notifications', label: 'Notifikasi', icon: <Bell className="h-5 w-5" /> });
@@ -86,7 +87,7 @@ const BOTTOM_NAV: Record<string, NavItem[]> = {
     { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
     { to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> },
     { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
-    { to: '/app/leave', label: 'Izin', icon: <FilePlus2 className="h-6 w-6" /> },
+    { to: '/app/leave/mine', label: 'Izin', icon: <FilePlus2 className="h-6 w-6" /> },
     { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
   ],
   PIKET: [
@@ -100,7 +101,7 @@ const BOTTOM_NAV: Record<string, NavItem[]> = {
     { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
     { to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> },
     { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
-    { to: '/app/leave', label: 'Izin', icon: <FilePlus2 className="h-6 w-6" /> },
+    { to: '/app/leave/mine', label: 'Izin', icon: <FilePlus2 className="h-6 w-6" /> },
     { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
   ],
   PARENT: [

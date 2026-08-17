@@ -265,6 +265,7 @@ function StudentEdit({ student, classes, onClose }: { student: StudentRow; class
     parentName: parent?.name || '',
     parentPhone: parent?.phone || '',
     cardUid: '',
+    password: '',
   });
 
   const mutation = useMutation({
@@ -282,6 +283,7 @@ function StudentEdit({ student, classes, onClose }: { student: StudentRow; class
         body.parentPhone = form.parentPhone;
       }
       if (form.cardUid.trim()) body.cardUid = form.cardUid.trim();
+      if (form.password.trim()) body.password = form.password.trim();
       return api(`/students/${student.id}`, { method: 'PUT', body });
     },
     onSuccess: () => {
@@ -313,6 +315,7 @@ function StudentEdit({ student, classes, onClose }: { student: StudentRow; class
         <Field label="Nama Orang Tua"><Input value={form.parentName} onChange={(e) => setForm({ ...form, parentName: e.target.value })} placeholder="Opsional" /></Field>
         <Field label="No WhatsApp Orang Tua"><Input value={form.parentPhone} onChange={(e) => setForm({ ...form, parentPhone: e.target.value })} placeholder="0812…" /></Field>
         <Field label="UID Kartu (kosongkan jika tidak diubah)" hint="UID disimpan terenkripsi, tidak bisa ditampilkan kembali."><Input value={form.cardUid} onChange={(e) => setForm({ ...form, cardUid: e.target.value })} placeholder="04:A2:3B:…" /></Field>
+        <Field label="Password Baru" hint="Kosongkan jika tidak diubah (default: smkn1kras)"><Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="smkn1kras" autoComplete="off" /></Field>
         <Field label="Status">
           <Select value={form.isActive ? 'true' : 'false'} onChange={(e) => setForm({ ...form, isActive: e.target.value === 'true' })}>
             <option value="true">Aktif</option>

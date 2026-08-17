@@ -333,6 +333,9 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 
 ## Log Perubahan
 
+- **Menu siswa disederhanakan** — siswa kini hanya melihat metode absen yang relevan: **Scan QR dihapus** (diganti **QR Saya** — QR pribadi untuk ditunjukkan ke petugas gerbang), **Kartu/NFC dihapus** untuk siswa. Beranda siswa menampilkan **nama + kelas** di banner atas.
+- **Perbaikan menu "Ajukan Izin" untuk siswa** — sebelumnya menu mengarah ke halaman admin (persetujuan) yang ditolak (403). Kini siswa/guru/staff diarahkan ke **pengajuan milik sendiri** (`/app/leave/mine`); menu persetujuan hanya untuk admin/wali kelas/petugas piket.
+- **Form Tambah/Edit Siswa** — kolom **Password Baru** di form Edit (kosongkan = tidak diubah, default `smkn1kras`); form Tambah sudah punya kolom Password Awal.
 - **Perbaikan unduhan APK di website** — tombol "Unduh APK" sebelumnya mengunduh file rusak (halaman HTML 923 byte, bukan APK) karena file APK asli tidak ada di server dan nginx SPA fallback mengembalikan halaman dengan status 200. Banner kini hanya muncul jika file yang diunduh benar-benar APK (cek tipe & ukuran). Ditambah **workflow GitHub Actions "Build APK WebView"** untuk membangun APK asli otomatis (tanpa Java/SDK di komputer) lalu meng-commit-nya ke `apps/web/public/apk/` — cara pakai: GitHub → Actions → Run workflow → `bash update.sh` di VPS.
 - **Logo baru** — ikon aplikasi didesain ulang terinspirasi emblem SMKN 1 Kras (perisai biru, bingkai emas, aksen magenta, bintang, tanda centang absen, buku terbuka). Berlaku untuk PWA (`apps/web/public/icons/`), favicon, dan semua ikon Android (TWA + WebView). Sumber SVG + script ada di `deploy/icon/` (regenerate: `cd deploy/icon && npm install && npm run render`).
 - **Perbaikan halaman Riwayat** — error `Cannot read properties of undefined (reading 'slice')` saat guru/staff membuka Riwayat Absensi (data laporan bulanan tidak punya `dayKey`). Kini aman dengan fallback ke tanggal.

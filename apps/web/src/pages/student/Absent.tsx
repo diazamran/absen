@@ -16,6 +16,14 @@ export default function Absent() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isStaff = user?.roleKey !== 'STUDENT' && user?.roleKey !== 'PARENT';
+  const isStudent = user?.roleKey === 'STUDENT';
+
+  // Siswa: tanpa Kartu/NFC, dan QR hanya untuk ditunjukkan ke gerbang (bukan memindai)
+  const methods = isStudent
+    ? METHODS.filter((m) => m.key !== 'card').map((m) =>
+        m.key === 'qr' ? { ...m, label: 'QR Saya', desc: 'QR pribadi untuk absen di gerbang' } : m,
+      )
+    : METHODS;
 
   // Status registrasi wajah (khusus siswa)
   const { data: faceStatus } = useQuery({
@@ -77,7 +85,7 @@ export default function Absent() {
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        {METHODS.map((m) => (
+        {methods.map((m) => (
           <button key={m.key} onClick={() => m.to !== '/app/absent' && navigate(m.to)} disabled={m.key === 'manual' && !isStaff}>
             <Card className={`h-full text-left transition-transform active:scale-[.98] ${m.key === 'manual' && !isStaff ? 'opacity-50' : ''}`}>
               <div className={`mb-3 inline-flex rounded-2xl bg-gradient-to-br ${m.color} p-3 text-white`}>{m.icon}</div>
@@ -88,9 +96,9 @@ export default function Absent() {
         ))}
       </div>
 
-      {user?.roleKey === 'STUDENT' && (
+      {isStudent && (
         <Card className="border-amber-200 bg-amber-50/60 text-sm text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
-          Absensi manual hanya dapat dilakukan oleh guru atau petugas sekolah. Gunakan Wajah, QR, atau Kartu.
+          Absensi manual hanya dapat dilakukan oleh guru atau petugas sekolah. Gunakan Wajah atau tunjukkan QR Saya ke petugas gerbang.
         </Card>
       )}
     </div>
