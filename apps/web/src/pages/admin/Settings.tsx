@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Palette, Building2, Clock3, Bell, Save, Check } from 'lucide-react';
+import { Palette, Building2, Clock3, Bell, Save, Check, Upload, Loader2, X } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
+import { compressImageFile } from '../../lib/image';
 import { useTheme } from '../../lib/theme';
 import { useToast } from '../../lib/toast';
 import { Card, Button, Input, Field } from '../../lib/ui';
@@ -22,6 +23,8 @@ export default function Settings() {
   const [branding, setBranding] = useState<Record<string, unknown> | null>(null);
   const [rules, setRules] = useState<Record<string, unknown> | null>(null);
   const [school, setSchool] = useState<Record<string, unknown> | null>(null);
+  const logoRef = useRef<HTMLInputElement>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const b = (branding as Record<string, unknown> | null) ?? ((settings?.branding as Record<string, unknown>) || {});
   const r = (rules as Record<string, unknown> | null) ?? ((settings?.attendanceRules as Record<string, unknown>) || {});
@@ -31,6 +34,29 @@ export default function Settings() {
   const setB = (k: string, v: unknown) => setBranding({ ...b, [k]: v });
   const setR = (k: string, v: unknown) => setRules({ ...r, [k]: v });
   const setS = (k: string, v: unknown) => setSchool({ ...s, [k]: v });
+
+  const uploadLogo = async (file: File) => {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast('error', 'Format logo harus JPG, PNG, atau WEBP.');
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      // Logo kecil tapi tajam: maks 512px, kualitas 0.88
+      const uploadFile = await compressImageFile(file, 512, 0.88);
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+      const res = await api<{ success: boolean; data: { url: string } }>('/settings/logo', { method: 'POST', formData });
+      setB('logoUrl', res.data.url);
+      toast('success', 'Logo sekolah berhasil diunggah.');
+      qc.invalidateQueries({ queryKey: ['settings'] });
+      localStorage.removeItem('presensiku_branding');
+    } catch (e) {
+      toast('error', e instanceof ApiError ? e.message : 'Gagal mengunggah logo.');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -59,6 +85,42 @@ export default function Settings() {
         <Card>
           <h3 className="mb-3 flex items-center gap-2 font-bold text-ink"><Building2 className="h-4 w-4" /> Identitas Aplikasi</h3>
           <div className="space-y-3">
+            <Field
+              label="Logo Sekolah"
+              hint="JPG/PNG/WEBP, maks 5 MB. Dipakai di kop kartu QR, halaman login, dan aplikasi."
+            >
+              <div className="flex items-center gap-4">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-line bg-slate-50 p-1 dark:bg-slate-900">
+                  {b.logoUrl ? (
+                    <img src={String(b.logoUrl)} alt="Logo sekolah" className="h-full w-full object-contain" />
+                  ) : (
+                    <Building2 className="h-8 w-8 text-muted" />
+                  )}
+                </div>
+                <div className="flex flex-col items-start gap-2">
+                  <input
+                    ref={logoRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) => e.target.files?.[0] && uploadLogo(e.target.files[0])}
+                  />
+                  <Button type="button" variant="outline" onClick={() => logoRef.current?.click()} disabled={uploadingLogo} className="px-3 py-2">
+                    {uploadingLogo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    {uploadingLogo ? 'Mengunggah…' : 'Ubah Logo'}
+                  </Button>
+                  {b.logoUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => setB('logoUrl', null)}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-muted transition-colors hover:text-red-500"
+                    >
+                      <X className="h-3.5 w-3.5" /> Hapus logo
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </Field>
             <Field label="Nama Aplikasi"><Input value={String(b.appName || '')} onChange={(e) => setB('appName', e.target.value)} /></Field>
             <Field label="Nama Sekolah"><Input value={String(b.schoolName || '')} onChange={(e) => setB('schoolName', e.target.value)} /></Field>
             <Field label="Tagline"><Input value={String(b.tagline || '')} onChange={(e) => setB('tagline', e.target.value)} /></Field>
