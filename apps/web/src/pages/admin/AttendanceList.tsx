@@ -17,6 +17,7 @@ export default function AttendanceList() {
   const qc = useQueryClient();
   const [classId, setClassId] = useState('');
   const [status, setStatus] = useState('');
+  const [q, setQ] = useState('');
   const [manualOpen, setManualOpen] = useState(false);
   const [editing, setEditing] = useState<AttRow | null>(null);
 
@@ -69,7 +70,16 @@ export default function AttendanceList() {
         subtitle="Data kehadiran realtime — klik ikon pensil untuk koreksi status/jam siswa"
         action={<Button onClick={() => setManualOpen(true)}><ClipboardEdit className="h-4 w-4" /> Absen Manual</Button>}
       />
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="relative min-w-0 flex-1 sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Cari siswa / NISN…"
+            className="pl-9"
+          />
+        </div>
         <div className="flex items-center gap-2 text-xs font-semibold text-muted"><Filter className="h-4 w-4" /> Filter:</div>
         <Select value={classId} onChange={(e) => setClassId(e.target.value)} className="sm:w-44">
           <option value="">Semua kelas</option>
@@ -82,7 +92,13 @@ export default function AttendanceList() {
       </div>
 
       <div className="space-y-2">
-        {rows?.map((r) => (
+        {(rows || [])
+          .filter((r) => {
+            const term = q.trim().toLowerCase();
+            if (!term) return true;
+            return r.name.toLowerCase().includes(term) || (r.nis || '').toLowerCase().includes(term);
+          })
+          .map((r) => (
           <Card key={r.id} className="flex items-center gap-3 p-3.5">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-soft text-primary">
               <ScanLine className="h-5 w-5" />
@@ -113,7 +129,12 @@ export default function AttendanceList() {
             </button>
           </Card>
         ))}
-        {rows?.length === 0 && <EmptyState icon={Search} title="Belum ada data absensi" description="Data akan muncul saat siswa mulai absen." />}
+        {rows && rows.length === 0 && (
+          <EmptyState icon={Search} title="Belum ada data absensi" description="Data akan muncul saat siswa mulai absen." />
+        )}
+        {rows && rows.length > 0 && q.trim() && (rows || []).filter((r) => r.name.toLowerCase().includes(q.trim().toLowerCase()) || (r.nis || '').includes(q.trim())).length === 0 && (
+          <EmptyState icon={Search} title="Siswa tidak ditemukan" description={`Tidak ada siswa dengan nama/NISN "${q.trim()}" pada daftar hari ini. Coba klik Absen Manual untuk mencari semua siswa.`} />
+        )}
       </div>
 
       {manualOpen && <ManualForm onClose={() => setManualOpen(false)} />}
@@ -200,7 +221,17 @@ function ManualForm({ onClose }: { onClose: () => void }) {
   return (
     <Modal open onClose={onClose} title="Absensi Manual" wide>
       <div className="space-y-3">
-        <Field label="Cari siswa"><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="NISN / nama…" /></Field>
+        <Field label="Cari siswa" hint={students?.length ? `${students.length} siswa ditemukan — tekan Enter untuk pilih yang pertama` : undefined}>
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter → pilih siswa pertama langsung (percepat absensi piket)
+              if (e.key === 'Enter' && students?.length) setForm({ ...form, studentId: students[0].id });
+            }}
+            placeholder="NISN / nama…"
+          />
+        </Field>
         <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-2xl border border-line p-2">
           {students?.map((s) => (
             <button
