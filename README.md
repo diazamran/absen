@@ -331,6 +331,7 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 
 ---
 
+- **Notifikasi absen lengkap + scan pulang lebih lancar** 📸 — popup hasil absen (wajah & QR) kini menampilkan **nama lengkap, kelas, dan jam absen** (judul membedakan "ABSEN DATANG BERHASIL" / "ABSEN PULANG BERHASIL", plus status Terlambat/Pulang Awal/Tepat waktu). Saat sudah absen, popup kuning **"SUDAH ABSEN DATANG/PULANG"** menampilkan nama, kelas, dan jam absen dari server. Deteksi wajah **pulang** diperbaiki: liveness kini mencoba sampai 3 pasang frame (ambang lebih longgar), dan di mode otomatis kegagalan sementara **tidak lagi memunculkan popup yang menutupi kamera** — cukup petunjuk kecil di bawah kamera lalu scan berlanjut otomatis (popup hanya muncul untuk hasil sukses/sudah absen/wajah tak dikenali, atau saat tombol manual ditekan).
 ## Log Perubahan
 
 - **Ringkasan statistik di detail absensi kelas** 📊 — halaman detail absensi kelas (dibuka dari dashboard/beranda) kini menampilkan **kartu ringkasan di bagian atas**: **Hadir**, **Terlambat**, **Izin / Sakit**, dan **Belum** — terhitung otomatis sesuai tanggal yang dipilih dan ikut berubah saat filter tanggal diganti.

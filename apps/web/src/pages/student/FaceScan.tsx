@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, XCircle, Loader2, Camera, RefreshCw, Zap, ZapOff } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
+import { useAuth } from '../../lib/auth';
 import { startCamera, stopCamera, captureFrame } from '../../lib/camera';
 import { detectFaceDescriptor, framesHaveMotion, initFaceModels, isFaceModelReady } from '../../lib/face';
 import { feedbackSuccess, feedbackInfo, feedbackError } from '../../lib/feedback';
@@ -16,14 +17,17 @@ interface ScanResult {
   already?: boolean;
   message: string;
   fullName?: string;
+  className?: string;
   time?: string;
   status?: string;
   lateMinutes?: number;
+  earlyLeave?: boolean;
 }
 
 export default function FaceScan() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const runningRef = useRef(false);
@@ -36,6 +40,7 @@ export default function FaceScan() {
   const [scanning, setScanning] = useState(false);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
+  const [hint, setHint] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -62,62 +67,86 @@ export default function FaceScan() {
     });
   }, []);
 
-  /** Satu siklus scan: liveness ringan → deteksi wajah → verifikasi di server. */
-  const runScan = useCallback(async () => {
-    const video = videoRef.current;
-    if (!video || runningRef.current || doneRef.current) return;
-    runningRef.current = true;
-    setScanning(true);
-    setResult(null);
-    if (!isFaceModelReady()) setModelsLoading(true);
-    try {
-      // Liveness ringan: 2 frame berjarak sebentar harus ada sedikit pergerakan
-      const frame1 = captureFrame(video);
-      await new Promise((r) => setTimeout(r, 350));
-      const frame2 = captureFrame(video);
-      if (!frame1 || !frame2) {
-        toast('warning', 'Wajah belum terlihat jelas. Pastikan pencahayaan cukup.');
-        return;
-      }
-      const motion = await framesHaveMotion(frame1, frame2);
-      if (!motion) {
-        setResult({ ok: false, message: 'Deteksi gerakan gagal. Gerakkan kepala sedikit lalu coba lagi.' });
-        return;
-      }
+  /**
+   * Satu siklus scan: liveness ringan (dengan retry) → deteksi wajah → verifikasi di server.
+   * Di mode otomatis, kegagalan sementara (gerakan/wajah belum terlihat) TIDAK memunculkan
+   * popup yang menutupi kamera — cukup petunjuk kecil, lalu scan lagi otomatis.
+   */
+  const runScan = useCallback(
+    async (manual = false) => {
+      const video = videoRef.current;
+      if (!video || runningRef.current || doneRef.current) return;
+      runningRef.current = true;
+      setScanning(true);
+      setResult(null);
+      setHint('');
+      if (!isFaceModelReady()) setModelsLoading(true);
+      try {
+        // Liveness ringan: coba sampai 3 pasang frame; satu saja ada pergerakan → lolos
+        let motion = false;
+        for (let attempt = 0; attempt < 3 && !motion; attempt++) {
+          const frame1 = captureFrame(video);
+          await new Promise((r) => setTimeout(r, 300));
+          const frame2 = captureFrame(video);
+          if (!frame1 || !frame2) continue;
+          motion = await framesHaveMotion(frame1, frame2, 0.01);
+        }
+        if (!motion) {
+          if (manual) {
+            setResult({ ok: false, message: 'Deteksi gerakan gagal. Gerakkan kepala sedikit lalu coba lagi.' });
+          } else {
+            setHint('Belum terdeteksi gerakan — gerakkan kepala sedikit');
+          }
+          return;
+        }
 
-      // Deteksi wajah & ekstrak descriptor di HP (bukan kirim foto ke server)
-      const descriptor = await detectFaceDescriptor(video);
-      if (!descriptor) {
-        setResult({ ok: false, message: 'Wajah tidak terdeteksi. Pastikan wajah di tengah & pencahayaan cukup.' });
-        return;
-      }
+        // Deteksi wajah & ekstrak descriptor di HP (bukan kirim foto ke server)
+        const descriptor = await detectFaceDescriptor(video);
+        if (!descriptor) {
+          if (manual) {
+            setResult({ ok: false, message: 'Wajah tidak terdeteksi. Pastikan wajah di tengah & pencahayaan cukup.' });
+          } else {
+            setHint('Wajah belum terlihat — posisikan wajah di dalam bingkai');
+          }
+          return;
+        }
 
-      const res = await api<{ success: boolean; message: string; data: { fullName: string; time: string; status: string; lateMinutes: number } }>('/attendance/face', {
-        method: 'POST',
-        body: { type, descriptor: Array.from(descriptor), liveness: true, deviceId: 'web' },
-      });
-      setResult({ ok: true, message: 'ABSEN BERHASIL', ...res.data });
-      doneRef.current = true;
-      feedbackSuccess();
-    } catch (e) {
-      if (e instanceof ApiError && e.code === 'ALREADY_ATTENDANCE') {
-        setResult({ ok: false, already: true, message: 'Kamu sudah absen hari ini' });
+        const res = await api<{
+          success: boolean;
+          message: string;
+          data: { fullName: string; className: string; time: string; status: string; lateMinutes: number; earlyLeave: boolean };
+        }>('/attendance/face', {
+          method: 'POST',
+          body: { type, descriptor: Array.from(descriptor), liveness: true, deviceId: 'web' },
+        });
+        setResult({ ok: true, message: 'ABSEN BERHASIL', ...res.data });
+        setHint('');
         doneRef.current = true;
-        feedbackInfo();
-      } else if (e instanceof ApiError && e.code === 'FACE_NOT_RECOGNIZED') {
-        setResult({ ok: false, message: 'Wajah tidak dikenali. Coba lagi.' });
-        feedbackInfo();
-      } else {
-        setResult({ ok: false, message: e instanceof ApiError ? e.message : 'Wajah tidak dikenali.' });
-        feedbackError();
+        feedbackSuccess();
+      } catch (e) {
+        if (e instanceof ApiError && e.code === 'ALREADY_ATTENDANCE') {
+          setResult({ ok: false, already: true, message: e.message });
+          doneRef.current = true;
+          feedbackInfo();
+        } else if (e instanceof ApiError && e.code === 'FACE_NOT_RECOGNIZED') {
+          setResult({ ok: false, message: 'Wajah tidak dikenali. Coba lagi.' });
+          feedbackInfo();
+        } else {
+          setResult({ ok: false, message: e instanceof ApiError ? e.message : 'Wajah tidak dikenali.' });
+          feedbackError();
+        }
+      } finally {
+        runningRef.current = false;
+        setScanning(false);
+        setModelsLoading(false);
+        // Popup hasil sukses / sudah absen hanya muncul sebentar, lalu scan bisa dipakai lagi
+        if (doneRef.current) {
+          setTimeout(() => setResult(null), 3500);
+        }
       }
-    } finally {
-      runningRef.current = false;
-      setScanning(false);
-      setModelsLoading(false);
-      setTimeout(() => setResult(null), 3500);
-    }
-  }, [type, toast]);
+    },
+    [type, toast],
+  );
 
   // Mode otomatis: scan berulang tanpa sentuh layar, berhenti setelah berhasil
   useEffect(() => {
@@ -126,7 +155,7 @@ export default function FaceScan() {
     const loop = async () => {
       if (!alive || doneRef.current) return;
       if (!runningRef.current) await runScan();
-      setTimeout(loop, 1600);
+      setTimeout(loop, 1800);
     };
     void loop();
     return () => {
@@ -149,9 +178,11 @@ export default function FaceScan() {
         <Segmented
           value={type}
           onChange={(t) => {
-            // Ganti ke pulang (atau datang) → izinkan scan lagi
+            // Ganti ke pulang (atau datang) → izinkan scan lagi & tutup popup lama
             doneRef.current = false;
             setType(t);
+            setResult(null);
+            setHint('');
           }}
           options={[
             { value: 'CHECK_IN', label: 'Absen Datang' },
@@ -174,13 +205,17 @@ export default function FaceScan() {
           </div>
         </div>
         <p className="absolute inset-x-0 bottom-4 px-4 text-center text-sm text-white/90">
-          {scanning
-            ? 'Memverifikasi wajah…'
-            : modelsLoading
-              ? 'Menyiapkan model wajah… (±5 MB, sekali saja)'
-              : auto
-                ? 'Otomatis: tatap kamera — absen masuk tercatat tanpa sentuh layar'
-                : 'Posisikan wajah di dalam area, lalu tekan tombol'}
+          {hint ? (
+            <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-amber-300">{hint}</span>
+          ) : scanning ? (
+            'Memverifikasi wajah…'
+          ) : modelsLoading ? (
+            'Menyiapkan model wajah… (±5 MB, sekali saja)'
+          ) : auto ? (
+            'Otomatis: tatap kamera — absen tercatat tanpa sentuh layar'
+          ) : (
+            'Posisikan wajah di dalam area, lalu tekan tombol'
+          )}
         </p>
       </div>
 
@@ -195,7 +230,7 @@ export default function FaceScan() {
           {auto ? 'Otomatis' : 'Manual'}
         </button>
         <button
-          onClick={() => void runScan()}
+          onClick={() => void runScan(true)}
           disabled={!ready || scanning || modelsLoading || doneRef.current}
           className="relative flex h-20 w-20 items-center justify-center rounded-full border-4 border-primary text-white transition-transform active:scale-95 disabled:opacity-50"
         >
@@ -211,20 +246,33 @@ export default function FaceScan() {
               <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 animate-pulse-ring dark:bg-emerald-500/15 dark:text-emerald-300">
                 <CheckCircle2 className="h-9 w-9" />
               </div>
-              <p className="text-xl font-extrabold text-primary">✓ ABSEN BERHASIL</p>
+              <p className="text-xl font-extrabold text-primary">
+                ✓ {type === 'CHECK_IN' ? 'ABSEN DATANG BERHASIL' : 'ABSEN PULANG BERHASIL'}
+              </p>
               <p className="mt-1 text-lg font-bold text-ink">{result.fullName}</p>
+              {result.className && <p className="text-sm font-medium text-muted">Kelas {result.className}</p>}
               <p className="font-mono text-4xl font-extrabold text-ink">{result.time}</p>
               <div className="mt-2 flex justify-center">
                 <Badge status={result.status || 'PRESENT'} label={STATUS_LABELS[result.status || 'PRESENT']} />
               </div>
-              {result.lateMinutes ? <p className="mt-1 text-xs text-amber-500">Terlambat {result.lateMinutes} menit</p> : <p className="mt-1 text-xs text-emerald-600">Tepat waktu</p>}
+              {result.lateMinutes ? (
+                <p className="mt-1 text-xs text-amber-500">Terlambat {result.lateMinutes} menit</p>
+              ) : result.earlyLeave ? (
+                <p className="mt-1 text-xs text-amber-500">Pulang Awal</p>
+              ) : (
+                <p className="mt-1 text-xs text-emerald-600">Tepat waktu</p>
+              )}
             </div>
           ) : result.already ? (
             <div className="mx-4 w-full max-w-sm rounded-3xl border border-amber-200 bg-amber-50 p-6 text-center animate-pop dark:border-amber-500/30 dark:bg-amber-500/10">
               <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300">
                 <CheckCircle2 className="h-9 w-9" />
               </div>
-              <p className="text-xl font-extrabold text-amber-600 dark:text-amber-300">SUDAH ABSEN</p>
+              <p className="text-xl font-extrabold text-amber-600 dark:text-amber-300">
+                {type === 'CHECK_IN' ? 'SUDAH ABSEN DATANG' : 'SUDAH ABSEN PULANG'}
+              </p>
+              <p className="mt-1 text-lg font-bold text-ink">{user?.fullName}</p>
+              {user?.student?.className && <p className="text-sm font-medium text-muted">Kelas {user.student.className}</p>}
               <p className="mt-1 text-sm text-muted">{result.message}</p>
             </div>
           ) : (

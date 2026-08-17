@@ -27,7 +27,7 @@ export default function QrScan() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [myQr, setMyQr] = useState('');
-  const [result, setResult] = useState<{ ok: boolean; message: string; fullName?: string; time?: string; status?: string } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; already?: boolean; message: string; fullName?: string; className?: string; time?: string; status?: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,13 +73,17 @@ export default function QrScan() {
           if (token) {
             busyRef.current = true;
             try {
-              const res = await api<{ success: boolean; message: string; data: { fullName: string; time: string; status: string } }>('/attendance/qr', {
+              const res = await api<{ success: boolean; message: string; data: { fullName: string; className: string; time: string; status: string } }>('/attendance/qr', {
                 method: 'POST',
                 body: { type, token, deviceId: 'web' },
               });
               setResult({ ok: true, message: res.message, ...res.data });
             } catch (e) {
-              setResult({ ok: false, message: e instanceof ApiError ? e.message : 'QR Code tidak valid.' });
+              if (e instanceof ApiError && e.code === 'ALREADY_ATTENDANCE') {
+                setResult({ ok: false, already: true, message: e.message });
+              } else {
+                setResult({ ok: false, message: e instanceof ApiError ? e.message : 'QR Code tidak valid.' });
+              }
             } finally {
               busyRef.current = false;
               setTimeout(() => setResult(null), 3500);
@@ -159,13 +163,17 @@ export default function QrScan() {
           <button
             onClick={async () => {
               try {
-                const res = await api<{ success: boolean; message: string; data: { fullName: string; time: string; status: string } }>('/attendance/qr', {
+                const res = await api<{ success: boolean; message: string; data: { fullName: string; className: string; time: string; status: string } }>('/attendance/qr', {
                   method: 'POST',
                   body: { type, token: (await api<{ success: boolean; data: { token: string } }>('/qr/me')).data.token },
                 });
                 setResult({ ok: true, message: res.message, ...res.data });
               } catch (e) {
-                setResult({ ok: false, message: e instanceof ApiError ? e.message : 'Gagal absen.' });
+                if (e instanceof ApiError && e.code === 'ALREADY_ATTENDANCE') {
+                  setResult({ ok: false, already: true, message: e.message });
+                } else {
+                  setResult({ ok: false, message: e instanceof ApiError ? e.message : 'Gagal absen.' });
+                }
               }
               setTimeout(() => setResult(null), 3500);
             }}
@@ -185,10 +193,23 @@ export default function QrScan() {
               </div>
               <p className="text-xl font-extrabold text-primary">✓ {result.message}</p>
               <p className="mt-1 text-lg font-bold text-ink">{result.fullName}</p>
+              {result.className && <p className="text-sm font-medium text-muted">Kelas {result.className}</p>}
               <p className="font-mono text-4xl font-extrabold text-ink">{result.time}</p>
               <div className="mt-2 flex justify-center">
                 <Badge status={result.status || 'PRESENT'} label={STATUS_LABELS[result.status || 'PRESENT']} />
               </div>
+            </div>
+          ) : result.already ? (
+            <div className="mx-4 w-full max-w-sm rounded-3xl border border-amber-200 bg-amber-50 p-6 text-center animate-pop dark:border-amber-500/30 dark:bg-amber-500/10">
+              <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300">
+                <CheckCircle2 className="h-9 w-9" />
+              </div>
+              <p className="text-xl font-extrabold text-amber-600 dark:text-amber-300">
+                {type === 'CHECK_IN' ? 'SUDAH ABSEN DATANG' : 'SUDAH ABSEN PULANG'}
+              </p>
+              <p className="mt-1 text-lg font-bold text-ink">{user?.fullName}</p>
+              {user?.student?.className && <p className="text-sm font-medium text-muted">Kelas {user.student.className}</p>}
+              <p className="mt-1 text-sm text-muted">{result.message}</p>
             </div>
           ) : (
             <div className="mx-4 w-full max-w-sm rounded-3xl bg-surface p-6 text-center animate-pop dark:bg-slate-800">
