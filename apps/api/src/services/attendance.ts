@@ -10,7 +10,7 @@
 import type { FastifyRequest } from 'fastify';
 import { prisma } from '../lib/prisma.js';
 import { ApiError } from '../utils/errors.js';
-import { dateKey, startOfLocalDay, localTime, localTimeToUtc } from '../lib/time.js';
+import { dateKey, startOfLocalDay, localTime, localTimeToUtc, localDateKeyOfStoredDate } from '../lib/time.js';
 import { faceService } from './face.js';
 import { verifyQrToken } from './qr.js';
 import { verifyCard } from './card.js';
@@ -18,7 +18,7 @@ import { getAttendanceRules } from './settings.js';
 import { emitAttendance, emitNotification } from '../realtime/emitter.js';
 import { sendNotification, notifyParentsOfStudent } from './notify.js';
 import { audit } from '../lib/audit.js';
-import type { AttendanceMethod, AttendanceStatus, AttendanceType } from '@prisma/client';
+import { Prisma, type AttendanceMethod, type AttendanceStatus, type AttendanceType } from '@prisma/client';
 
 export interface AttendanceProof {
   /** Descriptor wajah 128-d hasil deteksi di HP (face-api.js). */
@@ -306,7 +306,27 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
 }
 
 /**
- * Absensi manual oleh guru/admin — wajib audit, dengan konfirmasi status.
+ * Verifikasi scope pengelolaan absensi:
+ * - SUPER_ADMIN / ADMIN / PIKET: semua siswa (piket menjaga gerbang seluruh sekolah)
+ * - HOMEROOM_TEACHER (wali kelas): hanya siswa di kelas yang diwalikannya
+ */
+async function assertCanManageAttendance(request: FastifyRequest, studentClassId: string | null): Promise<void> {
+  const actor = await prisma.user.findUnique({ where: { id: request.user!.id }, include: { role: true, teacher: true } });
+  if (actor?.role.key !== 'HOMEROOM_TEACHER') return;
+  const myClass = actor.teacher
+    ? await prisma.class.findFirst({
+        where: { homeroomTeacherId: actor.teacher.id, isActive: true, academicYear: { isActive: true } },
+        select: { id: true },
+      })
+    : null;
+  if (!myClass || !studentClassId || studentClassId !== myClass.id) {
+    throw ApiError.forbidden('SCOPE_RESTRICTED', 'Anda hanya dapat mengelola absensi siswa di kelas Anda sendiri.');
+  }
+}
+
+/**
+ * Absensi manual oleh admin/piket/wali kelas — wajib audit, dengan konfirmasi status.
+ * Jika catatan sudah ada pada tanggal & tipe yang sama, catatan itu DIPERBARUI (ubah status/jam), bukan ditolak.
  */
 export async function manualAttendance(input: {
   actor: { id: string; request: FastifyRequest };
@@ -314,6 +334,8 @@ export async function manualAttendance(input: {
   status: AttendanceStatus;
   type: AttendanceType;
   dateKeyStr?: string;
+  checkIn?: string;
+  checkOut?: string;
   notes?: string;
   deviceId?: string;
 }): Promise<unknown> {
@@ -322,41 +344,55 @@ export async function manualAttendance(input: {
     include: { user: { include: { role: true } } },
   });
   if (!student || !student.user) throw ApiError.notFound('Siswa tidak ditemukan.');
+  await assertCanManageAttendance(input.actor.request, student.classId);
 
   const dateStr = input.dateKeyStr || dateKey();
   const dayStart = startOfLocalDay(dateStr);
+  const now = new Date();
+  const checkIn = input.checkIn ? localTimeToUtc(dateStr, input.checkIn) : null;
+  const checkOut = input.checkOut ? localTimeToUtc(dateStr, input.checkOut) : null;
 
   const existing = await prisma.attendance.findUnique({
     where: { userId_date_type: { userId: student.userId, date: dayStart, type: input.type } },
   });
-  if (existing) {
-    throw ApiError.conflict('ALREADY_ATTENDANCE', 'Siswa sudah memiliki catatan absensi pada tanggal tersebut.');
-  }
 
-  const now = new Date();
   let attendance;
-  try {
-    attendance = await prisma.attendance.create({
+  if (existing) {
+    // Catatan sudah ada → perbarui status/jam/catatan (koreksi absen siswa)
+    attendance = await prisma.attendance.update({
+      where: { id: existing.id },
       data: {
-        userId: student.userId,
-        studentId: student.id,
-        date: dayStart,
-        type: input.type,
-        checkIn: input.type === 'CHECK_IN' ? now : null,
-        checkOut: input.type === 'CHECK_OUT' ? now : null,
         status: input.status,
-        method: 'MANUAL',
+        ...(checkIn ? { checkIn } : {}),
+        ...(checkOut ? { checkOut } : {}),
+        ...(input.notes !== undefined ? { notes: input.notes } : {}),
         createdById: input.actor.id,
-        deviceId: input.deviceId,
-        notes: input.notes,
       },
     });
-  } catch (e) {
-    // Race kondisi duplikat → kembalikan pesan yang sama, bukan error 500
-    if ((e as { code?: string }).code === 'P2002') {
-      throw ApiError.conflict('ALREADY_ATTENDANCE', 'Siswa sudah memiliki catatan absensi pada tanggal tersebut.');
+  } else {
+    try {
+      attendance = await prisma.attendance.create({
+        data: {
+          userId: student.userId,
+          studentId: student.id,
+          date: dayStart,
+          type: input.type,
+          checkIn: input.type === 'CHECK_IN' ? checkIn ?? now : null,
+          checkOut: input.type === 'CHECK_OUT' ? checkOut ?? now : null,
+          status: input.status,
+          method: 'MANUAL',
+          createdById: input.actor.id,
+          deviceId: input.deviceId,
+          notes: input.notes,
+        },
+      });
+    } catch (e) {
+      // Race kondisi duplikat → kembalikan pesan yang sama, bukan error 500
+      if ((e as { code?: string }).code === 'P2002') {
+        throw ApiError.conflict('ALREADY_ATTENDANCE', 'Siswa sudah memiliki catatan absensi pada tanggal tersebut.');
+      }
+      throw e;
     }
-    throw e;
   }
 
   const className = student.classId ? (await prisma.class.findUnique({ where: { id: student.classId }, select: { name: true } }))?.name : null;
@@ -367,20 +403,78 @@ export async function manualAttendance(input: {
     fullName: student.user.fullName,
     nis: student.nis,
     className,
-    time: localTime(now),
-    status: input.status,
+    time: localTime(attendance.checkIn ?? attendance.checkOut ?? now),
+    status: attendance.status,
     method: 'MANUAL',
-    lateMinutes: 0,
+    lateMinutes: attendance.lateMinutes ?? 0,
   });
 
   await audit({
     userId: input.actor.id,
-    action: 'ATTENDANCE_MANUAL_CHANGED',
+    action: existing ? 'ATTENDANCE_MANUAL_UPDATED' : 'ATTENDANCE_MANUAL_CHANGED',
     entity: 'Attendance',
     entityId: attendance.id,
-    newValue: { studentId: student.id, status: input.status, type: input.type, notes: input.notes },
+    newValue: { studentId: student.id, status: input.status, type: input.type, checkIn: input.checkIn ?? null, checkOut: input.checkOut ?? null, notes: input.notes },
     request: input.actor.request,
   });
 
   return attendance;
+}
+
+/**
+ * Koreksi catatan absensi siswa yang sudah ada (status / jam datang / jam pulang / catatan).
+ * Hanya SUPER_ADMIN / ADMIN / PIKET / wali kelas (kelasnya sendiri) yang boleh.
+ */
+export async function updateAttendance(input: {
+  actor: { id: string; request: FastifyRequest };
+  attendanceId: string;
+  status?: AttendanceStatus;
+  checkIn?: string;
+  checkOut?: string;
+  notes?: string;
+}): Promise<unknown> {
+  const record = await prisma.attendance.findUnique({
+    where: { id: input.attendanceId },
+    include: { student: { include: { class: true } }, user: true },
+  });
+  if (!record) throw ApiError.notFound('Catatan absensi tidak ditemukan.');
+  await assertCanManageAttendance(input.actor.request, record.student?.classId ?? null);
+
+  const dateStr = localDateKeyOfStoredDate(record.date);
+  const data: Prisma.AttendanceUpdateInput = {};
+  if (input.status) data.status = input.status;
+  if (input.checkIn) data.checkIn = localTimeToUtc(dateStr, input.checkIn);
+  if (input.checkOut) data.checkOut = localTimeToUtc(dateStr, input.checkOut);
+  if (input.notes !== undefined) data.notes = input.notes;
+
+  const updated = await prisma.attendance.update({ where: { id: record.id }, data });
+
+  emitAttendance({
+    id: updated.id,
+    type: updated.type,
+    userId: updated.userId,
+    fullName: record.user?.fullName ?? '-',
+    nis: record.student?.nis ?? null,
+    className: record.student?.class?.name ?? null,
+    time: localTime(updated.checkIn ?? updated.checkOut ?? updated.date),
+    status: updated.status,
+    method: updated.method,
+    lateMinutes: updated.lateMinutes ?? 0,
+  });
+
+  await audit({
+    userId: input.actor.id,
+    action: 'ATTENDANCE_UPDATED',
+    entity: 'Attendance',
+    entityId: updated.id,
+    newValue: {
+      status: updated.status,
+      checkIn: updated.checkIn ? localTime(updated.checkIn) : null,
+      checkOut: updated.checkOut ? localTime(updated.checkOut) : null,
+      notes: updated.notes,
+    },
+    request: input.actor.request,
+  });
+
+  return updated;
 }

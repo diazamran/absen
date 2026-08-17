@@ -129,7 +129,7 @@ npm run dev
 
 **Guru / Staff / Wali Kelas** (login `guru` / `guru123`)
 - **Petugas Piket** adalah **role tersendiri** (terpisah dari Guru): admin memilih role **Petugas Piket** saat membuat/import akun (atau ubah role lewat Edit). Hanya Petugas Piket & admin yang bisa scan absen siswa di gerbang.
-- Login sebagai Petugas Piket → dashboard menampilkan kartu **"Kamu petugas piket hari ini"** → **Buka Gerbang** — kamera otomatis, scan wajah/QR/kartu untuk mencatat absen siswa di gerbang. Menu/bottom nav **Absen** membuka gerbang. Petugas Piket juga punya akses **Laporan & Cetak** (reports + export CSV) dan **Persetujuan Izin** (approve/tolak izin siswa) lewat drawer ☰.
+- Login sebagai Petugas Piket → dashboard menampilkan kartu **"Kamu petugas piket hari ini"** → **Buka Gerbang** — kamera otomatis, scan wajah/QR/kartu untuk mencatat absen siswa di gerbang. Petugas Piket juga punya menu **Absen Manual** (mencatat absen siswa secara manual) dan bisa **mengoreksi absen siswa** (ikon pensil di halaman Absensi: ubah status/jam datang/jam pulang). Menu/bottom nav **Absen** membuka gerbang. Petugas Piket juga punya akses **Laporan & Cetak** (reports + export CSV/PDF/Excel) dan **Persetujuan Izin** (approve/tolak izin siswa) lewat drawer ☰.
 - Guru/Staff/Wali Kelas absen **diri sendiri** lewat bottom nav **Absen** (wajah/QR/kartu) — tidak bisa scan siswa di gerbang.
 - **Kelas** → pilih kelas → validasi kehadiran (bottom sheet ubah status siswa).
 - **Jurnal Mengajar** & menu lain lewat drawer ☰ (kiri atas).
@@ -147,7 +147,7 @@ npm run dev
 - **Siswa** login sebagai siswa: beranda menampilkan menu **Registrasi Wajah** langsung (juga di halaman **Absen** dan drawer ☰) — daftar wajah sendiri → menunggu persetujuan admin.
 - **Pengaturan → Aturan Absensi & Lokasi**: set **titik absensi GPS** (latitude/longitude + radius) dan aktifkan "Wajib GPS di area sekolah" — siswa hanya bisa absen di dalam radius itu (diverifikasi server).
 - **Izin**: pengajuan bisa menyertakan **bukti/lampiran** (surat/dokter) — admin melihat tombol **Lihat Bukti**.
-- **Absensi**: monitoring realtime hari ini + tombol **Absen Manual** (fallback, tercatat di audit log).
+- **Absensi**: monitoring realtime hari ini + tombol **Absen Manual** + ikon **pensil** di tiap baris untuk **koreksi absen siswa** (ubah status, jam datang/pulang, catatan) — semua tercatat di audit log.
 - **Skala & performa**: rate-limit dihitung **per user** (bukan per IP) — ratusan siswa di belakang 1 IP NAT sekolah tetap mendapat jatah sendiri saat jam ramai; duplikat absen dicegah di database (unique `userId+date+type`) dan race kondisi ditangani (bukan error 500). Foto wajah otomatis dikompresi di HP (maks ~480px JPEG) dan **tidak disimpan** (hanya embedding); bukti izin dikompresi otomatis di sisi klien (maks ~1280px JPEG) sebelum diunggah.
 - **Pengaturan**: nama aplikasi/sekolah, warna tema, aturan absensi (jam terlambat, anti-duplikat, GPS).
 
@@ -333,6 +333,12 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 
 ## Log Perubahan
 
+- **Absen Manual & Koreksi Absen Siswa** ✏️ — sekarang **Super Admin, Admin, dan Petugas Piket** bisa mencatat absen manual siswa sekaligus **mengubah/mengoreksi catatan absensi yang sudah ada** (status, jam datang, jam pulang, catatan):
+  - Menu **Absen Manual** baru untuk Petugas Piket (beranda & sidebar/drawer ☰) → halaman Absensi dengan tombol "Absen Manual" (cari siswa → pilih status/tanggal/jam) dan ikon **pensil** di tiap baris untuk **koreksi** status/jam siswa.
+  - Absen manual kini **upsert**: jika siswa sudah punya catatan pada tanggal & tipe yang sama, catatan itu diperbarui (tidak lagi ditolak) — berlaku juga untuk validasi kehadiran wali kelas.
+  - Setiap perubahan tercatat di **Audit Log** (`ATTENDANCE_MANUAL_UPDATED` / `ATTENDANCE_UPDATED`).
+  - Keamanan scope: wali kelas hanya bisa mengoreksi siswa **kelasnya sendiri** (selain dikunci di UI, juga diperkuat di backend); piket/admin/superadmin boleh semua kelas.
+- **Perbaikan tanggal laporan & riwayat** 📅 — tanggal yang tersimpan di database berpotongan satu hari di belakang tanggal lokal (efek timezone UTC+7), sehingga tanggal pada laporan bulanan, export, dan riwayat absensi tampil sehari lebih awal. Kini tanggal lokal dihitung dengan benar, dan pengaturan jam datang/pulang saat koreksi absen memakai tanggal yang tepat.
 - **Scan gerbang 100% otomatis (tanpa sentuh layar)** 🚪 — petugas piket cukup membuka halaman **Scan Gerbang** sekali, lalu wajah / QR / kartu siswa langsung tercatat begitu terdeteksi (loop otomatis setiap ±1 detik). Saat cocok: muncul notif **"✓ ABSEN BERHASIL"**, HP bergetar + berbunyi (ding-dong), statistik langsung bertambah; jika siswa sudah absen muncul notif kuning **"SUDAH ABSEN"** (bukan error). **Kartu NFC didukung otomatis** di HP Android (Web NFC) — tempel kartu, langsung tercatat. Halaman **Absen Wajah siswa** juga kini otomatis: buka kamera, tatap → langsung tercatat, tombol manual tetap ada (bisa diubah ke mode Manual).
 - **Login tersimpan — sekali login, tidak perlu ulang** 🔐 — sesi disimpan aman di HP (refresh token). Membuka/menutup aplikasi berulang kali **tetap login**, termasuk akun siswa, guru, admin, dan superadmin. Hanya **Logout manual** yang mengakhiri sesi (harus login lagi). Sistem otomatis memulihkan sesi bahkan jika akses token sudah kedaluwarsa atau hilang, selama refresh token masih ada (±30 hari). Tidak perlu akun Google — penyimpanan token di perangkat adalah cara yang lebih aman & sesuai untuk data sekolah (siswa tidak perlu punya akun Google; tidak bergantung layanan pihak ketiga).
 - **Pengenalan wajah diganti total — jauh lebih akurat** 🔥 — sebelumnya sistem membandingkan *hash seluruh frame* (mock, sensitif terhadap cahaya/posisi) sehingga wajah yang sudah direkam sering ditolak saat absen. Sekarang deteksi wajah & ekstraksi ciri wajah (descriptor **FaceNet 128-dimensi**) dilakukan **langsung di HP** memakai face-api.js + TensorFlow.js (WebGL), dan server membandingkan descriptor dengan jarak euclidean + margin anti-salah-kenal. Model wajah (±5 MB) diunduh sekali lalu di-cache. Foto mentah tetap tidak pernah dikirim/disimpan.

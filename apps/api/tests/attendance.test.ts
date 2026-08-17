@@ -59,16 +59,44 @@ describe('Mesin Absensi', () => {
     ).rejects.toMatchObject({ code: 'NO_CHECK_IN' });
   });
 
-  it('absensi manual oleh admin tercatat + audit log', async () => {
+  it('absensi manual oleh admin membuat catatan baru + audit log', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/attendance/manual',
       headers: { authorization: `Bearer ${fx.adminToken}` },
-      payload: { studentId: fx.studentId, status: 'EXCUSED', type: 'CHECK_IN' },
+      payload: { studentId: fx.studentId, status: 'EXCUSED', type: 'CHECK_IN', checkIn: '07:00', notes: 'uji manual' },
     });
-    expect(res.statusCode).toBe(409); // sudah ada check-in dari tes sebelumnya → konflik (menandakan duplikat tertangkap)
-    const auditCount = await prisma.auditLog.count({ where: { action: 'ATTENDANCE_MANUAL_CHANGED' } });
-    expect(auditCount).toBeGreaterThanOrEqual(0);
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.success).toBe(true);
+    expect(body.data.status).toBe('EXCUSED');
+    const auditCount = await prisma.auditLog.count({
+      where: { OR: [{ action: 'ATTENDANCE_MANUAL_CHANGED' }, { action: 'ATTENDANCE_MANUAL_UPDATED' }] },
+    });
+    expect(auditCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it('koreksi absen via PATCH mengubah status catatan yang sudah ada + audit log', async () => {
+    // siswa sudah punya check-in dari tes pertama → ambil id-nya
+    const existing = await prisma.attendance.findFirst({
+      where: { userId: fx.studentUserId, type: 'CHECK_IN' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(existing).toBeTruthy();
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/attendance/${existing!.id}`,
+      headers: { authorization: `Bearer ${fx.adminToken}` },
+      payload: { status: 'SICK', checkIn: '08:30', notes: 'koreksi wali kelas' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.data.status).toBe('SICK');
+    const updated = await prisma.attendance.findUnique({ where: { id: existing!.id } });
+    expect(updated?.status).toBe('SICK');
+    expect(updated?.notes).toBe('koreksi wali kelas');
+    const auditCount = await prisma.auditLog.count({ where: { action: 'ATTENDANCE_UPDATED' } });
+    expect(auditCount).toBeGreaterThanOrEqual(1);
   });
 });
 

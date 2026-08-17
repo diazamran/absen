@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ScanLine, Search, ClipboardEdit, Filter } from 'lucide-react';
+import { ScanLine, Search, ClipboardEdit, Filter, Pencil } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Card, Input, Select, Button, Badge, Modal, Field, EmptyState } from '../../lib/ui';
@@ -9,7 +9,7 @@ import { STATUS_LABELS, METHOD_LABELS } from '../../lib/format';
 
 interface AttRow {
   id: string; name: string; nis: string | null; className: string | null; time: string | null;
-  status: string; method: string; lateMinutes: number;
+  checkOut?: string | null; status: string; method: string; lateMinutes: number;
 }
 
 export default function AttendanceList() {
@@ -18,6 +18,7 @@ export default function AttendanceList() {
   const [classId, setClassId] = useState('');
   const [status, setStatus] = useState('');
   const [manualOpen, setManualOpen] = useState(false);
+  const [editing, setEditing] = useState<AttRow | null>(null);
 
   const { data: rows } = useQuery({
     queryKey: ['attendance-today', classId, status],
@@ -29,11 +30,32 @@ export default function AttendanceList() {
     queryFn: () => api<{ success: boolean; data: { id: string; name: string }[] }>('/classes').then((r) => r.data),
   });
 
+  const editMutation = useMutation({
+    mutationFn: (payload: { id: string; status: string; checkIn?: string; checkOut?: string; notes?: string }) =>
+      api(`/attendance/${payload.id}`, {
+        method: 'PATCH',
+        body: {
+          status: payload.status,
+          checkIn: payload.checkIn || undefined,
+          checkOut: payload.checkOut || undefined,
+          notes: payload.notes || undefined,
+        },
+      }),
+    onSuccess: () => {
+      toast('success', 'Catatan absensi diperbarui.');
+      qc.invalidateQueries({ queryKey: ['attendance-today'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['attendance-history'] });
+      setEditing(null);
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menyimpan perubahan.'),
+  });
+
   return (
     <div>
       <PageHeader
         title="Absensi Hari Ini"
-        subtitle="Data kehadiran realtime"
+        subtitle="Data kehadiran realtime — klik ikon pensil untuk koreksi status/jam siswa"
         action={<Button onClick={() => setManualOpen(true)}><ClipboardEdit className="h-4 w-4" /> Absen Manual</Button>}
       />
       <div className="mb-4 flex flex-col gap-3 sm:flex-row">
@@ -62,20 +84,71 @@ export default function AttendanceList() {
               <p className="font-mono text-sm font-bold text-ink">{r.time || '—'}</p>
               <Badge status={r.status} label={r.status === 'LATE' ? `Terlambat ${r.lateMinutes}m` : STATUS_LABELS[r.status]} />
             </div>
+            <button
+              onClick={() => setEditing(r)}
+              className="rounded-xl p-2 text-muted transition-colors hover:bg-primary-soft hover:text-primary"
+              title="Koreksi absen siswa"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
           </Card>
         ))}
         {rows?.length === 0 && <EmptyState icon={Search} title="Belum ada data absensi" description="Data akan muncul saat siswa mulai absen." />}
       </div>
 
       {manualOpen && <ManualForm onClose={() => setManualOpen(false)} />}
+      {editing && (
+        <EditForm
+          row={editing}
+          onClose={() => setEditing(null)}
+          onSave={(payload) => editMutation.mutate({ id: editing.id, ...payload })}
+          saving={editMutation.isPending}
+        />
+      )}
     </div>
+  );
+}
+
+function EditForm({ row, onClose, onSave, saving }: {
+  row: AttRow;
+  onClose: () => void;
+  onSave: (p: { status: string; checkIn?: string; checkOut?: string; notes?: string }) => void;
+  saving: boolean;
+}) {
+  const [form, setForm] = useState({ status: row.status, checkIn: row.time || '', checkOut: row.checkOut || '', notes: '' });
+  return (
+    <Modal open onClose={onClose} title={`Koreksi Absen — ${row.name}`} wide>
+      <p className="mb-3 text-sm text-muted">{row.className} · {row.nis} · Metode: {METHOD_LABELS[row.method] || row.method}</p>
+      <div className="space-y-3">
+        <Field label="Status kehadiran">
+          <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+            {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </Select>
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Jam datang (HH:MM)">
+            <Input value={form.checkIn} onChange={(e) => setForm({ ...form, checkIn: e.target.value })} placeholder="07:00" />
+          </Field>
+          <Field label="Jam pulang (HH:MM)">
+            <Input value={form.checkOut} onChange={(e) => setForm({ ...form, checkOut: e.target.value })} placeholder="14:00" />
+          </Field>
+        </div>
+        <Field label="Catatan (opsional)">
+          <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="mis. koreksi oleh admin" />
+        </Field>
+      </div>
+      <div className="mt-5 flex justify-end gap-2">
+        <Button variant="outline" onClick={onClose}>Batal</Button>
+        <Button onClick={() => onSave(form)} disabled={saving}>{saving ? 'Menyimpan…' : 'Simpan Perubahan'}</Button>
+      </div>
+    </Modal>
   );
 }
 
 function ManualForm({ onClose }: { onClose: () => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ studentId: '', status: 'PRESENT', type: 'CHECK_IN', date: '', notes: '' });
+  const [form, setForm] = useState({ studentId: '', status: 'PRESENT', type: 'CHECK_IN', date: '', checkIn: '', checkOut: '', notes: '' });
   const [search, setSearch] = useState('');
 
   const { data: students } = useQuery({
@@ -87,7 +160,13 @@ function ManualForm({ onClose }: { onClose: () => void }) {
     mutationFn: () =>
       api('/attendance/manual', {
         method: 'POST',
-        body: { ...form, date: form.date || undefined, notes: form.notes || undefined },
+        body: {
+          ...form,
+          date: form.date || undefined,
+          checkIn: form.checkIn || undefined,
+          checkOut: form.checkOut || undefined,
+          notes: form.notes || undefined,
+        },
       }),
     onSuccess: () => {
       toast('success', 'Absensi manual disimpan.');
@@ -129,11 +208,16 @@ function ManualForm({ onClose }: { onClose: () => void }) {
           </Field>
         </div>
         <Field label="Tanggal (kosongkan = hari ini)"><Input value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} placeholder="2026-08-16" /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Jam datang (opsional)"><Input value={form.checkIn} onChange={(e) => setForm({ ...form, checkIn: e.target.value })} placeholder="07:00" /></Field>
+          <Field label="Jam pulang (opsional)"><Input value={form.checkOut} onChange={(e) => setForm({ ...form, checkOut: e.target.value })} placeholder="14:00" /></Field>
+        </div>
         <Field label="Catatan"><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Opsional" /></Field>
+        <p className="text-xs text-muted">Jika siswa sudah punya catatan pada tanggal tersebut, catatan akan diperbarui (bukan ditolak).</p>
       </div>
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="outline" onClick={onClose}>Batal</Button>
-        <Button onClick={() => mutation.mutate()} disabled={!form.studentId || mutation.isPending}>Simpan</Button>
+        <Button onClick={() => mutation.mutate()} disabled={!form.studentId || mutation.isPending}>{mutation.isPending ? 'Menyimpan…' : 'Simpan'}</Button>
       </div>
     </Modal>
   );

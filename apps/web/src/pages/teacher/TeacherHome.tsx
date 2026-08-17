@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  FilePlus2, FileText, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, XCircle, CalendarDays, MapPin, ShieldCheck, ScanFace, BarChart3,
+  FilePlus2, FileText, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, XCircle, CalendarDays, MapPin, ShieldCheck, ScanFace, BarChart3, ClipboardCheck,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -49,6 +49,7 @@ export default function TeacherHome() {
     : isPiket
       ? [
           { label: 'Scan Gerbang', icon: <ScanLine className="h-6 w-6" />, to: '/app/gate' },
+          { label: 'Absen Manual', icon: <ClipboardCheck className="h-6 w-6" />, to: '/app/attendance' },
           { label: 'Persetujuan Izin', icon: <FileText className="h-6 w-6" />, to: '/app/leave' },
           { label: 'Riwayat', icon: <History className="h-6 w-6" />, to: '/app/history' },
         ]
@@ -124,7 +125,7 @@ export default function TeacherHome() {
             </div>
             <div className="min-w-0">
               <p className="font-bold text-ink">Kamu petugas piket hari ini</p>
-              <p className="text-sm text-muted">Buka Scan Gerbang untuk mencatat absen siswa (wajah / QR / kartu) di gerbang.</p>
+              <p className="text-sm text-muted">Buka Scan Gerbang untuk absen otomatis (wajah / QR / kartu) atau gunakan Absen Manual untuk koreksi.</p>
             </div>
           </div>
           <Button className="shrink-0" onClick={() => navigate('/app/gate')}>

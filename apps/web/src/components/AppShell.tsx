@@ -40,6 +40,7 @@ function roleMenu(role?: string): NavItem[] {
   if (role === 'PIKET') {
     // Petugas Piket: menu izin hanya untuk persetujuan, bukan pengajuan
     items.push({ to: '/app/gate', label: 'Scan Gerbang', icon: <ScanLine className="h-5 w-5" /> });
+    items.push({ to: '/app/attendance', label: 'Absensi Manual', icon: <ClipboardCheck className="h-5 w-5" /> });
     items.push({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
     items.push({ to: '/app/reports', label: 'Laporan & Cetak', icon: <BarChart3 className="h-5 w-5" /> });
   } else if (role === 'HOMEROOM_TEACHER') {

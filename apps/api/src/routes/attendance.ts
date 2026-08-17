@@ -1,11 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { recordAttendance, manualAttendance } from '../services/attendance.js';
+import { recordAttendance, manualAttendance, updateAttendance } from '../services/attendance.js';
 import { issueQrToken } from '../services/qr.js';
 import { validate } from '../utils/validate.js';
 import { ApiError } from '../utils/errors.js';
-import { todayStart, todayEnd, dateKey, localTime, startOfLocalDay } from '../lib/time.js';
+import { todayStart, todayEnd, dateKey, localTime, startOfLocalDay, localDateKeyOfStoredDate } from '../lib/time.js';
 import { PERMISSION_KEYS } from '../rbac/permissions.js';
 
 const proofSchema = z.object({
@@ -30,8 +30,17 @@ const manualSchema = z.object({
   status: z.enum(['PRESENT', 'LATE', 'EXCUSED', 'SICK', 'OFFICIAL_DUTY', 'ABSENT', 'LEAVE']),
   type: z.enum(['CHECK_IN', 'CHECK_OUT']).default('CHECK_IN'),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  checkIn: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  checkOut: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   notes: z.string().optional(),
   deviceId: z.string().optional(),
+});
+
+const updateSchema = z.object({
+  status: z.enum(['PRESENT', 'LATE', 'EXCUSED', 'SICK', 'OFFICIAL_DUTY', 'ABSENT', 'LEAVE']).optional(),
+  checkIn: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  checkOut: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  notes: z.string().optional(),
 });
 
 export async function attendanceRoutes(app: FastifyInstance) {
@@ -226,7 +235,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
     });
   });
 
-  // ===== Manual (guru/admin) =====
+  // ===== Manual (admin/piket/wali kelas) — buat atau koreksi =====
   app.post('/attendance/manual', { preHandler: app.requirePermission(PERMISSION_KEYS.attendanceManage) }, async (request, reply) => {
     const body = validate(manualSchema, request.body);
     const result = await manualAttendance({
@@ -235,10 +244,27 @@ export async function attendanceRoutes(app: FastifyInstance) {
       status: body.status,
       type: body.type,
       dateKeyStr: body.date,
+      checkIn: body.checkIn,
+      checkOut: body.checkOut,
       notes: body.notes,
       deviceId: body.deviceId,
     });
     return reply.send({ success: true, message: 'Absensi manual disimpan.', data: result });
+  });
+
+  // ===== Koreksi catatan absensi siswa yang sudah ada =====
+  app.patch('/attendance/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.attendanceManage) }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = validate(updateSchema, request.body);
+    const result = await updateAttendance({
+      actor: { id: request.user!.id, request },
+      attendanceId: id,
+      status: body.status,
+      checkIn: body.checkIn,
+      checkOut: body.checkOut,
+      notes: body.notes,
+    });
+    return reply.send({ success: true, message: 'Catatan absensi diperbarui.', data: result });
   });
 
   // ===== Daftar absensi hari ini =====
@@ -266,6 +292,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         nis: r.student?.nis ?? null,
         className: r.student?.class?.name ?? null,
         time: r.checkIn ? localTime(r.checkIn) : null,
+        checkOut: r.checkOut ? localTime(r.checkOut) : null,
         status: r.status,
         method: r.method,
         lateMinutes: r.lateMinutes,
@@ -291,7 +318,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
       data: rows.map((r) => ({
         id: r.id,
         date: r.date,
-        dayKey: dateKey(r.date),
+        dayKey: localDateKeyOfStoredDate(r.date),
         checkIn: r.checkIn ? localTime(r.checkIn) : null,
         checkOut: r.checkOut ? localTime(r.checkOut) : null,
         status: r.status,

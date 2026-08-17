@@ -41,6 +41,15 @@ export function todayEnd(): Date {
   return new Date(todayStart().getTime() + 24 * 3600_000);
 }
 
+/**
+ * Prisma menyimpan kolom @db.Date sebagai tengah malam UTC dari tanggal hasil TRUNCATE
+ * instant (mis. startOfLocalDay → selalu hari SEBELUMNYA untuk timezone +7/+8).
+ * Untuk menampilkan/menghitung tanggal lokal yang benar dari nilai tersimpan, tambah 1 hari.
+ */
+export function localDateKeyOfStoredDate(storedDate: Date): string {
+  return dateKey(new Date(storedDate.getTime() + 24 * 3600_000));
+}
+
 /** Format jam lokal WIB (HH:mm) untuk suatu instant. */
 export function localTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;

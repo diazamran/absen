@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { prisma } from '../lib/prisma.js';
 import { toCsv } from '../lib/csv.js';
-import { startOfLocalDay, monthRange, dateKey, localTime, todayStart, todayEnd } from '../lib/time.js';
+import { startOfLocalDay, monthRange, dateKey, localTime, todayStart, todayEnd, localDateKeyOfStoredDate } from '../lib/time.js';
 import { ApiError } from '../utils/errors.js';
 import { audit } from '../lib/audit.js';
 import { PERMISSION_KEYS } from '../rbac/permissions.js';
@@ -166,7 +166,7 @@ export async function reportRoutes(app: FastifyInstance) {
           name: r.user?.fullName ?? '-',
           nis: r.student?.nis ?? null,
           className: r.student?.class?.name ?? null,
-          date: dateKey(r.date),
+          date: localDateKeyOfStoredDate(r.date),
           time: r.checkIn ? localTime(r.checkIn) : null,
           status: r.status,
           statusLabel: STATUS_LABELS[r.status],
@@ -244,7 +244,7 @@ export async function reportRoutes(app: FastifyInstance) {
         orderBy: { date: 'asc' },
       });
       rows = atts.map((r) => ({
-        Tanggal: dateKey(r.date),
+        Tanggal: localDateKeyOfStoredDate(r.date),
         Nama: r.user?.fullName ?? '-',
         NIS: r.student?.nis ?? '',
         Kelas: r.student?.class?.name ?? '',
@@ -262,7 +262,7 @@ export async function reportRoutes(app: FastifyInstance) {
         orderBy: { date: 'asc' },
       });
       rows = atts.map((r) => ({
-        Tanggal: dateKey(r.date),
+        Tanggal: localDateKeyOfStoredDate(r.date),
         'Jam Datang': r.checkIn ? localTime(r.checkIn) : '',
         'Jam Pulang': r.checkOut ? localTime(r.checkOut) : '',
         Status: STATUS_LABELS[r.status] ?? r.status,
