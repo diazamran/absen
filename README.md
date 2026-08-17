@@ -333,6 +333,7 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 
 ## Log Perubahan
 
+- **Teks notifikasi siswa** — dashboard notifikasi siswa kini menampilkan "Notifikasi absensi murid akan muncul di sini." (role lain tetap "anak/guru").
 - **Profil siswa dirapikan** — baris "@username · NISN …" dihilangkan dari kartu profil siswa (username otomatis `siswa_121212` tidak perlu ditampilkan); guru/staf tetap menampilkan NIP. Profile kini: Nama, Role, Kelas.
 - **Batas waktu absen datang & pulang cepat di Pengaturan** ⏰ — dua aturan baru di **Pengaturan → Aturan Absensi**:
   - **Batas akhir absen datang** (default 23:59 = tidak dibatasi): setelah jam ini, siswa **tidak bisa absen datang sendiri** (QR/wajah/kartu/gerbang ditolak dengan pesan "Absen datang sudah ditutup pukul …") dan dianggap **tidak hadir** — koreksi tetap bisa dilakukan manual oleh admin/piket/wali kelas. Contoh: set 12:00 → siswa yang datang setelah jam 12 ditolak sistem.

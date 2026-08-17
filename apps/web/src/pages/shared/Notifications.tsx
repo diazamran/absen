@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Bell, CheckCheck } from 'lucide-react';
 import { api } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
 import { Card, Button, EmptyState } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
 import { useSocketEvent } from '../../lib/socket';
@@ -11,6 +12,7 @@ interface NotifData { unread: number; items: NotifItem[]; }
 
 export default function Notifications() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const { data } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => api<{ success: boolean; data: NotifData }>('/notifications').then((r) => r.data),
@@ -59,7 +61,13 @@ export default function Notifications() {
             </div>
           </Card>
         ))}
-        {data?.items.length === 0 && <EmptyState icon={Bell} title="Belum ada notifikasi" description="Notifikasi absensi anak/guru akan muncul di sini." />}
+        {data?.items.length === 0 && (
+          <EmptyState
+            icon={Bell}
+            title="Belum ada notifikasi"
+            description={user?.roleKey === 'STUDENT' ? 'Notifikasi absensi murid akan muncul di sini.' : 'Notifikasi absensi anak/guru akan muncul di sini.'}
+          />
+        )}
       </div>
     </div>
   );
