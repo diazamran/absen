@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { api, setTokens, clearTokens } from './api';
+import { api, setTokens, clearTokens, restoreSession } from './api';
 
 export interface MeData {
   id: string;
@@ -48,11 +48,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Pulihkan sesi: selama refresh token masih ada, pengguna TETAP masuk
+  // (tidak perlu login ulang tiap buka aplikasi). Logout manual → harus login lagi.
   useEffect(() => {
     (async () => {
-      if (localStorage.getItem('presensiku_access')) {
-        await refreshMe();
-      }
+      const ok = await restoreSession();
+      if (ok) await refreshMe();
       setLoading(false);
     })();
   }, []);

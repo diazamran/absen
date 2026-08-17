@@ -30,6 +30,21 @@ export function clearTokens(): void {
 
 let refreshPromise: Promise<string | null> | null = null;
 
+/**
+ * Pulihkan sesi saat aplikasi dibuka kembali:
+ * - Tidak ada refresh token → tidak ada sesi (harus login)
+ * - Refresh token ada → selalu berusaha pulih (refresh ulang akses token bila perlu)
+ * sehingga pengguna tidak perlu login ulang setiap membuka aplikasi.
+ */
+export async function restoreSession(): Promise<boolean> {
+  if (!getRefreshToken()) return false;
+  if (!getToken()) {
+    const newToken = await tryRefresh();
+    if (!newToken) return false;
+  }
+  return true;
+}
+
 async function tryRefresh(): Promise<string | null> {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return null;
