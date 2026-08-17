@@ -14,12 +14,22 @@ export interface ReportExportRow {
   lateMinutes: number;
 }
 
+export interface ClassSummaryRow {
+  className: string;
+  total: number;
+  present: number;
+  late: number;
+  excused: number;
+  absent: number;
+}
+
 export interface ReportExportOptions {
   title: string;
   schoolName: string;
   period: string;
   rows: ReportExportRow[];
   summary: Record<string, number | undefined>;
+  classSummary?: ClassSummaryRow[];
   signatureName?: string | null;
   signatureNip?: string | null;
   filename: string;
@@ -103,6 +113,23 @@ export function exportReportPdf(opts: ReportExportOptions): void {
     alternateRowStyles: { fillColor: [245, 250, 249] },
   });
 
+  // Rekap per kelas (semua kelas)
+  if (opts.classSummary?.length) {
+    const after = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Rekap per Kelas', 14, after + 10);
+    doc.setFont('helvetica', 'normal');
+    autoTable(doc, {
+      startY: after + 13,
+      head: [['Kelas', 'Total Siswa', 'Hadir', 'Terlambat', 'Izin / Sakit', 'Tidak Hadir']],
+      body: opts.classSummary.map((c) => [c.className, String(c.total), String(c.present), String(c.late), String(c.excused), String(c.absent)]),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [13, 148, 136], fontSize: 8 },
+      alternateRowStyles: { fillColor: [245, 250, 249] },
+    });
+  }
+
   const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
   let y = finalY + 14;
   if (y > pageHeight - 58) {
@@ -146,6 +173,12 @@ export function exportReportExcel(opts: ReportExportOptions): void {
     [],
     [summaryLine(opts.summary)],
     [],
+    ['REKAP PER KELAS'],
+    ['Kelas', 'Total Siswa', 'Hadir', 'Terlambat', 'Izin / Sakit', 'Tidak Hadir'],
+    ...(opts.classSummary?.length
+      ? opts.classSummary.map((c) => [c.className, c.total, c.present, c.late, c.excused, c.absent])
+      : []),
+    [],
     ...signatureRows(opts).map((s) => [s]),
   ];
 
@@ -153,5 +186,5 @@ export function exportReportExcel(opts: ReportExportOptions): void {
   ws['!cols'] = [{ wch: 4 }, { wch: 26 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 10 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Laporan');
-  XLSX.writeFile(wb, opts.filename);
+  XLSX.writeFile(wb, opts.filename, { bookType: 'xlsx' });
 }

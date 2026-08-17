@@ -22,6 +22,49 @@ function statusCountsMap(rows: { status: string }[]): Record<string, number> {
   return m;
 }
 
+/** Rekap per kelas: total siswa, hadir, terlambat, izin/sakit, dan tidak hadir pada rentang tanggal. */
+async function classRecap(start: Date, end: Date) {
+  const classes = await prisma.class.findMany({
+    where: { isActive: true, academicYear: { isActive: true } },
+    include: { students: { where: { isActive: true }, select: { id: true } } },
+    orderBy: { name: 'asc' },
+  });
+  const atts = await prisma.attendance.groupBy({
+    by: ['studentId', 'status'],
+    where: { type: 'CHECK_IN', date: { gte: start, lt: end }, studentId: { not: null } },
+    _count: { _all: true },
+  });
+  const byStudent = new Map<string, Set<string>>();
+  for (const a of atts) {
+    if (!a.studentId) continue;
+    const set = byStudent.get(a.studentId) ?? new Set<string>();
+    set.add(a.status);
+    byStudent.set(a.studentId, set);
+  }
+  const EXCUSED = new Set(['EXCUSED', 'SICK', 'OFFICIAL_DUTY', 'LEAVE']);
+  return classes.map((c) => {
+    const total = c.students.length;
+    const present = c.students.filter((s) => {
+      const st = byStudent.get(s.id);
+      return !!st && (st.has('PRESENT') || st.has('LATE'));
+    }).length;
+    const late = c.students.filter((s) => byStudent.get(s.id)?.has('LATE')).length;
+    const excused = c.students.filter((s) => {
+      const st = byStudent.get(s.id);
+      return !!st && [...st].some((x) => EXCUSED.has(x));
+    }).length;
+    const any = c.students.filter((s) => byStudent.has(s.id)).length;
+    return {
+      className: c.name,
+      total,
+      present,
+      late,
+      excused,
+      absent: Math.max(0, total - any),
+    };
+  });
+}
+
 export async function reportRoutes(app: FastifyInstance) {
   app.get('/reports/daily', { preHandler: app.requirePermission(PERMISSION_KEYS.reportsRead) }, async (request, reply) => {
     const q = request.query as { date?: string; classId?: string };
@@ -36,6 +79,7 @@ export async function reportRoutes(app: FastifyInstance) {
       },
       orderBy: { checkIn: 'asc' },
     });
+    const classSummary = q.classId ? [] : await classRecap(dayStart, dayEnd);
 
     const counts = statusCountsMap(rows);
     const total = rows.length;
@@ -62,6 +106,7 @@ export async function reportRoutes(app: FastifyInstance) {
           method: r.method,
           lateMinutes: r.lateMinutes,
         })),
+        classSummary,
       },
     });
   });
@@ -86,11 +131,13 @@ export async function reportRoutes(app: FastifyInstance) {
     });
 
     const counts = statusCountsMap(rows);
+    const classSummary = q.classId ? [] : await classRecap(start, end);
     return reply.send({
       success: true,
       data: {
         month,
         total: rows.length,
+        classSummary,
         summary: {
           PRESENT: counts.PRESENT || 0,
           LATE: counts.LATE || 0,

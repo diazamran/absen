@@ -333,6 +333,8 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 
 ## Log Perubahan
 
+- **Perbaikan Export Excel** — tombol Export Excel sebelumnya gagal karena nama file berakhiran `.excel` (seharusnya `.xlsx`) sehingga format tidak dikenali; kini berhasil mengunduh file `.xlsx` yang valid.
+- **Rekap per Kelas di Laporan** — saat filter kelas "Semua Kelas", laporan kini menampilkan tabel **Rekap per Kelas** (total siswa, hadir, terlambat, izin/sakit, tidak hadir) di halaman maupun di file PDF/Excel yang diexport.
 - **Laporan: Export PDF & Excel (bukan CSV lagi)** — tombol "Export PDF" dan "Export Excel" menggantikan CSV. PDF dicetak landscape dengan ringkasan, tabel rincian, dan **blok tanda tangan** (kota + tanggal, "Petugas Piket,", nama lengkap, dan NIP dari akun yang login — mengikuti format laporan resmi). Excel berisi sheet rapi yang siap diolah.
 - **Dashboard guru piket dirapikan** — kartu "Kehadiran Saya" dihapus (guru tidak memerlukannya), banner menampilkan **jabatan** di bawah nama (Guru / Petugas Piket / Wali Kelas) tanpa baris tanggal, dan menu mobile "Ajukan Izin" diperbaiki menjadi **"Persetujuan Izin"** (mengarah ke daftar persetujuan).
 - **Menu siswa disederhanakan** — siswa kini hanya melihat metode absen yang relevan: **Scan QR dihapus** (diganti **QR Saya** — QR pribadi untuk ditunjukkan ke petugas gerbang), **Kartu/NFC dihapus** untuk siswa. Beranda siswa menampilkan **nama + kelas** di banner atas.

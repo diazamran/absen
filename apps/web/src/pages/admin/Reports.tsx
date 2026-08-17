@@ -12,8 +12,11 @@ import { STATUS_LABELS, STATUS_COLORS, currentMonthKey, todayJakartaKey } from '
 import { exportReportPdf, exportReportExcel, formatLongDate, type ReportExportRow } from '../../lib/reportExport';
 
 interface Summary { PRESENT: number; LATE: number; EXCUSED: number; SICK: number; OFFICIAL_DUTY: number; ABSENT: number; }
+interface ClassSummaryRow { className: string; total: number; present: number; late: number; excused: number; absent: number; }
 interface ReportData {
-  summary: Summary; rows: { name: string; nis?: string | null; className?: string | null; date?: string; time?: string | null; status: string; method: string; lateMinutes: number }[];
+  summary: Summary;
+  classSummary?: ClassSummaryRow[];
+  rows: { name: string; nis?: string | null; className?: string | null; date?: string; time?: string | null; status: string; method: string; lateMinutes: number }[];
 }
 
 const SUMMARY_KEYS: { key: keyof Summary; label: string }[] = [
@@ -53,7 +56,7 @@ export default function Reports() {
 
   const period = type === 'daily' ? `Tanggal: ${formatLongDate(date)}` : `Bulan: ${formatLongDate(`${month}-01`).replace(/^1\s/, '')}`;
   const doExport = (kind: 'pdf' | 'excel') => {
-    if (!report?.rows.length) {
+    if (!report?.rows.length && !report?.classSummary?.length) {
       toast('info', 'Tidak ada data untuk diexport.');
       return;
     }
@@ -63,15 +66,17 @@ export default function Reports() {
       period,
       rows: report.rows as ReportExportRow[],
       summary: report.summary as unknown as Record<string, number | undefined>,
+      classSummary: report.classSummary || [],
       signatureName: user?.fullName,
       signatureNip: user?.teacher?.nip || user?.staff?.nip || null,
-      filename: `laporan_${type}_${date || month}.${kind}`,
+      filename: `laporan_${type}_${date || month}.${kind === 'pdf' ? 'pdf' : 'xlsx'}`,
     };
     try {
       if (kind === 'pdf') exportReportPdf(opts);
       else exportReportExcel(opts);
       toast('success', kind === 'pdf' ? 'Laporan PDF diunduh.' : 'Laporan Excel diunduh.');
-    } catch {
+    } catch (e) {
+      console.error('EXPORT_FAIL', e);
       toast('error', 'Gagal membuat laporan.');
     }
   };
@@ -136,6 +141,38 @@ export default function Reports() {
           </div>
         </Card>
       </div>
+
+      {classId === '' && report?.classSummary?.length ? (
+        <Card className="mt-4">
+          <h3 className="mb-3 font-bold text-ink">Rekap per Kelas — Semua Kelas</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs uppercase text-muted">
+                <tr>
+                  <th className="px-3 py-2">Kelas</th>
+                  <th className="px-3 py-2">Total Siswa</th>
+                  <th className="px-3 py-2">Hadir</th>
+                  <th className="px-3 py-2">Terlambat</th>
+                  <th className="px-3 py-2">Izin / Sakit</th>
+                  <th className="px-3 py-2">Tidak Hadir</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {report.classSummary.map((c) => (
+                  <tr key={c.className}>
+                    <td className="px-3 py-2 font-semibold text-ink">{c.className}</td>
+                    <td className="px-3 py-2 text-muted">{c.total}</td>
+                    <td className="px-3 py-2 font-semibold text-emerald-600 dark:text-emerald-400">{c.present}</td>
+                    <td className="px-3 py-2 font-semibold text-amber-600 dark:text-amber-400">{c.late}</td>
+                    <td className="px-3 py-2 font-semibold text-sky-600 dark:text-sky-400">{c.excused}</td>
+                    <td className="px-3 py-2 font-semibold text-red-500">{c.absent}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      ) : null}
 
       <Card className="mt-4">
         <h3 className="mb-3 font-bold text-ink">Rincian</h3>
