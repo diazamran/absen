@@ -18,6 +18,7 @@ interface QrStudent {
 }
 
 type Layout = 'big' | 'small';
+type SmallQr = 'std' | 'big';
 
 function PrintHead({ compact }: { compact?: boolean }) {
   const { branding } = useTheme();
@@ -44,6 +45,7 @@ export default function QrCards() {
   const classId = params.get('classId') || '';
   const [qrMap, setQrMap] = useState<Record<string, string>>({});
   const [layout, setLayout] = useState<Layout>('big');
+  const [qrSize, setQrSize] = useState<SmallQr>('std');
 
   const { data: classes } = useQuery({
     queryKey: ['classes'],
@@ -69,7 +71,7 @@ export default function QrCards() {
         data.students.map(async (s) => {
           if (map[s.token]) return;
           try {
-            map[s.token] = await QRCode.toDataURL(s.token, { width: 240, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } });
+            map[s.token] = await QRCode.toDataURL(s.token, { width: 320, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } });
           } catch {
             // token gagal di-render → kartu tanpa gambar
           }
@@ -110,6 +112,16 @@ export default function QrCards() {
               { value: 'small', label: 'Kecil ID (2×3,5 cm)' },
             ]}
           />
+          {layout === 'small' && (
+            <Segmented
+              value={qrSize}
+              onChange={setQrSize}
+              options={[
+                { value: 'std', label: 'QR Standar' },
+                { value: 'big', label: 'QR Besar' },
+              ]}
+            />
+          )}
           <Select value={classId} onChange={(e) => selectClass(e.target.value)} className="sm:w-56">
             <option value="">Pilih kelas…</option>
             {classes?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -149,6 +161,25 @@ export default function QrCards() {
             ))}
           </div>
         </div>
+      ) : qrSize === 'big' ? (
+        <div id="qr-print-area" className="rounded-2xl bg-white p-3 shadow-card">
+          <PrintHead compact />
+          <div className="qr-small-grid">
+            {students.map((s) => (
+              <div key={s.studentId} className="qr-card-small-big">
+                {s.dataUrl ? (
+                  <img src={s.dataUrl} alt={`QR ${s.fullName}`} />
+                ) : (
+                  <div className="qr-small-big-placeholder"><QrCode className="h-6 w-6" /></div>
+                )}
+                <div className="qr-small-big-text">
+                  <p className="qr-small-big-nis">{s.nis}</p>
+                  <p className="qr-small-big-name" title={s.fullName}>{s.fullName}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : (
         <div id="qr-print-area" className="rounded-2xl bg-white p-3 shadow-card">
           <PrintHead compact />
@@ -176,10 +207,17 @@ export default function QrCards() {
           <ul className="mt-1 list-inside list-disc space-y-1">
             <li>Klik <b>Cetak</b> → di dialog printer pilih <b>A4</b> dan margin <b>Default/Minimal</b>.</li>
             {layout === 'small' ? (
-              <>
-                <li>Kartu <b>kecil 2×3,5 cm</b> dicetak rapat di kertas label/kartu A4 — QR kiri, <b>NISN</b> & nama kanan. Potong sesuai garis/garis putus kertas.</li>
-                <li>Ukuran QR ±1,7 cm — tetap terbaca kamera gerbang dari jarak dekat (5–20 cm).</li>
-              </>
+              qrSize === 'big' ? (
+                <>
+                  <li>Kartu <b>QR Besar</b> (3,5 × 3,1 cm): QR <b>±2,3 cm</b> di tengah, NISN & nama di bawahnya — jauh lebih mudah discan kamera gerbang dari jarak lebih jauh.</li>
+                  <li>Kartu <b>QR Standar</b> (2 × 3,5 cm): QR kiri, NISN & nama kanan, dicetak paling rapat di kertas label A4.</li>
+                </>
+              ) : (
+                <>
+                  <li>Kartu <b>kecil 2×3,5 cm</b> dicetak rapat di kertas label/kartu A4 — QR kiri, <b>NISN</b> & nama kanan. Potong sesuai garis/garis putus kertas.</li>
+                  <li>Ukuran QR ±1,7 cm — tetap terbaca kamera gerbang dari jarak dekat (5–20 cm). Pilih <b>QR Besar</b> (±2,3 cm) kalau ingin lebih mudah discan.</li>
+                </>
+              )
             ) : (
               <li>Kartu besar diatur agar tidak terpotong di tengah halaman (anti pecah antar halaman).</li>
             )}
