@@ -333,6 +333,8 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 
 ## Log Perubahan
 
+- **Laporan: Export PDF & Excel (bukan CSV lagi)** — tombol "Export PDF" dan "Export Excel" menggantikan CSV. PDF dicetak landscape dengan ringkasan, tabel rincian, dan **blok tanda tangan** (kota + tanggal, "Petugas Piket,", nama lengkap, dan NIP dari akun yang login — mengikuti format laporan resmi). Excel berisi sheet rapi yang siap diolah.
+- **Dashboard guru piket dirapikan** — kartu "Kehadiran Saya" dihapus (guru tidak memerlukannya), banner menampilkan **jabatan** di bawah nama (Guru / Petugas Piket / Wali Kelas) tanpa baris tanggal, dan menu mobile "Ajukan Izin" diperbaiki menjadi **"Persetujuan Izin"** (mengarah ke daftar persetujuan).
 - **Menu siswa disederhanakan** — siswa kini hanya melihat metode absen yang relevan: **Scan QR dihapus** (diganti **QR Saya** — QR pribadi untuk ditunjukkan ke petugas gerbang), **Kartu/NFC dihapus** untuk siswa. Beranda siswa menampilkan **nama + kelas** di banner atas.
 - **Perbaikan menu "Ajukan Izin" untuk siswa** — sebelumnya menu mengarah ke halaman admin (persetujuan) yang ditolak (403). Kini siswa/guru/staff diarahkan ke **pengajuan milik sendiri** (`/app/leave/mine`); menu persetujuan hanya untuk admin/wali kelas/petugas piket.
 - **Form Tambah/Edit Siswa** — kolom **Password Baru** di form Edit (kosongkan = tidak diubah, default `smkn1kras`); form Tambah sudah punya kolom Password Awal.

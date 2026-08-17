@@ -94,7 +94,7 @@ const BOTTOM_NAV: Record<string, NavItem[]> = {
     { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
     { to: '/app/gate', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> },
     { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
-    { to: '/app/leave', label: 'Izin', icon: <FilePlus2 className="h-6 w-6" /> },
+    { to: '/app/leave', label: 'Persetujuan', icon: <FilePlus2 className="h-6 w-6" /> },
     { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
   ],
   STUDENT: [

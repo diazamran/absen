@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  FilePlus2, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, XCircle, CalendarDays, MapPin, ShieldCheck, ScanFace,
+  FilePlus2, FileText, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, XCircle, CalendarDays, MapPin, ShieldCheck, ScanFace,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -47,7 +47,7 @@ export default function TeacherHome() {
     : isPiket
       ? [
           { label: 'Scan Gerbang', icon: <ScanLine className="h-6 w-6" />, to: '/app/gate' },
-          { label: 'Ajukan Izin', icon: <FilePlus2 className="h-6 w-6" />, to: '/app/leave/mine' },
+          { label: 'Persetujuan Izin', icon: <FileText className="h-6 w-6" />, to: '/app/leave' },
           { label: 'Riwayat', icon: <History className="h-6 w-6" />, to: '/app/history' },
         ]
       : [
@@ -79,12 +79,14 @@ export default function TeacherHome() {
 
   return (
     <div className="space-y-5">
-      {/* Sambutan — 3 baris: sapaan, nama lengkap, kelas (kecil) */}
+      {/* Sambutan — 3 baris: sapaan, nama lengkap, kelas/jabatan (kecil) */}
       <div className="rounded-3xl bg-gradient-to-br from-primary to-primary-dark p-5 text-white shadow-float">
         <p className="text-sm font-medium opacity-90">{greeting()},</p>
         <h1 className="text-2xl font-extrabold">{user?.fullName}</h1>
-        {isStudent && data.student?.className && (
-          <p className="mt-1 text-sm font-medium opacity-80">{data.student.className}</p>
+        {isStudent ? (
+          data.student?.className && <p className="mt-1 text-sm font-medium opacity-80">{data.student.className}</p>
+        ) : (
+          <p className="mt-1 text-sm font-medium opacity-80">{user?.roleName}</p>
         )}
         {data.myClass && (
           <div className="mt-4 flex items-center justify-between rounded-2xl bg-white/15 px-4 py-3 backdrop-blur">
@@ -115,24 +117,26 @@ export default function TeacherHome() {
         </Card>
       )}
 
-      {/* Kehadiran saya */}
-      <Card className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${att?.checkIn ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-slate-100 text-slate-400 dark:bg-slate-700'}`}>
-            {att?.checkIn ? <CheckCircle2 className="h-7 w-7" /> : <Clock3 className="h-7 w-7" />}
+      {/* Kehadiran saya — khusus siswa; guru/petugas piket tidak memerlukan kartu ini */}
+      {isStudent && (
+        <Card className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${att?.checkIn ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-slate-100 text-slate-400 dark:bg-slate-700'}`}>
+              {att?.checkIn ? <CheckCircle2 className="h-7 w-7" /> : <Clock3 className="h-7 w-7" />}
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted">Kehadiran Saya</p>
+              <p className="font-mono text-3xl font-extrabold leading-none text-ink">{att?.checkIn?.time || '--:--'}</p>
+              <p className="mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                {att?.checkIn ? (att.checkIn.status === 'LATE' ? `Terlambat ${att.checkIn.lateMinutes} menit` : 'Hadir tepat waktu') : 'Belum absen'}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-medium text-muted">Kehadiran Saya</p>
-            <p className="font-mono text-3xl font-extrabold leading-none text-ink">{att?.checkIn?.time || '--:--'}</p>
-            <p className="mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-              {att?.checkIn ? (att.checkIn.status === 'LATE' ? `Terlambat ${att.checkIn.lateMinutes} menit` : 'Hadir tepat waktu') : 'Belum absen'}
-            </p>
-          </div>
-        </div>
-        <Button variant="secondary" onClick={quickAction} className="shrink-0">
-          <Camera className="h-4 w-4" /> Absen
-        </Button>
-      </Card>
+          <Button variant="secondary" onClick={quickAction} className="shrink-0">
+            <Camera className="h-4 w-4" /> Absen
+          </Button>
+        </Card>
+      )}
 
       {/* Menu grid */}
       <div className="grid grid-cols-3 gap-3">
