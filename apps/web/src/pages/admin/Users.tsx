@@ -12,7 +12,7 @@ interface UserRow {
 }
 
 const ROLE_LABEL: Record<string, string> = {
-  TEACHER: 'Guru', HOMEROOM_TEACHER: 'Wali Kelas', STAFF: 'Staff', ADMIN: 'Admin', HEADMASTER: 'Kepala Sekolah', PIKET: 'Petugas Piket',
+  SUPER_ADMIN: 'Super Admin', TEACHER: 'Guru', HOMEROOM_TEACHER: 'Wali Kelas', STAFF: 'Staff', ADMIN: 'Admin', HEADMASTER: 'Kepala Sekolah', PIKET: 'Petugas Piket',
 };
 
 export default function Users() {
@@ -196,12 +196,13 @@ function UserForm({ onClose, subjects, initial }: { onClose: () => void; subject
         <Field label="Username *"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoCapitalize="none" /></Field>
         <Field label="Role">
           <Select value={form.roleKey} onChange={(e) => setForm({ ...form, roleKey: e.target.value })}>
-            <option value="TEACHER">Guru</option>
-            <option value="HOMEROOM_TEACHER">Wali Kelas</option>
-            <option value="STAFF">Staff</option>
-            <option value="PIKET">Petugas Piket</option>
+            <option value="SUPER_ADMIN">Super Admin</option>
             <option value="ADMIN">Admin</option>
             <option value="HEADMASTER">Kepala Sekolah</option>
+            <option value="HOMEROOM_TEACHER">Wali Kelas</option>
+            <option value="TEACHER">Guru</option>
+            <option value="PIKET">Petugas Piket</option>
+            <option value="STAFF">Staff</option>
           </Select>
         </Field>
         <Field label={initial ? 'Password baru (opsional)' : 'Password'} hint={initial ? 'Kosongkan jika tidak diubah' : undefined}><Input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></Field>
