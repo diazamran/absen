@@ -39,9 +39,9 @@ export default function Settings() {
   const s = (school as Record<string, unknown> | null) ?? ((settings?.school as Record<string, unknown>) || {});
   const notif = (settings?.notifications as Record<string, unknown>) || {};
 
-  const setB = (k: string, v: unknown) => setBranding({ ...b, [k]: v });
-  const setR = (k: string, v: unknown) => setRules({ ...r, [k]: v });
-  const setS = (k: string, v: unknown) => setSchool({ ...s, [k]: v });
+  const setB = (k: string, v: unknown) => setBranding((prev) => ({ ...(prev ?? (settings?.branding as Record<string, unknown>) ?? {}), [k]: v }));
+  const setR = (k: string, v: unknown) => setRules((prev) => ({ ...(prev ?? (settings?.attendanceRules as Record<string, unknown>) ?? {}), [k]: v }));
+  const setS = (k: string, v: unknown) => setSchool((prev) => ({ ...(prev ?? (settings?.school as Record<string, unknown>) ?? {}), [k]: v }));
 
   const uploadLogo = async (file: File) => {
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
