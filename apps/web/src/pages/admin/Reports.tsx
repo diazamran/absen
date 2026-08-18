@@ -10,6 +10,7 @@ import { Card, Select, Field, Button, EmptyState, Segmented } from '../../lib/ui
 import { PageHeader } from '../../components/AppShell';
 import { STATUS_LABELS, STATUS_COLORS, currentMonthKey, todayJakartaKey } from '../../lib/format';
 import { exportReportPdf, exportReportExcel, formatLongDate, type ReportExportRow } from '../../lib/reportExport';
+import { exportRecapExcel } from '../../lib/recapExport';
 import RecapTable from '../../components/RecapTable';
 
 interface Summary { PRESENT: number; LATE: number; EXCUSED: number; SICK: number; OFFICIAL_DUTY: number; DISPENSATION: number; ABSENT: number; }
@@ -93,8 +94,19 @@ export default function Reports() {
         subtitle="Rekap kehadiran harian & bulanan"
         action={
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => doExport('pdf')}><FileText className="h-4 w-4" /> Export PDF</Button>
-            <Button variant="outline" onClick={() => doExport('excel')}><FileSpreadsheet className="h-4 w-4" /> Export Excel</Button>
+            {tab === 'recap' ? (
+              <Button variant="outline" onClick={() => {
+                if (report?.dateColumns && report?.rows) {
+                  exportRecapExcel(report as any);
+                  toast('success', 'Rekap Excel diunduh.');
+                } else toast('info', 'Belum ada data rekap.');
+              }}><FileSpreadsheet className="h-4 w-4" /> Export Excel</Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => doExport('pdf')}><FileText className="h-4 w-4" /> Export PDF</Button>
+                <Button variant="outline" onClick={() => doExport('excel')}><FileSpreadsheet className="h-4 w-4" /> Export Excel</Button>
+              </>
+            )}
           </div>
         }
       />
