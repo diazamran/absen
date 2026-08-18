@@ -304,7 +304,7 @@ export async function importRoutes(app: FastifyInstance) {
           z.object({
             nama: z.string().min(1),
             username: z.string().min(3),
-            roleKey: z.enum(['ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF', 'PIKET']),
+            roleKey: z.enum(['SUPER_ADMIN', 'ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF', 'PIKET']),
             password: z.string().min(6),
             nip: z.string().optional(),
             position: z.string().optional(),

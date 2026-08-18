@@ -11,7 +11,7 @@ const userCreateSchema = z.object({
   username: z.string().min(3),
   password: z.string().min(6),
   fullName: z.string().min(1),
-  roleKey: z.enum(['ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF', 'PIKET']),
+  roleKey: z.enum(['SUPER_ADMIN', 'ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF', 'PIKET']),
   nip: z.string().optional(),
   position: z.string().optional(),
   phone: z.string().optional(),
@@ -127,7 +127,7 @@ export async function userRoutes(app: FastifyInstance) {
         subjectId: z.string().optional(),
         isPiket: z.boolean().optional(),
         password: z.string().min(6).optional(),
-        roleKey: z.enum(['ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF', 'PIKET']).optional(),
+        roleKey: z.enum(['SUPER_ADMIN', 'ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF', 'PIKET']).optional(),
       }),
       request.body,
     );
