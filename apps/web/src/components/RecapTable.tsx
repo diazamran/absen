@@ -134,16 +134,23 @@ export default function RecapTable({ data }: { data: RecapData }) {
       </div>
 
       {/* Signature area */}
-      <div className="mt-6 flex justify-end gap-12 pr-8 text-xs text-muted">
+      <div className="mt-6 flex items-start justify-between px-4 text-xs text-muted">
+        {/* Kiri: Kepala Sekolah */}
         <div className="text-center">
-          <p className="mb-8">Mengetahui,</p>
-          <p className="font-semibold text-ink">_________________________</p>
-          <p>Kepala Sekolah</p>
+          <p className="mb-1">Mengetahui,</p>
+          <p className="mb-8">Kepala Sekolah</p>
+          <p className="mb-1">_________________________</p>
+          <p className="font-semibold text-ink">( _____________________ )</p>
+          <p>NIP. _____________________</p>
         </div>
+        {/* Kanan: Petugas Piket */}
         <div className="text-center">
-          <p className="mb-8">{data.today}</p>
-          <p className="font-semibold text-ink">_________________________</p>
-          <p>Petugas Piket</p>
+          <p className="mb-1">{data.today}</p>
+          <p className="mb-1">Petugas Piket,</p>
+          <p className="mb-8">&nbsp;</p>
+          <p className="mb-1">_________________________</p>
+          <p className="font-semibold text-ink">( _____________________ )</p>
+          <p>NIP. _____________________</p>
         </div>
       </div>
     </Card>
