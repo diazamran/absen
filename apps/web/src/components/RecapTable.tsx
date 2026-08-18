@@ -73,8 +73,8 @@ export default function RecapTable({ data }: { data: RecapData }) {
             <tr className="bg-slate-100 dark:bg-slate-800">
               <th className="sticky left-0 z-20 bg-slate-100 px-2 py-1 text-center font-bold text-ink dark:bg-slate-800" rowSpan={2}>No</th>
               <th className="sticky left-8 z-20 bg-slate-100 px-2 py-1 text-center font-bold text-ink dark:bg-slate-800" rowSpan={2}>Kelas</th>
-              <th className="sticky left-[7rem] z-20 bg-slate-100 px-2 py-1 text-center font-bold text-ink dark:bg-slate-800" rowSpan={2}>Nama</th>
-              <th className="border border-slate-300 bg-slate-200 px-2 py-0.5 text-center font-bold text-ink dark:bg-slate-700" colSpan={6}>Smt. {data.semesterName}</th>
+              <th className="sticky left-[8rem] z-20 bg-slate-100 border-r-2 border-slate-400 px-2 py-1 text-center font-bold text-ink dark:bg-slate-800 dark:border-slate-600" rowSpan={2}>Nama</th>
+              <th className="border border-slate-300 bg-slate-200 px-2 py-0.5 text-center font-bold text-ink dark:bg-slate-700" colSpan={6}>{'Smt. ' + data.semesterName}</th>
               <th className="border border-slate-300 bg-slate-200 px-2 py-0.5 text-center font-bold text-ink dark:bg-slate-700" colSpan={6}>Last 30 Day</th>
               <th className="border border-slate-300 bg-slate-200 px-2 py-0.5 text-center font-bold text-ink dark:bg-slate-700" colSpan={data.dateColumns.length}>Detail Harian</th>
             </tr>
@@ -103,7 +103,7 @@ export default function RecapTable({ data }: { data: RecapData }) {
               <tr key={row.nis} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                 <td className="sticky left-0 z-10 border border-slate-200 bg-white px-2 py-1 text-center text-muted dark:bg-slate-900">{row.no}</td>
                 <td className="sticky left-8 z-10 border border-slate-200 bg-white px-2 py-1 font-semibold text-ink dark:bg-slate-900">{row.className}</td>
-                <td className="sticky left-[7rem] z-10 border border-slate-200 bg-white px-2 py-1 font-medium text-ink dark:bg-slate-900" style={{ minWidth: 140 }}>{row.name}</td>
+                <td className="sticky left-[8rem] z-10 border border-r-2 border-slate-200 bg-white px-2 py-1 font-medium text-ink dark:bg-slate-900 dark:border-slate-600" style={{ minWidth: 140 }}>{row.name}</td>
                 {/* Semester counts */}
                 {(['S', 'I', 'A', 'D', 'P'] as const).map((k) => (
                   <td key={`sem-${k}`} className="border border-slate-200 px-1 py-1 text-center font-semibold" style={{ color: LETTER_STYLE[k]?.color ?? '#374151' }}>
