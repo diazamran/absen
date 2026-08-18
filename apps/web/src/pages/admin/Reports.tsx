@@ -58,7 +58,7 @@ export default function Reports() {
     queryFn: () => api<{ success: boolean; data: { id: string; name: string }[] }>('/classes').then((r) => r.data),
   });
 
-  const chartData = SUMMARY_KEYS.map((s) => ({ name: s.label, value: report?.summary[s.key] || 0, color: STATUS_COLORS[s.key] }));
+  const chartData = SUMMARY_KEYS.map((s) => ({ name: s.label, value: report?.summary?.[s.key] || 0, color: STATUS_COLORS[s.key] }));
 
   const period = tab === 'daily' ? `Tanggal: ${formatLongDate(date)}` : `Bulan: ${formatLongDate(`${month}-01`).replace(/^1\s/, '')}`;
   const doExport = (kind: 'pdf' | 'excel') => {
