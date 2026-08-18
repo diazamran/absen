@@ -43,7 +43,7 @@ export default function Classes() {
 
 interface ClassRow {
   id: string; name: string; grade: string; majorId?: string | null; majorName?: string | null;
-  homeroomTeacher?: string | null; room?: string | null; studentCount: number;
+  homeroomTeacher?: string | null; homeroomTeacherId?: string | null; room?: string | null; studentCount: number;
 }
 
 const CLASS_HEADERS = ['Nama Kelas', 'Tingkat', 'Jurusan', 'Ruang'];
@@ -261,6 +261,16 @@ function ClassForm({ majors, initial, onClose }: { majors: { id: string; name: s
     grade: initial?.grade || 'X',
     majorId: initial?.majorId || '',
     room: initial?.room || '',
+    homeroomTeacherId: initial?.homeroomTeacherId || '',
+  });
+  const { data: teachers } = useQuery({
+    queryKey: ['teachers'],
+    queryFn: () => api<{ success: boolean; data: { id: string; fullName: string; nip?: string | null }[] }>('/users?role=TEACHER&pageSize=200').then((r) => r.data),
+  });
+  // Gabung guru + wali kelas + kepala sekolah + staff untuk dropdown
+  const { data: allStaff } = useQuery({
+    queryKey: ['all-staff-for-class'],
+    queryFn: () => api<{ success: boolean; data: { id: string; fullName: string; roleKey: string; nip?: string | null }[] }>('/users?pageSize=500').then((r) => r.data),
   });
 
   const mutation = useMutation({
@@ -292,6 +302,14 @@ function ClassForm({ majors, initial, onClose }: { majors: { id: string; name: s
           </Select>
         </Field>
         <Field label="Ruang"><Input value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} placeholder="Labkom 1" /></Field>
+        <Field label="Wali Kelas">
+          <Select value={form.homeroomTeacherId} onChange={(e) => setForm({ ...form, homeroomTeacherId: e.target.value })}>
+            <option value="">— Belum ditentukan —</option>
+            {(allStaff || []).filter((u) => ['TEACHER', 'HOMEROOM_TEACHER', 'ADMIN', 'SUPER_ADMIN', 'HEADMASTER'].includes(u.roleKey)).map((u) => (
+              <option key={u.id} value={u.id}>{u.fullName}{u.nip ? ` (${u.nip})` : ''}</option>
+            ))}
+          </Select>
+        </Field>
       </div>
       <div className="mt-4 flex justify-end gap-2">
         <Button variant="outline" onClick={onClose}>Batal</Button>

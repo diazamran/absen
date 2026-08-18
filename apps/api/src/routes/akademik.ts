@@ -34,6 +34,7 @@ export async function akademikRoutes(app: FastifyInstance) {
         majorName: c.major?.name ?? null,
         academicYear: c.academicYear?.name ?? null,
         homeroomTeacher: c.homeroomTeacher?.user?.fullName ?? null,
+        homeroomTeacherId: c.homeroomTeacherId ?? null,
         room: c.room,
         studentCount: c._count.students,
       })),
