@@ -6,6 +6,7 @@ import { prepareLogoFile } from '../../lib/image';
 import { useTheme } from '../../lib/theme';
 import { useToast } from '../../lib/toast';
 import { Card, Button, Input, Field } from '../../lib/ui';
+import TimeInput from '../../components/TimeInput';
 import { PageHeader } from '../../components/AppShell';
 
 const PRESETS = ['#0d9488', '#2563eb', '#16a34a', '#7c3aed', '#ea580c'];
@@ -15,14 +16,6 @@ function pad2(v: unknown): string {
   const n = Number(v);
   const t = Number.isFinite(n) ? Math.trunc(n) : 0;
   return String(Math.max(0, Math.min(59, t))).padStart(2, '0');
-}
-
-/** Parse "HH:MM" dari input type=time → [jam, menit] yang valid. */
-function splitTime(v: string): [number, number] {
-  const [h, m] = v.split(':').map(Number);
-  const hh = Number.isFinite(h) ? Math.min(23, Math.max(0, Math.trunc(h))) : 0;
-  const mm = Number.isFinite(m) ? Math.min(59, Math.max(0, Math.trunc(m))) : 0;
-  return [hh, mm];
 }
 
 export default function Settings() {
@@ -169,16 +162,16 @@ export default function Settings() {
           <h3 className="mb-3 flex items-center gap-2 font-bold text-ink"><Clock3 className="h-4 w-4" /> Aturan Absensi & Lokasi</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Jam batas terlambat" hint="Setelah jam ini, absen datang dihitung Terlambat.">
-              <Input type="time" value={`${pad2(r.lateAfterHour ?? 7)}:${pad2(r.lateAfterMinute ?? 0)}`} onChange={(e) => { const [h, m] = splitTime(e.target.value); setR('lateAfterHour', h); setR('lateAfterMinute', m); }} />
+              <TimeInput value={`${pad2(r.lateAfterHour ?? 7)}:${pad2(r.lateAfterMinute ?? 0)}`} onChange={(v) => { const [h, m] = v.split(':').map(Number); setR('lateAfterHour', h); setR('lateAfterMinute', m); }} />
             </Field>
             <Field label="Batas akhir absen datang" hint="Setelah jam ini, siswa TIDAK BISA absen datang sendiri (dianggap tidak hadir — koreksi manual oleh petugas). 23:59 = tidak dibatasi.">
-              <Input type="time" value={`${pad2(r.checkInDeadlineHour ?? 23)}:${pad2(r.checkInDeadlineMinute ?? 59)}`} onChange={(e) => { const [h, m] = splitTime(e.target.value); setR('checkInDeadlineHour', h); setR('checkInDeadlineMinute', m); }} />
+              <TimeInput value={`${pad2(r.checkInDeadlineHour ?? 23)}:${pad2(r.checkInDeadlineMinute ?? 59)}`} onChange={(v) => { const [h, m] = v.split(':').map(Number); setR('checkInDeadlineHour', h); setR('checkInDeadlineMinute', m); }} />
             </Field>
             <Field label="Jam pulang sekolah" hint="Jam selesai kegiatan sekolah (dipakai di laporan).">
-              <Input type="time" value={`${pad2(r.checkOutAfterHour ?? 15)}:${pad2(r.checkOutAfterMinute ?? 30)}`} onChange={(e) => { const [h, m] = splitTime(e.target.value); setR('checkOutAfterHour', h); setR('checkOutAfterMinute', m); }} />
+              <TimeInput value={`${pad2(r.checkOutAfterHour ?? 15)}:${pad2(r.checkOutAfterMinute ?? 30)}`} onChange={(v) => { const [h, m] = v.split(':').map(Number); setR('checkOutAfterHour', h); setR('checkOutAfterMinute', m); }} />
             </Field>
             <Field label="Mulai dihitung Pulang Awal" hint={'Siswa yang absen pulang SEBELUM jam ini ditandai "Pulang Awal". Kosongkan = ikut jam pulang sekolah.'}>
-              <Input type="time" value={`${pad2(r.earlyLeaveBeforeHour ?? r.checkOutAfterHour ?? 15)}:${pad2(r.earlyLeaveBeforeMinute ?? r.checkOutAfterMinute ?? 30)}`} onChange={(e) => { const [h, m] = splitTime(e.target.value); setR('earlyLeaveBeforeHour', h); setR('earlyLeaveBeforeMinute', m); }} />
+              <TimeInput value={`${pad2(r.earlyLeaveBeforeHour ?? r.checkOutAfterHour ?? 15)}:${pad2(r.earlyLeaveBeforeMinute ?? r.checkOutAfterMinute ?? 30)}`} onChange={(v) => { const [h, m] = v.split(':').map(Number); setR('earlyLeaveBeforeHour', h); setR('earlyLeaveBeforeMinute', m); }} />
             </Field>
             <label className="flex items-center gap-2 text-sm font-medium text-ink">
               <input type="checkbox" checked={r.duplicatePrevention !== false} onChange={(e) => setR('duplicatePrevention', e.target.checked)} className="h-4 w-4 accent-teal-600" />
