@@ -333,20 +333,20 @@ export async function reportRoutes(app: FastifyInstance) {
         }
       }
 
-      // Last 30 days + daily statuses: only past school days = A, else empty
+      // Date range statuses + daily: only past school days = A, else empty
       for (const dk of dateColumns) {
         const st = dayMap.get(dk);
         if (st) {
           // Has attendance record
           const letter = statusLetter(st);
           dailyStatuses[dk] = letter;
-          if (dk >= dateKey(last30Start) && dk <= todayKey) {
+          if (dk >= fromDate && dk <= toDate) {
             l30Counts[letter as keyof typeof l30Counts]++;
           }
         } else if (dk <= todayKey && isSchoolDay(dk)) {
           // Past school day, no record → Alpha
           dailyStatuses[dk] = 'A';
-          if (dk >= dateKey(last30Start)) {
+          if (dk >= fromDate) {
             l30Counts.A++;
           }
         }
