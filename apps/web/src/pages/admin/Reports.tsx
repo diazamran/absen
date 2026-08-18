@@ -41,11 +41,19 @@ export default function Reports() {
   const [month, setMonth] = useState(currentMonthKey());
   const [classId, setClassId] = useState('');
 
+  // Date range for recap (default: last 30 days)
+  const [recapFrom, setRecapFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 29);
+    return d.toISOString().slice(0, 10);
+  });
+  const [recapTo, setRecapTo] = useState(todayJakartaKey());
+
   const { data: report } = useQuery({
-    queryKey: ['report', tab, date, month, classId],
+    queryKey: ['report', tab, date, month, classId, recapFrom, recapTo],
     queryFn: () =>
       tab === 'recap'
-        ? api<{ success: boolean; data: any }>('/reports/recap').then((r) => r.data)
+        ? api<{ success: boolean; data: any }>(`/reports/recap?from=${recapFrom}&to=${recapTo}`).then((r) => r.data)
         : api<{ success: boolean; data: ReportData }>(
             tab === 'daily'
               ? `/reports/daily?date=${date}&classId=${classId}`
@@ -133,7 +141,13 @@ export default function Reports() {
             { value: 'recap', label: 'Rekap Absensi' },
           ]}
         />
-        {tab !== 'recap' && (
+        {tab === 'recap' ? (
+          <>
+            <Field label="Dari"><input type="date" value={recapFrom} onChange={(e) => setRecapFrom(e.target.value)} className="rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink dark:bg-slate-900" /></Field>
+            <span className="self-end pb-2 text-sm text-muted">—</span>
+            <Field label="Sampai"><input type="date" value={recapTo} onChange={(e) => setRecapTo(e.target.value)} className="rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink dark:bg-slate-900" /></Field>
+          </>
+        ) : (
           <>
             {tab === 'daily' ? (
               <Field label="Tanggal"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink dark:bg-slate-900" /></Field>

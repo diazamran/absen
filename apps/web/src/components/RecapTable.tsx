@@ -23,6 +23,8 @@ interface RecapRow {
 interface RecapData {
   today: string;
   semesterName: string;
+  fromDate?: string;
+  toDate?: string;
   dateColumns: string[];
   rows: RecapRow[];
 }
@@ -52,7 +54,7 @@ export default function RecapTable({ data }: { data: RecapData }) {
         <div>
           <h3 className="font-bold text-ink">Rekap Absensi Siswa</h3>
           <p className="text-xs text-muted">
-            Smt. {data.semesterName} · {data.dateColumns.length} hari terakhir · {data.rows.length} siswa
+            Smt. {data.semesterName} · {data.fromDate && data.toDate ? `${data.fromDate} s/d ${data.toDate} (${data.dateColumns.length} hari)` : `${data.dateColumns.length} hari terakhir`} · {data.rows.length} siswa
           </p>
         </div>
         <div className="flex gap-2 text-[10px]">

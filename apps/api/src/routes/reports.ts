@@ -223,7 +223,7 @@ export async function reportRoutes(app: FastifyInstance) {
 
   // ===== Rekap Absensi per Siswa (tampilan spreadsheet) =====
   app.get('/reports/recap', { preHandler: app.requirePermission(PERMISSION_KEYS.reportsRead) }, async (request, reply) => {
-    const q = request.query as { classId?: string; date?: string };
+    const q = request.query as { classId?: string; date?: string; from?: string; to?: string };
     const classId = await scopedClassId(request, q.classId);
     const today = q.date || dateKey();
 
@@ -242,13 +242,18 @@ export async function reportRoutes(app: FastifyInstance) {
     const semesterStartDate = startOfLocalDay(semesterStart);
     const todayDateObj = new Date(today + 'T23:59:59+07:00');
 
-    // Last 30 days
-    const last30Start = new Date(todayDateObj.getTime() - 30 * 24 * 3600_000);
+    // Date range for daily columns: from/to params or default last 30 days
+    const toDate = q.to || today;
+    const fromDate = q.from || dateKey(new Date(new Date(toDate + 'T12:00:00+07:00').getTime() - 29 * 24 * 3600_000));
+    const fromDateObj = new Date(fromDate + 'T12:00:00+07:00');
+    const toDateObj = new Date(toDate + 'T23:59:59+07:00');
 
-    // Generate date columns for last 30 days (newest first)
+    // Generate date columns (newest first)
     const dateColumns: string[] = [];
-    for (let i = 0; i < 30; i++) {
-      const d = new Date(todayDateObj.getTime() - i * 24 * 3600_000);
+    const diffMs = toDateObj.getTime() - fromDateObj.getTime();
+    const diffDays = Math.floor(diffMs / (24 * 3600_000)) + 1;
+    for (let i = 0; i < diffDays; i++) {
+      const d = new Date(toDateObj.getTime() - i * 24 * 3600_000);
       dateColumns.push(dateKey(d));
     }
 
@@ -378,6 +383,8 @@ export async function reportRoutes(app: FastifyInstance) {
       data: {
         today,
         semesterName,
+        fromDate,
+        toDate,
         dateColumns,
         rows,
       },
