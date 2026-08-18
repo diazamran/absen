@@ -48,6 +48,7 @@ export default function FaceRegister() {
 
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<StudentRow | null>(null);
+  const [pendingSelected, setPendingSelected] = useState<Set<string>>(new Set());
   const [descriptors, setDescriptors] = useState<number[][]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [consent, setConsent] = useState(false);
@@ -83,6 +84,49 @@ export default function FaceRegister() {
     },
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menyetujui.'),
   });
+
+  const bulkApprove = useMutation({
+    mutationFn: async () => {
+      for (const userId of pendingSelected) {
+        await api(`/face/${userId}/approve`, { method: 'POST' });
+      }
+    },
+    onSuccess: () => {
+      toast('success', `${pendingSelected.size} registrasi wajah disetujui.`);
+      setPendingSelected(new Set());
+      qc.invalidateQueries({ queryKey: ['face-pending'] });
+      qc.invalidateQueries({ queryKey: ['face-status'] });
+      qc.invalidateQueries({ queryKey: ['students'] });
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menyetujui massal.'),
+  });
+
+  const bulkReset = useMutation({
+    mutationFn: async () => {
+      for (const userId of pendingSelected) {
+        await api(`/face/${userId}`, { method: 'DELETE' });
+      }
+    },
+    onSuccess: () => {
+      toast('success', `${pendingSelected.size} data wajah dihapus.`);
+      setPendingSelected(new Set());
+      qc.invalidateQueries({ queryKey: ['face-pending'] });
+      qc.invalidateQueries({ queryKey: ['students'] });
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus massal.'),
+  });
+
+  const togglePending = (userId: string) => {
+    setPendingSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId); else next.add(userId);
+      return next;
+    });
+  };
+  const toggleAllPending = () => {
+    if (!pending?.length) return;
+    setPendingSelected((prev) => (prev.size === pending.length ? new Set() : new Set(pending.map((p) => p.userId))));
+  };
 
   // Nyalakan kamera saat siswa dipilih & belum terdaftar
   useEffect(() => {
@@ -176,13 +220,37 @@ export default function FaceRegister() {
       {pendingLoading && <Skeleton className="mb-4 h-24 w-full" />}
       {!pendingLoading && pending && pending.length > 0 && (
         <Card className="mb-4 border-amber-200 bg-amber-50/50 dark:bg-amber-500/5">
-          <div className="mb-3 flex items-center gap-2">
-            <Clock className="h-5 w-5 text-amber-600" />
-            <p className="font-bold text-ink">Menunggu Persetujuan ({pending.length})</p>
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-amber-600" />
+              <p className="font-bold text-ink">Menunggu Persetujuan ({pending.length})</p>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-muted">
+              <input type="checkbox" checked={pendingSelected.size === pending.length && pending.length > 0} onChange={toggleAllPending} className="h-4 w-4 accent-[var(--primary)]" />
+              Pilih semua
+            </label>
           </div>
+          {pendingSelected.size > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber-300 bg-amber-100/60 px-3 py-2 dark:bg-amber-500/10">
+              <span className="text-xs font-semibold text-ink">{pendingSelected.size} dipilih</span>
+              <Button className="!px-3 !py-1.5 text-xs" onClick={() => {
+                if (window.confirm(`Setujui ${pendingSelected.size} registrasi wajah?`)) bulkApprove.mutate();
+              }} disabled={bulkApprove.isPending}>
+                {bulkApprove.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                Setujui Semua
+              </Button>
+              <Button variant="danger" className="!px-3 !py-1.5 text-xs" onClick={() => {
+                if (window.confirm(`Hapus data wajah ${pendingSelected.size} siswa?`)) bulkReset.mutate();
+              }} disabled={bulkReset.isPending}>
+                {bulkReset.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                Hapus Semua
+              </Button>
+            </div>
+          )}
           <div className="space-y-2">
             {pending.map((p) => (
-              <div key={p.userId} className="flex flex-wrap items-center gap-3 rounded-2xl border border-line/60 bg-surface p-3 dark:bg-slate-800/70">
+              <div key={p.userId} className={`flex flex-wrap items-center gap-3 rounded-2xl border p-3 dark:bg-slate-800/70 ${pendingSelected.has(p.userId) ? 'border-primary bg-primary-soft/30' : 'border-line/60 bg-surface'}`}>
+                <input type="checkbox" checked={pendingSelected.has(p.userId)} onChange={() => togglePending(p.userId)} className="h-4 w-4 shrink-0 accent-[var(--primary)]" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-ink">{p.fullName}</p>
                   <p className="text-xs text-muted">{p.nis ?? '-'} · {p.className ?? '-'} · {p.samples} sampel</p>
