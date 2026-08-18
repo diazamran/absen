@@ -28,20 +28,34 @@ export interface Branding {
   loginBackground: string | null;
 }
 
+/** Normalisasi nilai jam (0-23) / menit (0-59) — nilai tak valid (mis. "7.1"/"10.1") jatuh ke default. */
+function normTimePart(v: unknown, fallback: number, max: number): number {
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 && n <= max ? n : fallback;
+}
+
+function normHour(v: unknown, fallback: number): number {
+  return normTimePart(v, fallback, 23);
+}
+
+function normMinute(v: unknown, fallback: number): number {
+  return normTimePart(v, fallback, 59);
+}
+
 export async function getAttendanceRules(): Promise<AttendanceRules> {
   const row = await prisma.schoolSetting.findUnique({ where: { key: 'attendanceRules' } });
   const v = (row?.value as Record<string, unknown>) || {};
   const school = await prisma.school.findFirst();
   return {
-    lateAfterHour: Number(v.lateAfterHour ?? config.lateAfterHour),
-    lateAfterMinute: Number(v.lateAfterMinute ?? config.lateAfterMinute),
-    checkOutAfterHour: Number(v.checkOutAfterHour ?? config.checkOutAfterHour),
-    checkOutAfterMinute: Number(v.checkOutAfterMinute ?? config.checkOutAfterMinute),
-    checkInDeadlineHour: Number(v.checkInDeadlineHour ?? config.checkInDeadlineHour),
-    checkInDeadlineMinute: Number(v.checkInDeadlineMinute ?? config.checkInDeadlineMinute),
+    lateAfterHour: normHour(v.lateAfterHour, config.lateAfterHour),
+    lateAfterMinute: normMinute(v.lateAfterMinute, config.lateAfterMinute),
+    checkOutAfterHour: normHour(v.checkOutAfterHour, config.checkOutAfterHour),
+    checkOutAfterMinute: normMinute(v.checkOutAfterMinute, config.checkOutAfterMinute),
+    checkInDeadlineHour: normHour(v.checkInDeadlineHour, config.checkInDeadlineHour),
+    checkInDeadlineMinute: normMinute(v.checkInDeadlineMinute, config.checkInDeadlineMinute),
     // Pulang awal: default ikut jam pulang sekolah kalau belum diatur terpisah
-    earlyLeaveBeforeHour: Number(v.earlyLeaveBeforeHour ?? v.checkOutAfterHour ?? config.checkOutAfterHour),
-    earlyLeaveBeforeMinute: Number(v.earlyLeaveBeforeMinute ?? v.checkOutAfterMinute ?? config.checkOutAfterMinute),
+    earlyLeaveBeforeHour: normHour(v.earlyLeaveBeforeHour ?? v.checkOutAfterHour, config.checkOutAfterHour),
+    earlyLeaveBeforeMinute: normMinute(v.earlyLeaveBeforeMinute ?? v.checkOutAfterMinute, config.checkOutAfterMinute),
     duplicatePrevention: v.duplicatePrevention !== false,
     locationEnabled: v.locationEnabled === true || (v.locationEnabled === undefined && config.locationEnabled),
     radiusMeters: Number(v.radiusMeters ?? config.locationRadiusMeters),

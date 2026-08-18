@@ -43,6 +43,7 @@ services:
       API_URL: ${API_URL:-http://localhost:4000}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
       TIMEZONE: Asia/Jakarta
+      TZ: Asia/Jakarta
       STORAGE_DRIVER: local
       FACE_RECOGNITION_PROVIDER: ${FACE_RECOGNITION_PROVIDER:-mock}
       OTP_DEV_PREVIEW: "false"

@@ -59,6 +59,17 @@ export function localTime(date: Date | string): string {
   return `${hh}:${mm}`;
 }
 
+/**
+ * Menit sejak tengah malam waktu LOKAL (timezone sekolah) untuk suatu instant.
+ * Penting: JANGAN pakai date.getHours() langsung — server bisa berjalan di UTC
+ * sehingga jam 15:24 WIB terbaca 08:24 dan aturan "pulang awal" salah.
+ */
+export function localMinutesOf(date: Date | string = new Date()): number {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  const shifted = new Date(d.getTime() + tzOffsetMs() * 3600_000);
+  return shifted.getUTCHours() * 60 + shifted.getUTCMinutes();
+}
+
 /** Format tanggal lokal (dd MMM yyyy) mis. "16 Agu 2026". */
 export function localDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;

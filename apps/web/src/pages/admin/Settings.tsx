@@ -10,6 +10,21 @@ import { PageHeader } from '../../components/AppShell';
 
 const PRESETS = ['#0d9488', '#2563eb', '#16a34a', '#7c3aed', '#ea580c'];
 
+/** Tampilkan jam/menit sebagai HH:MM (nilai tak valid seperti 7.1 → 07:00). */
+function pad2(v: unknown): string {
+  const n = Number(v);
+  const t = Number.isFinite(n) ? Math.trunc(n) : 0;
+  return String(Math.max(0, Math.min(59, t))).padStart(2, '0');
+}
+
+/** Parse "HH:MM" dari input type=time → [jam, menit] yang valid. */
+function splitTime(v: string): [number, number] {
+  const [h, m] = v.split(':').map(Number);
+  const hh = Number.isFinite(h) ? Math.min(23, Math.max(0, Math.trunc(h))) : 0;
+  const mm = Number.isFinite(m) ? Math.min(59, Math.max(0, Math.trunc(m))) : 0;
+  return [hh, mm];
+}
+
 export default function Settings() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -152,24 +167,20 @@ export default function Settings() {
         {/* Aturan absensi + lokasi */}
         <Card>
           <h3 className="mb-3 flex items-center gap-2 font-bold text-ink"><Clock3 className="h-4 w-4" /> Aturan Absensi & Lokasi</h3>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Jam batas terlambat" hint="Setelah jam ini, absen datang dihitung Terlambat.">
-              <Input type="number" value={Number(r.lateAfterHour ?? 7)} onChange={(e) => setR('lateAfterHour', Number(e.target.value))} />
+              <Input type="time" value={`${pad2(r.lateAfterHour ?? 7)}:${pad2(r.lateAfterMinute ?? 0)}`} onChange={(e) => { const [h, m] = splitTime(e.target.value); setR('lateAfterHour', h); setR('lateAfterMinute', m); }} />
             </Field>
-            <Field label="Menit"><Input type="number" value={Number(r.lateAfterMinute ?? 0)} onChange={(e) => setR('lateAfterMinute', Number(e.target.value))} /></Field>
             <Field label="Batas akhir absen datang" hint="Setelah jam ini, siswa TIDAK BISA absen datang sendiri (dianggap tidak hadir — koreksi manual oleh petugas). 23:59 = tidak dibatasi.">
-              <Input type="number" value={Number(r.checkInDeadlineHour ?? 23)} onChange={(e) => setR('checkInDeadlineHour', Number(e.target.value))} />
+              <Input type="time" value={`${pad2(r.checkInDeadlineHour ?? 23)}:${pad2(r.checkInDeadlineMinute ?? 59)}`} onChange={(e) => { const [h, m] = splitTime(e.target.value); setR('checkInDeadlineHour', h); setR('checkInDeadlineMinute', m); }} />
             </Field>
-            <Field label="Menit"><Input type="number" value={Number(r.checkInDeadlineMinute ?? 59)} onChange={(e) => setR('checkInDeadlineMinute', Number(e.target.value))} /></Field>
             <Field label="Jam pulang sekolah" hint="Jam selesai kegiatan sekolah (dipakai di laporan).">
-              <Input type="number" value={Number(r.checkOutAfterHour ?? 15)} onChange={(e) => setR('checkOutAfterHour', Number(e.target.value))} />
+              <Input type="time" value={`${pad2(r.checkOutAfterHour ?? 15)}:${pad2(r.checkOutAfterMinute ?? 30)}`} onChange={(e) => { const [h, m] = splitTime(e.target.value); setR('checkOutAfterHour', h); setR('checkOutAfterMinute', m); }} />
             </Field>
-            <Field label="Menit"><Input type="number" value={Number(r.checkOutAfterMinute ?? 30)} onChange={(e) => setR('checkOutAfterMinute', Number(e.target.value))} /></Field>
             <Field label="Mulai dihitung Pulang Awal" hint={'Siswa yang absen pulang SEBELUM jam ini ditandai "Pulang Awal". Kosongkan = ikut jam pulang sekolah.'}>
-              <Input type="number" value={Number(r.earlyLeaveBeforeHour ?? r.checkOutAfterHour ?? 15)} onChange={(e) => setR('earlyLeaveBeforeHour', Number(e.target.value))} />
+              <Input type="time" value={`${pad2(r.earlyLeaveBeforeHour ?? r.checkOutAfterHour ?? 15)}:${pad2(r.earlyLeaveBeforeMinute ?? r.checkOutAfterMinute ?? 30)}`} onChange={(e) => { const [h, m] = splitTime(e.target.value); setR('earlyLeaveBeforeHour', h); setR('earlyLeaveBeforeMinute', m); }} />
             </Field>
-            <Field label="Menit"><Input type="number" value={Number(r.earlyLeaveBeforeMinute ?? r.checkOutAfterMinute ?? 30)} onChange={(e) => setR('earlyLeaveBeforeMinute', Number(e.target.value))} /></Field>
-            <label className="flex items-center gap-2 pt-5 text-sm font-medium text-ink">
+            <label className="flex items-center gap-2 text-sm font-medium text-ink">
               <input type="checkbox" checked={r.duplicatePrevention !== false} onChange={(e) => setR('duplicatePrevention', e.target.checked)} className="h-4 w-4 accent-teal-600" />
               Cegah absen ganda
             </label>

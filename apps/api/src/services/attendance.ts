@@ -10,7 +10,7 @@
 import type { FastifyRequest } from 'fastify';
 import { prisma } from '../lib/prisma.js';
 import { ApiError } from '../utils/errors.js';
-import { dateKey, startOfLocalDay, localTime, localTimeToUtc, localDateKeyOfStoredDate } from '../lib/time.js';
+import { dateKey, startOfLocalDay, localTime, localTimeToUtc, localDateKeyOfStoredDate, localMinutesOf } from '../lib/time.js';
 import { faceService } from './face.js';
 import { verifyQrToken } from './qr.js';
 import { verifyCard } from './card.js';
@@ -168,8 +168,9 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
       throw ApiError.badRequest('NO_CHECK_IN', 'Absensi pulang hanya bisa dilakukan setelah absensi datang.');
     }
     // Pulang sebelum batas "mulai dihitung pulang awal" (default: jam pulang sekolah) → ditandai "pulang awal"
+    // Gunakan menit waktu LOKAL sekolah (WIB), bukan waktu lokal server yang bisa UTC di container
     const batasPulangAwal = rules.earlyLeaveBeforeHour * 60 + rules.earlyLeaveBeforeMinute;
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const nowMinutes = localMinutesOf(now);
     if (nowMinutes < batasPulangAwal) {
       earlyLeave = true;
     }
