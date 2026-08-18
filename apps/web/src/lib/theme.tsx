@@ -1,6 +1,14 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { api } from './api';
 
+export interface LoginTexts {
+  headline: string;
+  description: string;
+  loginHeading: string;
+  loginSubtitle: string;
+  features: string[];
+}
+
 export interface Branding {
   appName: string;
   schoolName: string;
@@ -9,6 +17,7 @@ export interface Branding {
   secondaryColor: string;
   logoUrl: string | null;
   loginBackground: string | null;
+  loginTexts: LoginTexts;
 }
 
 const PALETTES: Record<string, { light: string; dark: string; soft: string }> = {

@@ -157,6 +157,45 @@ export default function Settings() {
           </div>
         </Card>
 
+        {/* Teks Halaman Login */}
+        <Card>
+          <h3 className="mb-3 flex items-center gap-2 font-bold text-ink"><Palette className="h-4 w-4" /> Teks Halaman Login</h3>
+          <p className="mb-3 text-sm text-muted">Kustomisasi teks yang ditampilkan di halaman login (desktop & mobile).</p>
+          {(() => {
+            const lt = (b.loginTexts as Record<string, unknown>) || {};
+            const setLT = (k: string, v: unknown) => setB('loginTexts', { ...(lt), [k]: v });
+            const features = Array.isArray(lt.features) ? lt.features as string[] : [];
+            return (
+              <div className="space-y-3">
+                <Field label="Headline (panel kiri desktop)">
+                  <Input value={String(lt.headline || '')} onChange={(e) => setLT('headline', e.target.value)} placeholder="Satu aplikasi untuk semua peran." />
+                </Field>
+                <Field label="Deskripsi (panel kiri desktop)">
+                  <textarea value={String(lt.description || '')} onChange={(e) => setLT('description', e.target.value)} placeholder="Setiap pengguna hanya melihat data dan menu sesuai wewenangnya..." className="w-full rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink dark:bg-slate-900" rows={2} />
+                </Field>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Heading Form Login">
+                    <Input value={String(lt.loginHeading || '')} onChange={(e) => setLT('loginHeading', e.target.value)} placeholder="Masuk ke Panel" />
+                  </Field>
+                  <Field label="Subtitle Form Login">
+                    <Input value={String(lt.loginSubtitle || '')} onChange={(e) => setLT('loginSubtitle', e.target.value)} placeholder="Masuk dengan akun Anda..." />
+                  </Field>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-sm font-medium text-ink">Fitur (panel kiri desktop)</p>
+                  {features.map((f: string, i: number) => (
+                    <div key={i} className="mb-1.5 flex gap-2">
+                      <Input value={f} onChange={(e) => { const next = [...features]; next[i] = e.target.value; setLT('features', next); }} className="flex-1" />
+                      <button onClick={() => { const next = features.filter((_: string, j: number) => j !== i); setLT('features', next); }} className="rounded-xl px-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10">✕</button>
+                    </div>
+                  ))}
+                  <button onClick={() => setLT('features', [...features, ''])} className="mt-1 text-xs font-semibold text-primary hover:underline">+ Tambah Fitur</button>
+                </div>
+              </div>
+            );
+          })()}
+        </Card>
+
         {/* Aturan absensi + lokasi */}
         <Card>
           <h3 className="mb-3 flex items-center gap-2 font-bold text-ink"><Clock3 className="h-4 w-4" /> Aturan Absensi & Lokasi</h3>

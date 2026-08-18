@@ -18,6 +18,14 @@ export interface AttendanceRules {
   checkOutAllowed: boolean;
 }
 
+export interface LoginTexts {
+  headline: string;
+  description: string;
+  loginHeading: string;
+  loginSubtitle: string;
+  features: string[];
+}
+
 export interface Branding {
   appName: string;
   schoolName: string;
@@ -26,6 +34,7 @@ export interface Branding {
   secondaryColor: string;
   logoUrl: string | null;
   loginBackground: string | null;
+  loginTexts: LoginTexts;
 }
 
 /** Normalisasi nilai jam (0-23) / menit (0-59) — nilai tak valid (mis. "7.1"/"10.1") jatuh ke default. */
@@ -65,10 +74,24 @@ export async function getAttendanceRules(): Promise<AttendanceRules> {
   };
 }
 
+const DEFAULT_LOGIN_TEXTS: LoginTexts = {
+  headline: 'Satu aplikasi untuk semua peran.',
+  description: 'Setiap pengguna hanya melihat data dan menu sesuai wewenangnya — dari kepala sekolah, admin, guru, wali kelas, petugas piket, hingga siswa dan orang tua.',
+  loginHeading: 'Masuk ke Panel',
+  loginSubtitle: 'Masuk dengan akun Anda — hak akses menyesuaikan peran secara otomatis.',
+  features: [
+    'Akses berbasis peran (RBAC) untuk setiap akun',
+    'Absensi QR, wajah, kartu & gerbang secara realtime',
+    'Laporan per kelas & rekap otomatis (PDF / Excel)',
+    'Sesi terenkripsi & audit log setiap aktivitas',
+  ],
+};
+
 export async function getBranding(): Promise<Branding> {
   const row = await prisma.schoolSetting.findUnique({ where: { key: 'branding' } });
   const v = (row?.value as Record<string, unknown>) || {};
   const school = await prisma.school.findFirst();
+  const lt = (v.loginTexts as Record<string, unknown>) || {};
   return {
     appName: String(v.appName || config.appName),
     schoolName: String(v.schoolName || school?.name || config.schoolName),
@@ -77,5 +100,12 @@ export async function getBranding(): Promise<Branding> {
     secondaryColor: String(v.secondaryColor || '#14b8a6'),
     logoUrl: v.logoUrl ? String(v.logoUrl) : null,
     loginBackground: v.loginBackground ? String(v.loginBackground) : null,
+    loginTexts: {
+      headline: String(lt.headline || DEFAULT_LOGIN_TEXTS.headline),
+      description: String(lt.description || DEFAULT_LOGIN_TEXTS.description),
+      loginHeading: String(lt.loginHeading || DEFAULT_LOGIN_TEXTS.loginHeading),
+      loginSubtitle: String(lt.loginSubtitle || DEFAULT_LOGIN_TEXTS.loginSubtitle),
+      features: Array.isArray(lt.features) && lt.features.length > 0 ? lt.features.map(String) : DEFAULT_LOGIN_TEXTS.features,
+    },
   };
 }

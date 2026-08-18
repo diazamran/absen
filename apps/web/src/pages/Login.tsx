@@ -29,7 +29,7 @@ function darken(hex: string, amt: number): string {
   return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
 }
 
-const FEATURES = [
+const DEFAULT_FEATURES = [
   'Akses berbasis peran (RBAC) untuk setiap akun',
   'Absensi QR, wajah, kartu & gerbang secara realtime',
   'Laporan per kelas & rekap otomatis (PDF / Excel)',
@@ -189,13 +189,12 @@ export default function Login() {
 
         {/* headline + fitur */}
         <div className="relative max-w-md">
-          <h2 className="text-3xl font-extrabold leading-tight">Satu aplikasi untuk semua peran.</h2>
+          <h2 className="text-3xl font-extrabold leading-tight">{branding?.loginTexts?.headline || 'Satu aplikasi untuk semua peran.'}</h2>
           <p className="mt-3 text-sm leading-relaxed text-white/75">
-            Setiap pengguna hanya melihat data dan menu sesuai wewenangnya — dari kepala sekolah, admin, guru, wali kelas,
-            petugas piket, hingga siswa dan orang tua.
+            {branding?.loginTexts?.description || 'Setiap pengguna hanya melihat data dan menu sesuai wewenangnya — dari kepala sekolah, admin, guru, wali kelas, petugas piket, hingga siswa dan orang tua.'}
           </p>
           <ul className="mt-7 space-y-3.5">
-            {FEATURES.map((f) => (
+            {(branding?.loginTexts?.features || DEFAULT_FEATURES).map((f) => (
               <li key={f} className="flex items-start gap-3 text-sm text-white/90">
                 <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/15">
                   <Check className="h-3 w-3" />
@@ -231,8 +230,8 @@ export default function Login() {
           <div className="rounded-3xl border border-line/70 bg-surface p-6 shadow-card dark:bg-slate-800/80">
             {/* Heading versi desktop */}
             <div className="mb-5 hidden lg:block">
-              <h2 className="text-2xl font-extrabold tracking-tight text-ink">Masuk ke Panel</h2>
-              <p className="mt-1 text-sm text-muted">Masuk dengan akun Anda — hak akses menyesuaikan peran secara otomatis.</p>
+              <h2 className="text-2xl font-extrabold tracking-tight text-ink">{branding?.loginTexts?.loginHeading || 'Masuk ke Panel'}</h2>
+              <p className="mt-1 text-sm text-muted">{branding?.loginTexts?.loginSubtitle || 'Masuk dengan akun Anda — hak akses menyesuaikan peran secara otomatis.'}</p>
             </div>
 
             {/* Pilihan role */}
