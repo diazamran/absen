@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
-import { FileText, FileSpreadsheet, BarChart3 } from 'lucide-react';
+import { FileText, FileSpreadsheet, BarChart3, Table } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { useAuth } from '../../lib/auth';
@@ -10,6 +10,7 @@ import { Card, Select, Field, Button, EmptyState, Segmented } from '../../lib/ui
 import { PageHeader } from '../../components/AppShell';
 import { STATUS_LABELS, STATUS_COLORS, currentMonthKey, todayJakartaKey } from '../../lib/format';
 import { exportReportPdf, exportReportExcel, formatLongDate, type ReportExportRow } from '../../lib/reportExport';
+import RecapTable from '../../components/RecapTable';
 
 interface Summary { PRESENT: number; LATE: number; EXCUSED: number; SICK: number; OFFICIAL_DUTY: number; DISPENSATION: number; ABSENT: number; }
 interface ClassSummaryRow { className: string; total: number; present: number; late: number; excused: number; absent: number; }
@@ -33,19 +34,22 @@ export default function Reports() {
   const { toast } = useToast();
   const { user } = useAuth();
   const { branding } = useTheme();
-  const [type, setType] = useState<'daily' | 'monthly'>('daily');
+  const [tab, setTab] = useState<'daily' | 'monthly' | 'recap'>('daily');
   const [date, setDate] = useState(todayJakartaKey());
   const [month, setMonth] = useState(currentMonthKey());
   const [classId, setClassId] = useState('');
 
   const { data: report } = useQuery({
-    queryKey: ['report', type, date, month, classId],
+    queryKey: ['report', tab, date, month, classId],
     queryFn: () =>
-      api<{ success: boolean; data: ReportData }>(
-        type === 'daily'
-          ? `/reports/daily?date=${date}&classId=${classId}`
-          : `/reports/monthly?month=${month}&classId=${classId}`,
-      ).then((r) => r.data),
+      tab === 'recap'
+        ? api<{ success: boolean; data: any }>('/reports/recap').then((r) => r.data)
+        : api<{ success: boolean; data: ReportData }>(
+            tab === 'daily'
+              ? `/reports/daily?date=${date}&classId=${classId}`
+              : `/reports/monthly?month=${month}&classId=${classId}`,
+          ).then((r) => r.data),
+    enabled: true,
   });
 
   const { data: classes } = useQuery({
@@ -55,14 +59,14 @@ export default function Reports() {
 
   const chartData = SUMMARY_KEYS.map((s) => ({ name: s.label, value: report?.summary[s.key] || 0, color: STATUS_COLORS[s.key] }));
 
-  const period = type === 'daily' ? `Tanggal: ${formatLongDate(date)}` : `Bulan: ${formatLongDate(`${month}-01`).replace(/^1\s/, '')}`;
+  const period = tab === 'daily' ? `Tanggal: ${formatLongDate(date)}` : `Bulan: ${formatLongDate(`${month}-01`).replace(/^1\s/, '')}`;
   const doExport = (kind: 'pdf' | 'excel') => {
     if (!report?.rows.length && !report?.classSummary?.length) {
       toast('info', 'Tidak ada data untuk diexport.');
       return;
     }
     const opts = {
-      title: `LAPORAN ABSENSI SISWA ${type === 'daily' ? 'HARIAN' : 'BULANAN'}`,
+      title: `LAPORAN ABSENSI SISWA ${tab === 'daily' ? 'HARIAN' : 'BULANAN'}`,
       schoolName: branding?.schoolName || 'Sekolah',
       period,
       rows: report.rows as ReportExportRow[],
@@ -70,7 +74,7 @@ export default function Reports() {
       classSummary: report.classSummary || [],
       signatureName: user?.fullName,
       signatureNip: user?.teacher?.nip || user?.staff?.nip || null,
-      filename: `laporan_${type}_${date || month}.${kind === 'pdf' ? 'pdf' : 'xlsx'}`,
+      filename: `laporan_${tab}_${date || month}.${kind === 'pdf' ? 'pdf' : 'xlsx'}`,
     };
     try {
       if (kind === 'pdf') exportReportPdf(opts);
@@ -96,22 +100,27 @@ export default function Reports() {
       />
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
         <Segmented
-          value={type}
-          onChange={setType}
+          value={tab}
+          onChange={(v) => setTab(v as typeof tab)}
           options={[
             { value: 'daily', label: 'Harian' },
             { value: 'monthly', label: 'Bulanan' },
+            { value: 'recap', label: 'Rekap Absensi' },
           ]}
         />
-        {type === 'daily' ? (
-          <Field label="Tanggal"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink dark:bg-slate-900" /></Field>
-        ) : (
-          <Field label="Bulan"><input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink dark:bg-slate-900" /></Field>
+        {tab !== 'recap' && (
+          <>
+            {tab === 'daily' ? (
+              <Field label="Tanggal"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink dark:bg-slate-900" /></Field>
+            ) : (
+              <Field label="Bulan"><input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink dark:bg-slate-900" /></Field>
+            )}
+            <Select value={classId} onChange={(e) => setClassId(e.target.value)} className="sm:w-44">
+              <option value="">Semua kelas</option>
+              {classes?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
+          </>
         )}
-        <Select value={classId} onChange={(e) => setClassId(e.target.value)} className="sm:w-44">
-          <option value="">Semua kelas</option>
-          {classes?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </Select>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -143,7 +152,11 @@ export default function Reports() {
         </Card>
       </div>
 
-      {classId === '' && report?.classSummary?.length ? (
+      {tab === 'recap' && report?.dateColumns ? (
+        <RecapTable data={report as any} />
+      ) : null}
+
+      {tab !== 'recap' && classId === '' && report?.classSummary?.length ? (
         <Card className="mt-4">
           <h3 className="mb-3 font-bold text-ink">Rekap per Kelas — Semua Kelas</h3>
           <div className="overflow-x-auto">
@@ -159,7 +172,7 @@ export default function Reports() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {report.classSummary.map((c) => (
+                {report.classSummary!.map((c: any) => (
                   <tr key={c.className}>
                     <td className="px-3 py-2 font-semibold text-ink">{c.className}</td>
                     <td className="px-3 py-2 text-muted">{c.total}</td>
@@ -175,41 +188,43 @@ export default function Reports() {
         </Card>
       ) : null}
 
-      <Card className="mt-4">
-        <h3 className="mb-3 font-bold text-ink">Rincian</h3>
-        {report?.rows.length ? (
-          <div className="max-h-[28rem] overflow-y-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-surface text-left text-xs uppercase text-muted dark:bg-slate-800">
-                <tr>
-                  <th className="px-3 py-2">Nama</th>
-                  <th className="px-3 py-2">Kelas</th>
-                  {type === 'monthly' && <th className="px-3 py-2">Tanggal</th>}
-                  <th className="px-3 py-2">Jam</th>
-                  <th className="px-3 py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {report.rows.map((r, i) => (
-                  <tr key={i}>
-                    <td className="px-3 py-2 font-medium text-ink">{r.name}</td>
-                    <td className="px-3 py-2 text-muted">{r.className}</td>
-                    {type === 'monthly' && <td className="px-3 py-2 text-muted">{r.date}</td>}
-                    <td className="px-3 py-2 font-mono text-muted">{r.time || '—'}</td>
-                    <td className="px-3 py-2">
-                      <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: `${STATUS_COLORS[r.status]}1a`, color: STATUS_COLORS[r.status] }}>
-                        {STATUS_LABELS[r.status]}{r.status === 'LATE' && r.lateMinutes ? ` (${r.lateMinutes}m)` : ''}
-                      </span>
-                    </td>
+      {tab !== 'recap' && (
+        <Card className="mt-4">
+          <h3 className="mb-3 font-bold text-ink">Rincian</h3>
+          {report?.rows?.length ? (
+            <div className="max-h-[28rem] overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-surface text-left text-xs uppercase text-muted dark:bg-slate-800">
+                  <tr>
+                    <th className="px-3 py-2">Nama</th>
+                    <th className="px-3 py-2">Kelas</th>
+                    {tab === 'monthly' && <th className="px-3 py-2">Tanggal</th>}
+                    <th className="px-3 py-2">Jam</th>
+                    <th className="px-3 py-2">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <EmptyState icon={BarChart3} title="Belum ada data" description="Ubah filter tanggal/kelas untuk melihat laporan." />
-        )}
-      </Card>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {report.rows.map((r: any, i: number) => (
+                    <tr key={i}>
+                      <td className="px-3 py-2 font-medium text-ink">{r.name}</td>
+                      <td className="px-3 py-2 text-muted">{r.className}</td>
+                      {tab === 'monthly' && <td className="px-3 py-2 text-muted">{r.date}</td>}
+                      <td className="px-3 py-2 font-mono text-muted">{r.time || '—'}</td>
+                      <td className="px-3 py-2">
+                        <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: `${STATUS_COLORS[r.status]}1a`, color: STATUS_COLORS[r.status] }}>
+                          {STATUS_LABELS[r.status]}{r.status === 'LATE' && r.lateMinutes ? ` (${r.lateMinutes}m)` : ''}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState icon={BarChart3} title="Belum ada data" description="Ubah filter tanggal/kelas untuk melihat laporan." />
+          )}
+        </Card>
+      )}
     </div>
   );
 }

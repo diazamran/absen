@@ -221,6 +221,152 @@ export async function reportRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: { className: klass.name, month, rows } });
   });
 
+  // ===== Rekap Absensi per Siswa (tampilan spreadsheet) =====
+  app.get('/reports/recap', { preHandler: app.requirePermission(PERMISSION_KEYS.reportsRead) }, async (request, reply) => {
+    const q = request.query as { classId?: string; date?: string };
+    const classId = await scopedClassId(request, q.classId);
+    const today = q.date || dateKey();
+
+    // Tentukan semester aktif (Ganjil = Juli–Des, Genap = Januari– Juni)
+    const todayDate = new Date(today + 'T12:00:00+07:00');
+    const month = todayDate.getMonth() + 1; // 1-12
+    let semesterStart: string;
+    let semesterName: string;
+    if (month >= 7) {
+      semesterStart = `${todayDate.getFullYear()}-07-01`;
+      semesterName = `Ganjil ${todayDate.getFullYear()}/${todayDate.getFullYear() + 1}`;
+    } else {
+      semesterStart = `${todayDate.getFullYear()}-01-01`;
+      semesterName = `Genap ${todayDate.getFullYear() - 1}/${todayDate.getFullYear()}`;
+    }
+    const semesterStartDate = startOfLocalDay(semesterStart);
+    const todayDateObj = new Date(today + 'T23:59:59+07:00');
+
+    // Last 30 days
+    const last30Start = new Date(todayDateObj.getTime() - 30 * 24 * 3600_000);
+
+    // Generate date columns for last 30 days (newest first)
+    const dateColumns: string[] = [];
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(todayDateObj.getTime() - i * 24 * 3600_000);
+      dateColumns.push(dateKey(d));
+    }
+
+    // Fetch all active students with class
+    const students = await prisma.student.findMany({
+      where: {
+        isActive: true,
+        ...(classId ? { classId } : {}),
+      },
+      include: {
+        user: { select: { fullName: true } },
+        class: { select: { name: true } },
+      },
+      orderBy: [{ class: { name: 'asc' } }, { nis: 'asc' }],
+    });
+
+    // Fetch all CHECK_IN attendance for these students in semester range
+    const studentUserIds = students.map((s) => s.userId);
+    const atts = await prisma.attendance.findMany({
+      where: {
+        userId: { in: studentUserIds },
+        type: 'CHECK_IN',
+        date: { gte: semesterStartDate, lt: new Date(todayDateObj.getTime() + 24 * 3600_000) },
+      },
+      select: { userId: true, date: true, status: true },
+    });
+
+    // Build lookup: userId -> dateKey -> status
+    const attMap = new Map<string, Map<string, string>>();
+    for (const a of atts) {
+      const dk = localDateKeyOfStoredDate(a.date);
+      if (!attMap.has(a.userId)) attMap.set(a.userId, new Map());
+      attMap.get(a.userId)!.set(dk, a.status);
+    }
+
+    // Status to letter mapping
+    const statusLetter = (s: string): string => {
+      if (s === 'SICK' || s === 'LEAVE') return 'S';
+      if (s === 'EXCUSED') return 'I';
+      if (s === 'OFFICIAL_DUTY') return 'D';
+      if (s === 'DISPENSATION') return 'P';
+      if (s === 'PRESENT' || s === 'LATE') return 'H';
+      return 'A'; // ABSENT or no record
+    };
+
+    // Build per-student rows
+    const rows = students.map((s, idx) => {
+      const dayMap = attMap.get(s.userId) ?? new Map();
+
+      // Semester counts
+      const semCounts = { S: 0, I: 0, A: 0, D: 0, P: 0, H: 0 };
+      // Last 30 day counts
+      const l30Counts = { S: 0, I: 0, A: 0, D: 0, P: 0, H: 0 };
+      // Per-day statuses
+      const dailyStatuses: Record<string, string> = {};
+
+      // Count semester (all days from semesterStart to today)
+      for (const [dk, st] of dayMap) {
+        const letter = statusLetter(st);
+        // Check if in semester
+        if (dk >= semesterStart) {
+          semCounts[letter as keyof typeof semCounts]++;
+        }
+        // Check if in last 30 days
+        if (dk >= dateKey(last30Start)) {
+          l30Counts[letter as keyof typeof l30Counts]++;
+        }
+      }
+
+      // For days without attendance record in last 30 days, count as A (alpha)
+      const todayKey = dateKey();
+      for (const dk of dateColumns) {
+        if (dk > todayKey) continue; // future dates
+        const st = dayMap.get(dk);
+        if (st) {
+          dailyStatuses[dk] = statusLetter(st);
+        } else {
+          dailyStatuses[dk] = 'A';
+          l30Counts.A++;
+        }
+      }
+
+      return {
+        no: idx + 1,
+        className: s.class?.name ?? '-',
+        nis: s.nis,
+        name: s.user?.fullName ?? '-',
+        semester: {
+          S: semCounts.S,
+          I: semCounts.I,
+          A: semCounts.A,
+          D: semCounts.D,
+          P: semCounts.P,
+          total: semCounts.S + semCounts.I + semCounts.A + semCounts.D + semCounts.P,
+        },
+        last30Days: {
+          S: l30Counts.S,
+          I: l30Counts.I,
+          A: l30Counts.A,
+          D: l30Counts.D,
+          P: l30Counts.P,
+          total: l30Counts.S + l30Counts.I + l30Counts.A + l30Counts.D + l30Counts.P,
+        },
+        daily: dailyStatuses,
+      };
+    });
+
+    return reply.send({
+      success: true,
+      data: {
+        today,
+        semesterName,
+        dateColumns,
+        rows,
+      },
+    });
+  });
+
   // ===== Export CSV =====
   app.get('/reports/export', { preHandler: app.requirePermission(PERMISSION_KEYS.exportCreate) }, async (request, reply) => {
     const q = request.query as { report?: string; date?: string; month?: string; classId?: string; studentId?: string };
