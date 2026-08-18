@@ -43,21 +43,22 @@ function DayHeader({ dateStr }: { dateStr: string }) {
   );
 }
 
+const STAT_COLS = ['S', 'I', 'A', 'D', 'P'] as const;
+
 export default function RecapTable({ data }: { data: RecapData }) {
   if (!data?.rows?.length) return null;
-
   const todayKey = data.today;
 
   return (
     <Card className="mt-4 overflow-hidden">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div>
           <h3 className="font-bold text-ink">Rekap Absensi Siswa</h3>
           <p className="text-xs text-muted">
             Smt. {data.semesterName} · {data.fromDate && data.toDate ? `${data.fromDate} s/d ${data.toDate} (${data.dateColumns.length} hari)` : `${data.dateColumns.length} hari terakhir`} · {data.rows.length} siswa
           </p>
         </div>
-        <div className="flex gap-2 text-[10px]">
+        <div className="flex flex-wrap gap-1.5 text-[10px]">
           {Object.entries(LETTER_STYLE).map(([k, v]) => (
             <span key={k} className="rounded px-1.5 py-0.5 font-bold" style={{ backgroundColor: v.bg, color: v.color }}>
               {v.label} = {k === 'H' ? 'Hadir' : k === 'S' ? 'Sakit' : k === 'I' ? 'Izin' : k === 'A' ? 'Alpha' : k === 'D' ? 'Dinas' : 'Dispensasi'}
@@ -66,31 +67,28 @@ export default function RecapTable({ data }: { data: RecapData }) {
         </div>
       </div>
 
-      <div className="overflow-x-auto" style={{ maxHeight: '70vh' }}>
-        <table className="w-full border-collapse text-xs">
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-xs" style={{ minWidth: 600 }}>
           <thead>
             {/* Header row 1: group labels */}
             <tr className="bg-slate-100 dark:bg-slate-800">
-              <th className="sticky left-0 z-20 bg-slate-100 px-2 py-1 text-center font-bold text-ink dark:bg-slate-800" rowSpan={2}>No</th>
-              <th className="sticky left-8 z-20 bg-slate-100 px-2 py-1 text-center font-bold text-ink dark:bg-slate-800" rowSpan={2}>Kelas</th>
-              <th className="sticky left-[8rem] z-20 bg-slate-100 border-r-2 border-slate-400 px-2 py-1 text-center font-bold text-ink dark:bg-slate-800 dark:border-slate-600" rowSpan={2}>Nama</th>
-              <th className="border border-slate-300 bg-slate-200 px-2 py-0.5 text-center font-bold text-ink dark:bg-slate-700" colSpan={6}>{'Smt. ' + data.semesterName}</th>
-              <th className="border border-slate-300 bg-slate-200 px-2 py-0.5 text-center font-bold text-ink dark:bg-slate-700" colSpan={6}>Last 30 Day</th>
-              <th className="border border-slate-300 bg-slate-200 px-2 py-0.5 text-center font-bold text-ink dark:bg-slate-700" colSpan={data.dateColumns.length}>Detail Harian</th>
+              <th className="px-2 py-1 text-center font-bold text-ink" rowSpan={2}>No</th>
+              <th className="px-2 py-1 text-center font-bold text-ink" rowSpan={2}>Kelas</th>
+              <th className="sticky left-0 z-20 border-r-2 border-slate-400 bg-slate-100 px-2 py-1 text-center font-bold text-ink dark:bg-slate-800 dark:border-slate-600" rowSpan={2}>Nama</th>
+              <th className="border border-slate-300 bg-slate-200 px-3 py-1 text-center font-bold text-ink dark:bg-slate-700" colSpan={6}>{'Smt. ' + data.semesterName}</th>
+              <th className="border border-slate-300 bg-slate-200 px-3 py-1 text-center font-bold text-ink dark:bg-slate-700" colSpan={6}>Last 30 Day</th>
+              <th className="border border-slate-300 bg-slate-200 px-3 py-1 text-center font-bold text-ink dark:bg-slate-700" colSpan={data.dateColumns.length}>Detail Harian</th>
             </tr>
             {/* Header row 2: sub-column labels */}
             <tr className="bg-slate-50 dark:bg-slate-800/50">
-              {/* Semester sub-cols */}
-              {['S', 'I', 'A', 'D', 'P'].map((k) => (
-                <th key={`sem-${k}`} className="border border-slate-300 px-1 py-0.5 text-center font-semibold text-muted">{k}</th>
+              {STAT_COLS.map((k) => (
+                <th key={`sem-${k}`} className="border border-slate-300 px-2 py-0.5 text-center text-[11px] font-semibold text-muted">{k}</th>
               ))}
-              <th className="border border-slate-300 bg-slate-100 px-1 py-0.5 text-center font-bold text-ink dark:bg-slate-700">Tot</th>
-              {/* Last 30 day sub-cols */}
-              {['S', 'I', 'A', 'D', 'P'].map((k) => (
-                <th key={`l30-${k}`} className="border border-slate-300 px-1 py-0.5 text-center font-semibold text-muted">{k}</th>
+              <th className="border border-slate-300 bg-slate-100 px-2 py-0.5 text-center text-[11px] font-bold text-ink dark:bg-slate-700">Tot</th>
+              {STAT_COLS.map((k) => (
+                <th key={`l30-${k}`} className="border border-slate-300 px-2 py-0.5 text-center text-[11px] font-semibold text-muted">{k}</th>
               ))}
-              <th className="border border-slate-300 bg-slate-100 px-1 py-0.5 text-center font-bold text-ink dark:bg-slate-700">Tot</th>
-              {/* Daily date columns */}
+              <th className="border border-slate-300 bg-slate-100 px-2 py-0.5 text-center text-[11px] font-bold text-ink dark:bg-slate-700">Tot</th>
               {data.dateColumns.map((dk) => (
                 <th key={dk} className={`border border-slate-300 px-1 py-0.5 text-center ${dk === todayKey ? 'bg-amber-100 dark:bg-amber-900/30' : ''}`}>
                   <DayHeader dateStr={dk} />
@@ -101,31 +99,28 @@ export default function RecapTable({ data }: { data: RecapData }) {
           <tbody>
             {data.rows.map((row) => (
               <tr key={row.nis} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                <td className="sticky left-0 z-10 border border-slate-200 bg-white px-2 py-1 text-center text-muted dark:bg-slate-900">{row.no}</td>
-                <td className="sticky left-8 z-10 border border-slate-200 bg-white px-2 py-1 font-semibold text-ink dark:bg-slate-900">{row.className}</td>
-                <td className="sticky left-[8rem] z-10 border border-r-2 border-slate-200 bg-white px-2 py-1 font-medium text-ink dark:bg-slate-900 dark:border-slate-600" style={{ minWidth: 140 }}>{row.name}</td>
-                {/* Semester counts */}
-                {(['S', 'I', 'A', 'D', 'P'] as const).map((k) => (
-                  <td key={`sem-${k}`} className="border border-slate-200 px-1 py-1 text-center font-semibold" style={{ color: LETTER_STYLE[k]?.color ?? '#374151' }}>
+                <td className="px-2 py-1.5 text-center text-muted">{row.no}</td>
+                <td className="px-2 py-1.5 font-semibold text-ink">{row.className}</td>
+                <td className="sticky left-0 z-10 border-r-2 border-slate-300 bg-white px-2 py-1.5 font-medium text-ink dark:bg-slate-900 dark:border-slate-600" style={{ minWidth: 130 }}>{row.name}</td>
+                {STAT_COLS.map((k) => (
+                  <td key={`sem-${k}`} className="border border-slate-200 px-2 py-1.5 text-center font-semibold" style={{ color: LETTER_STYLE[k]?.color ?? '#374151' }}>
                     {row.semester[k] || ''}
                   </td>
                 ))}
-                <td className="border border-slate-200 bg-slate-50 px-1 py-1 text-center font-bold text-ink dark:bg-slate-800">{row.semester.total || ''}</td>
-                {/* Last 30 day counts */}
-                {(['S', 'I', 'A', 'D', 'P'] as const).map((k) => (
-                  <td key={`l30-${k}`} className="border border-slate-200 px-1 py-1 text-center font-semibold" style={{ color: LETTER_STYLE[k]?.color ?? '#374151' }}>
+                <td className="border border-slate-200 bg-slate-50 px-2 py-1.5 text-center font-bold text-ink dark:bg-slate-800">{row.semester.total || ''}</td>
+                {STAT_COLS.map((k) => (
+                  <td key={`l30-${k}`} className="border border-slate-200 px-2 py-1.5 text-center font-semibold" style={{ color: LETTER_STYLE[k]?.color ?? '#374151' }}>
                     {row.last30Days[k] || ''}
                   </td>
                 ))}
-                <td className="border border-slate-200 bg-slate-50 px-1 py-1 text-center font-bold text-ink dark:bg-slate-800">{row.last30Days.total || ''}</td>
-                {/* Daily statuses */}
+                <td className="border border-slate-200 bg-slate-50 px-2 py-1.5 text-center font-bold text-ink dark:bg-slate-800">{row.last30Days.total || ''}</td>
                 {data.dateColumns.map((dk) => {
                   const letter = row.daily[dk] ?? '';
                   const style = LETTER_STYLE[letter];
                   return (
                     <td
                       key={dk}
-                      className={`border border-slate-200 px-1 py-1 text-center font-bold ${dk === todayKey ? 'ring-1 ring-amber-400' : ''}`}
+                      className={`border border-slate-200 px-1 py-1.5 text-center font-bold ${dk === todayKey ? 'ring-1 ring-amber-400' : ''}`}
                       style={style ? { backgroundColor: style.bg, color: style.color } : undefined}
                     >
                       {letter}
