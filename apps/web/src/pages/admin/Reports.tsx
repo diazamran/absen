@@ -123,34 +123,36 @@ export default function Reports() {
         )}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <h3 className="mb-3 font-bold text-ink">Ringkasan</h3>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {SUMMARY_KEYS.map((s) => (
-              <div key={s.key} className="rounded-2xl border border-line/60 p-3">
-                <p className="text-2xl font-extrabold" style={{ color: STATUS_COLORS[s.key] }}>{report?.summary[s.key] ?? 0}</p>
-                <p className="text-xs text-muted">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
-        <Card>
-          <h3 className="mb-3 font-bold text-ink">Grafik</h3>
-          <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={{ borderRadius: 12, fontSize: 13 }} />
-                <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                  {chartData.map((c) => <Cell key={c.name} fill={c.color} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      </div>
+      {tab !== 'recap' && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <h3 className="mb-3 font-bold text-ink">Ringkasan</h3>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {SUMMARY_KEYS.map((s) => (
+                <div key={s.key} className="rounded-2xl border border-line/60 p-3">
+                  <p className="text-2xl font-extrabold" style={{ color: STATUS_COLORS[s.key] }}>{report?.summary?.[s.key] ?? 0}</p>
+                  <p className="text-xs text-muted">{s.label}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+          <Card>
+            <h3 className="mb-3 font-bold text-ink">Grafik</h3>
+            <div className="h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip contentStyle={{ borderRadius: 12, fontSize: 13 }} />
+                  <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                    {chartData.map((c) => <Cell key={c.name} fill={c.color} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {tab === 'recap' && report?.dateColumns ? (
         <RecapTable data={report as any} />
