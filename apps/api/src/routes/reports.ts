@@ -291,12 +291,20 @@ export async function reportRoutes(app: FastifyInstance) {
       if (s === 'OFFICIAL_DUTY') return 'D';
       if (s === 'DISPENSATION') return 'P';
       if (s === 'PRESENT' || s === 'LATE') return 'H';
-      return 'A'; // ABSENT or no record
+      return '';
+    };
+
+    // Helper: is this date a school day (weekday Mon-Fri)?
+    const isSchoolDay = (dk: string): boolean => {
+      const d = new Date(dk + 'T12:00:00+07:00');
+      const day = d.getDay();
+      return day >= 1 && day <= 5; // Mon-Fri
     };
 
     // Build per-student rows
     const rows = students.map((s, idx) => {
       const dayMap = attMap.get(s.userId) ?? new Map();
+      const todayKey = dateKey();
 
       // Semester counts
       const semCounts = { S: 0, I: 0, A: 0, D: 0, P: 0, H: 0 };
@@ -305,30 +313,39 @@ export async function reportRoutes(app: FastifyInstance) {
       // Per-day statuses
       const dailyStatuses: Record<string, string> = {};
 
-      // Count semester (all days from semesterStart to today)
-      for (const [dk, st] of dayMap) {
-        const letter = statusLetter(st);
-        // Check if in semester
-        if (dk >= semesterStart) {
+      // Count semester: only past school days with no record = A
+      for (let i = 0; i < 200; i++) {
+        const d = new Date(semesterStartDate.getTime() + i * 24 * 3600_000);
+        const dk = dateKey(d);
+        if (dk > todayKey) break;
+        if (!isSchoolDay(dk)) continue;
+        const st = dayMap.get(dk);
+        if (st) {
+          const letter = statusLetter(st);
           semCounts[letter as keyof typeof semCounts]++;
-        }
-        // Check if in last 30 days
-        if (dk >= dateKey(last30Start)) {
-          l30Counts[letter as keyof typeof l30Counts]++;
+        } else {
+          semCounts.A++;
         }
       }
 
-      // For days without attendance record in last 30 days, count as A (alpha)
-      const todayKey = dateKey();
+      // Last 30 days + daily statuses: only past school days = A, else empty
       for (const dk of dateColumns) {
-        if (dk > todayKey) continue; // future dates
         const st = dayMap.get(dk);
         if (st) {
-          dailyStatuses[dk] = statusLetter(st);
-        } else {
+          // Has attendance record
+          const letter = statusLetter(st);
+          dailyStatuses[dk] = letter;
+          if (dk >= dateKey(last30Start) && dk <= todayKey) {
+            l30Counts[letter as keyof typeof l30Counts]++;
+          }
+        } else if (dk <= todayKey && isSchoolDay(dk)) {
+          // Past school day, no record → Alpha
           dailyStatuses[dk] = 'A';
-          l30Counts.A++;
+          if (dk >= dateKey(last30Start)) {
+            l30Counts.A++;
+          }
         }
+        // else: weekend or future → empty (no entry)
       }
 
       return {

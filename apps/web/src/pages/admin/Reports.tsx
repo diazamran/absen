@@ -11,6 +11,7 @@ import { PageHeader } from '../../components/AppShell';
 import { STATUS_LABELS, STATUS_COLORS, currentMonthKey, todayJakartaKey } from '../../lib/format';
 import { exportReportPdf, exportReportExcel, formatLongDate, type ReportExportRow } from '../../lib/reportExport';
 import { exportRecapExcel } from '../../lib/recapExport';
+import { exportRecapPdf } from '../../lib/recapPdfExport';
 import RecapTable from '../../components/RecapTable';
 
 interface Summary { PRESENT: number; LATE: number; EXCUSED: number; SICK: number; OFFICIAL_DUTY: number; DISPENSATION: number; ABSENT: number; }
@@ -95,12 +96,24 @@ export default function Reports() {
         action={
           <div className="flex flex-wrap gap-2">
             {tab === 'recap' ? (
-              <Button variant="outline" onClick={() => {
-                if (report?.dateColumns && report?.rows) {
-                  exportRecapExcel(report as any);
-                  toast('success', 'Rekap Excel diunduh.');
-                } else toast('info', 'Belum ada data rekap.');
-              }}><FileSpreadsheet className="h-4 w-4" /> Export Excel</Button>
+              <>
+                <Button variant="outline" onClick={() => {
+                  if (report?.dateColumns && report?.rows) {
+                    exportRecapPdf(report as any, {
+                      schoolName: branding?.schoolName || 'Sekolah',
+                      signatureName: user?.fullName,
+                      signatureNip: user?.teacher?.nip || user?.staff?.nip || undefined,
+                    });
+                    toast('success', 'Rekap PDF diunduh.');
+                  } else toast('info', 'Belum ada data rekap.');
+                }}><FileText className="h-4 w-4" /> Export PDF</Button>
+                <Button variant="outline" onClick={() => {
+                  if (report?.dateColumns && report?.rows) {
+                    exportRecapExcel(report as any);
+                    toast('success', 'Rekap Excel diunduh.');
+                  } else toast('info', 'Belum ada data rekap.');
+                }}><FileSpreadsheet className="h-4 w-4" /> Export Excel</Button>
+              </>
             ) : (
               <>
                 <Button variant="outline" onClick={() => doExport('pdf')}><FileText className="h-4 w-4" /> Export PDF</Button>

@@ -72,9 +72,9 @@ export default function RecapTable({ data }: { data: RecapData }) {
               <th className="sticky left-0 z-20 bg-slate-100 px-2 py-1 text-center font-bold text-ink dark:bg-slate-800" rowSpan={2}>No</th>
               <th className="sticky left-8 z-20 bg-slate-100 px-2 py-1 text-center font-bold text-ink dark:bg-slate-800" rowSpan={2}>Kelas</th>
               <th className="sticky left-[7rem] z-20 bg-slate-100 px-2 py-1 text-center font-bold text-ink dark:bg-slate-800" rowSpan={2}>Nama</th>
-              <th className="border border-slate-300 bg-slate-200 px-1 py-0.5 text-center font-bold text-ink dark:bg-slate-700" colSpan={6}>Smt. {data.semesterName.split(' ')[0]}</th>
-              <th className="border border-slate-300 bg-slate-200 px-1 py-0.5 text-center font-bold text-ink dark:bg-slate-700" colSpan={6}>Last 30 Day</th>
-              <th className="border border-slate-300 bg-slate-200 px-1 py-0.5 text-center font-bold text-ink dark:bg-slate-700" colSpan={data.dateColumns.length}>Detail Harian</th>
+              <th className="border border-slate-300 bg-slate-200 px-2 py-0.5 text-center font-bold text-ink dark:bg-slate-700" colSpan={6}>Smt. {data.semesterName}</th>
+              <th className="border border-slate-300 bg-slate-200 px-2 py-0.5 text-center font-bold text-ink dark:bg-slate-700" colSpan={6}>Last 30 Day</th>
+              <th className="border border-slate-300 bg-slate-200 px-2 py-0.5 text-center font-bold text-ink dark:bg-slate-700" colSpan={data.dateColumns.length}>Detail Harian</th>
             </tr>
             {/* Header row 2: sub-column labels */}
             <tr className="bg-slate-50 dark:bg-slate-800/50">
@@ -134,6 +134,20 @@ export default function RecapTable({ data }: { data: RecapData }) {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Signature area */}
+      <div className="mt-6 flex justify-end gap-12 pr-8 text-xs text-muted">
+        <div className="text-center">
+          <p className="mb-8">Mengetahui,</p>
+          <p className="font-semibold text-ink">_________________________</p>
+          <p>Kepala Sekolah</p>
+        </div>
+        <div className="text-center">
+          <p className="mb-8">{data.today}</p>
+          <p className="font-semibold text-ink">_________________________</p>
+          <p>Petugas Piket</p>
+        </div>
       </div>
     </Card>
   );
