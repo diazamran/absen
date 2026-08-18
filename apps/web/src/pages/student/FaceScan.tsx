@@ -36,29 +36,35 @@ export default function FaceScan() {
   const [type, setType] = useState<Type>('CHECK_IN');
   const [auto, setAuto] = useState(true);
   const [ready, setReady] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState('');
   const [scanning, setScanning] = useState(false);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [hint, setHint] = useState('');
 
+  // Nyalakan kamera — default langsung "Absen Datang" tanpa perlu menekan tombol.
+  // Dipanggil otomatis saat halaman dibuka, atau lewat tombol "Mulai Kamera" bila gagal.
+  const initCamera = useCallback(async () => {
+    setStarting(true);
+    setError('');
+    try {
+      const stream = await startCamera(videoRef.current!, 'user');
+      streamRef.current = stream;
+      setReady(true);
+    } catch {
+      setError('Kamera tidak dapat diakses. Izinkan akses kamera di browser/HP, lalu ketuk "Mulai Kamera".');
+    } finally {
+      setStarting(false);
+    }
+  }, []);
+
   useEffect(() => {
-    let cancelled = false;
-    const init = async () => {
-      try {
-        const stream = await startCamera(videoRef.current!, 'user');
-        streamRef.current = stream;
-        if (!cancelled) setReady(true);
-      } catch {
-        if (!cancelled) setError('Kamera tidak dapat diakses. Periksa izin kamera.');
-      }
-    };
-    init();
+    void initCamera();
     return () => {
-      cancelled = true;
       stopCamera(streamRef.current);
     };
-  }, []);
+  }, [initCamera]);
 
   // Panaskan model wajah diam-diam saat halaman dibuka
   useEffect(() => {
@@ -199,32 +205,54 @@ export default function FaceScan() {
         />
       </div>
 
-      {/* Kamera */}
+      {/* Kamera — langsung menyala otomatis (default Absen Datang) */}
       <div className="relative flex-1 overflow-hidden bg-slate-900">
-        <video ref={videoRef} className="camera-view h-full w-full" muted playsInline />
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="relative h-64 w-64">
-            <div className="absolute inset-0 rounded-[2.5rem] border-2 border-white/30" />
-            <div className="absolute left-0 top-0 h-12 w-12 rounded-tl-[2.5rem] border-l-4 border-t-4 border-primary" />
-            <div className="absolute right-0 top-0 h-12 w-12 rounded-tr-[2.5rem] border-r-4 border-t-4 border-primary" />
-            <div className="absolute bottom-0 left-0 h-12 w-12 rounded-bl-[2.5rem] border-b-4 border-l-4 border-primary" />
-            <div className="absolute bottom-0 right-0 h-12 w-12 rounded-br-[2.5rem] border-b-4 border-r-4 border-primary" />
-            <div className="absolute inset-x-6 animate-scan h-1 rounded-full bg-primary shadow-[0_0_14px_rgba(13,148,136,1)]" />
+        <video ref={videoRef} className="camera-view h-full w-full" muted playsInline autoPlay />
+        {!ready && !error && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/80">
+            <Loader2 className="h-9 w-9 animate-spin text-primary" />
+            <p className="text-sm">{starting ? 'Menyalakan kamera…' : 'Menyiapkan kamera…'}</p>
           </div>
-        </div>
-        <p className="absolute inset-x-0 bottom-4 px-4 text-center text-sm text-white/90">
-          {hint ? (
-            <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-amber-300">{hint}</span>
-          ) : scanning ? (
-            'Memverifikasi wajah…'
-          ) : modelsLoading ? (
-            'Menyiapkan model wajah… (±5 MB, sekali saja)'
-          ) : auto ? (
-            'Otomatis: tatap kamera — absen tercatat tanpa sentuh layar'
-          ) : (
-            'Posisikan wajah di dalam area, lalu tekan tombol'
-          )}
-        </p>
+        )}
+        {error && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-8 text-center">
+            <XCircle className="h-10 w-10 text-red-400" />
+            <p className="text-sm leading-relaxed text-white/90">{error}</p>
+            <button
+              onClick={() => void initCamera()}
+              className="rounded-full bg-primary px-6 py-2.5 font-bold text-white shadow-float transition-transform active:scale-95"
+            >
+              <Camera className="mr-1.5 inline h-4 w-4" /> Mulai Kamera
+            </button>
+          </div>
+        )}
+        {ready && (
+          <>
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="relative h-64 w-64">
+                <div className="absolute inset-0 rounded-[2.5rem] border-2 border-white/30" />
+                <div className="absolute left-0 top-0 h-12 w-12 rounded-tl-[2.5rem] border-l-4 border-t-4 border-primary" />
+                <div className="absolute right-0 top-0 h-12 w-12 rounded-tr-[2.5rem] border-r-4 border-t-4 border-primary" />
+                <div className="absolute bottom-0 left-0 h-12 w-12 rounded-bl-[2.5rem] border-b-4 border-l-4 border-primary" />
+                <div className="absolute bottom-0 right-0 h-12 w-12 rounded-br-[2.5rem] border-b-4 border-r-4 border-primary" />
+                <div className="absolute inset-x-6 animate-scan h-1 rounded-full bg-primary shadow-[0_0_14px_rgba(13,148,136,1)]" />
+              </div>
+            </div>
+            <p className="absolute inset-x-0 bottom-4 px-4 text-center text-sm text-white/90">
+              {hint ? (
+                <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-amber-300">{hint}</span>
+              ) : scanning ? (
+                'Memverifikasi wajah…'
+              ) : modelsLoading ? (
+                'Menyiapkan model wajah… (±5 MB, sekali saja)'
+              ) : auto ? (
+                'Otomatis: tatap kamera — absen datang langsung tercatat tanpa sentuh layar'
+              ) : (
+                'Posisikan wajah di dalam area, lalu tekan tombol'
+              )}
+            </p>
+          </>
+        )}
       </div>
 
       {/* Tombol scan + toggle otomatis */}
@@ -302,7 +330,6 @@ export default function FaceScan() {
         </div>
       )}
 
-      {error && <p className="bg-red-500/10 px-4 py-3 text-center text-sm text-red-300">{error}</p>}
     </div>
   );
 }

@@ -17,7 +17,7 @@ interface HomeData {
     checkIn: { status: string; statusLabel: string; time: string | null; lateMinutes: number } | null;
     checkOut: { time: string | null; earlyLeave?: boolean } | null;
   } | null;
-  schedules: { id: string; subject: string; className: string; classId: string; startTime: string; endTime: string; room: string | null }[];
+  schedules: { id: string; subject: string; className: string; classId: string; startTime: string; endTime: string; room: string | null; teacher?: string }[];
   myClass?: { id: string; name: string; studentCount: number } | null;
   student?: { id: string; nis: string; className: string | null } | null;
   attendanceRules?: { lateAfterHour: number; lateAfterMinute: number };
@@ -193,6 +193,34 @@ export default function TeacherHome() {
           </button>
         ))}
       </div>
+
+      {/* Jadwal hari ini — khusus siswa (jadwal yang di-set admin di menu Kelas → Jadwal) */}
+      {isStudent && (
+        <div>
+          <h2 className="mb-3 font-bold text-ink">Jadwal Hari Ini</h2>
+          {data.schedules.length === 0 ? (
+            <Card className="flex flex-col items-center py-8 text-muted">
+              <CalendarDays className="mb-2 h-8 w-8 opacity-40" />
+              <p className="text-sm">Tidak ada jadwal hari ini</p>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {data.schedules.map((s) => (
+                <Card key={s.id} className="flex items-center gap-4">
+                  <div className="flex flex-col items-center rounded-xl bg-primary-soft px-3 py-2 text-primary-dark">
+                    <span className="font-mono text-sm font-bold">{s.startTime}</span>
+                    <span className="text-[10px] opacity-70">{s.endTime}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-bold text-ink">{s.subject}</p>
+                    <p className="text-xs text-muted">{s.teacher || '-'} · {s.room || '—'}</p>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Dashboard petugas piket — ala admin: statistik seluruh sekolah, tanpa Sesi Mengajar */}
       {isPiket && <AdminDashboard />}

@@ -10,7 +10,26 @@ export async function startCamera(video: HTMLVideoElement, facingMode: 'user' | 
     audio: false,
   });
   video.srcObject = stream;
-  await video.play();
+  // Beberapa WebView/browser menahan video.play() sampai ada sentuhan pertama di layar.
+  // Jangan gagalkan startup — simpan stream dan coba play lagi begitu layar disentuh.
+  const tryPlay = async () => {
+    try {
+      await video.play();
+    } catch {
+      // masih ditahan — coba lagi pada sentuhan berikutnya
+    }
+  };
+  try {
+    await video.play();
+  } catch {
+    const onGesture = () => {
+      window.removeEventListener('pointerdown', onGesture);
+      window.removeEventListener('touchstart', onGesture);
+      void tryPlay();
+    };
+    window.addEventListener('pointerdown', onGesture);
+    window.addEventListener('touchstart', onGesture);
+  }
   return stream;
 }
 
