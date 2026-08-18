@@ -12,7 +12,7 @@ interface UserRow {
 }
 
 const ROLE_LABEL: Record<string, string> = {
-  TEACHER: 'Guru', HOMEROOM_TEACHER: 'Wali Kelas', STAFF: 'Staff', ADMIN: 'Admin / TU', HEADMASTER: 'Kepala Sekolah', PIKET: 'Petugas Piket',
+  TEACHER: 'Guru', HOMEROOM_TEACHER: 'Wali Kelas', STAFF: 'Staff', ADMIN: 'Admin', HEADMASTER: 'Kepala Sekolah', PIKET: 'Petugas Piket',
 };
 
 export default function Users() {
@@ -200,7 +200,7 @@ function UserForm({ onClose, subjects, initial }: { onClose: () => void; subject
             <option value="HOMEROOM_TEACHER">Wali Kelas</option>
             <option value="STAFF">Staff</option>
             <option value="PIKET">Petugas Piket</option>
-            <option value="ADMIN">Admin / TU</option>
+            <option value="ADMIN">Admin</option>
             <option value="HEADMASTER">Kepala Sekolah</option>
           </Select>
         </Field>

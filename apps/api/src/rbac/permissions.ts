@@ -168,7 +168,7 @@ export function rolePermissionKeys(roleKey: string): PermissionKey[] {
 /** Nama role dalam Bahasa Indonesia untuk tampilan. */
 export const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'Super Admin',
-  ADMIN: 'Admin / TU',
+  ADMIN: 'Admin',
   HEADMASTER: 'Kepala Sekolah',
   HOMEROOM_TEACHER: 'Wali Kelas',
   TEACHER: 'Guru',
