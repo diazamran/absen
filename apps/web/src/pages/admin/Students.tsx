@@ -121,6 +121,13 @@ export default function Students() {
         </div>
       </div>
 
+      {students && students.length > 0 && (
+        <label className="mb-3 flex w-fit items-center gap-2 text-sm text-muted">
+          <input type="checkbox" checked={selected.size === (allIds?.length || students.length) && (allIds?.length || students.length) > 0} onChange={toggleAll} className="h-4 w-4 accent-[var(--primary)]" />
+          Pilih semua ({allIds?.length || students.length})
+        </label>
+      )}
+
       {selected.size > 0 && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-line/70 bg-primary-soft/60 px-4 py-2.5 dark:bg-primary-500/10">
           <p className="text-sm font-semibold text-ink">{selected.size} siswa dipilih</p>
@@ -150,7 +157,7 @@ export default function Students() {
         </div>
       )}
 
-      <div className="space-y-2">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {students?.map((s) => (
           <Card key={s.id} className="flex items-center gap-3 p-3.5">
             <input
@@ -199,7 +206,9 @@ export default function Students() {
           </Card>
         ))}
         {students?.length === 0 && (
-          <EmptyState icon={Search} title="Tidak ada siswa" description="Coba ubah kata kunci pencarian atau tambahkan siswa baru." />
+          <div className="sm:col-span-2 lg:col-span-3">
+            <EmptyState icon={Search} title="Tidak ada siswa" description="Coba ubah kata kunci pencarian atau tambahkan siswa baru." />
+          </div>
         )}
       </div>
 
