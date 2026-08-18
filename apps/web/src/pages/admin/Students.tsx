@@ -41,9 +41,14 @@ export default function Students() {
       return next;
     });
   };
+  const { data: allIds } = useQuery({
+    queryKey: ['students-all-ids', search, classId],
+    queryFn: () => api<{ success: boolean; data: string[] }>(`/students/all-ids?search=${encodeURIComponent(search)}&classId=${classId}`).then((r) => r.data),
+  });
   const toggleAll = () => {
-    if (!students?.length) return;
-    setSelected((prev) => (prev.size === students.length ? new Set() : new Set(students.map((s) => s.id))));
+    const ids = allIds || students?.map((s) => s.id) || [];
+    if (!ids.length) return;
+    setSelected((prev) => (prev.size === ids.length ? new Set() : new Set(ids)));
   };
 
   const deleteOne = useMutation({

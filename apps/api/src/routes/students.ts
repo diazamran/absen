@@ -93,6 +93,25 @@ export async function studentRoutes(app: FastifyInstance) {
     });
   });
 
+  // Semua ID siswa aktif (untuk checkbox 'pilih semua' di frontend)
+  app.get('/students/all-ids', { preHandler: app.requirePermission(PERMISSION_KEYS.studentsRead) }, async (request, reply) => {
+    const q = request.query as { search?: string; classId?: string };
+    const where = {
+      isActive: true,
+      ...(q.classId ? { classId: q.classId } : {}),
+      ...(q.search
+        ? {
+            OR: [
+              { nis: { contains: q.search, mode: 'insensitive' as const } },
+              { user: { fullName: { contains: q.search, mode: 'insensitive' as const } } },
+            ],
+          }
+        : {}),
+    };
+    const rows = await prisma.student.findMany({ where, select: { id: true }, orderBy: { nis: 'asc' } });
+    return reply.send({ success: true, data: rows.map((r) => r.id) });
+  });
+
   app.get('/students/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.studentsRead) }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const student = await prisma.student.findUnique({
