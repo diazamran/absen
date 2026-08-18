@@ -114,15 +114,23 @@ export default function FaceScan() {
         const res = await api<{
           success: boolean;
           message: string;
-          data: { fullName: string; className: string; time: string; status: string; lateMinutes: number; earlyLeave: boolean };
+          data: { fullName: string; className: string; time: string; status: string; lateMinutes: number; earlyLeave: boolean; alreadyExists?: boolean };
         }>('/attendance/face', {
           method: 'POST',
           body: { type, descriptor: Array.from(descriptor), liveness: true, deviceId: 'web' },
         });
-        setResult({ ok: true, message: 'ABSEN BERHASIL', ...res.data });
-        setHint('');
-        doneRef.current = true;
-        feedbackSuccess();
+        if (res.data.alreadyExists && type === 'CHECK_IN') {
+          // Sudah absen datang → jam datang PALING AWAL tetap yang tercatat
+          setResult({ ok: false, already: true, message: res.message, fullName: res.data.fullName, className: res.data.className, time: res.data.time, status: res.data.status });
+          setHint('');
+          doneRef.current = true;
+          feedbackInfo();
+        } else {
+          setResult({ ok: true, message: 'ABSEN BERHASIL', ...res.data });
+          setHint('');
+          doneRef.current = true;
+          feedbackSuccess();
+        }
       } catch (e) {
         if (e instanceof ApiError && e.code === 'ALREADY_ATTENDANCE') {
           setResult({ ok: false, already: true, message: e.message });
@@ -271,8 +279,9 @@ export default function FaceScan() {
               <p className="text-xl font-extrabold text-amber-600 dark:text-amber-300">
                 {type === 'CHECK_IN' ? 'SUDAH ABSEN DATANG' : 'SUDAH ABSEN PULANG'}
               </p>
-              <p className="mt-1 text-lg font-bold text-ink">{user?.fullName}</p>
-              {user?.student?.className && <p className="text-sm font-medium text-muted">Kelas {user.student.className}</p>}
+              <p className="mt-1 text-lg font-bold text-ink">{result.fullName || user?.fullName}</p>
+              {(result.className || user?.student?.className) && <p className="text-sm font-medium text-muted">Kelas {result.className || user?.student?.className}</p>}
+              {result.time && <p className="font-mono text-3xl font-extrabold text-ink">{result.time}</p>}
               <p className="mt-1 text-sm text-muted">{result.message}</p>
             </div>
           ) : (

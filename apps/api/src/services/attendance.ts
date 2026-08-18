@@ -18,7 +18,7 @@ import { getAttendanceRules } from './settings.js';
 import { emitAttendance, emitNotification } from '../realtime/emitter.js';
 import { sendNotification, notifyParentsOfStudent } from './notify.js';
 import { audit } from '../lib/audit.js';
-import { Prisma, type AttendanceMethod, type AttendanceStatus, type AttendanceType } from '@prisma/client';
+import { Prisma, type Attendance, type AttendanceMethod, type AttendanceStatus, type AttendanceType } from '@prisma/client';
 
 export interface AttendanceProof {
   /** Descriptor wajah 128-d hasil deteksi di HP (face-api.js). */
@@ -61,6 +61,7 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   fullName: string;
   nis?: string | null;
   className?: string | null;
+  alreadyExists?: boolean;
 }> {
   const { actor, type, method } = input;
   const rules = await getAttendanceRules();
@@ -149,21 +150,12 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
     throw ApiError.badRequest('INVALID_METHOD', 'Metode absen tidak valid.');
   }
 
-  // ===== Waktu server + pencegahan duplikat =====
+  // ===== Waktu server =====
   const now = new Date();
   const today = dateKey(now);
   const dayStart = startOfLocalDay(today);
 
-  const existing = await prisma.attendance.findUnique({
-    where: { userId_date_type: { userId: targetUserId, date: dayStart, type } },
-  });
-  if (existing) {
-    const timeStr = type === 'CHECK_IN' ? localTime(existing.checkIn ?? now) : localTime(existing.checkOut ?? now);
-    const prefix = type === 'CHECK_IN' ? 'Anda sudah melakukan absensi datang hari ini' : 'Anda sudah melakukan absensi pulang hari ini';
-    throw ApiError.conflict('ALREADY_ATTENDANCE', `${prefix} pada ${timeStr}.`);
-  }
-
-  // ===== Jam pulang & pulang awal =====
+  // ===== Aturan jam pulang & pulang awal (berlaku juga saat memperbarui pulang terbaru) =====
   let earlyLeave = false;
   if (type === 'CHECK_OUT' && rules.checkOutAllowed === false) {
     throw ApiError.badRequest('CHECK_OUT_DISABLED', 'Absensi pulang dinonaktifkan oleh sekolah.');
@@ -199,7 +191,108 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
     locationVerified = true;
   }
 
-  // ===== Status & keterlambatan (hanya untuk check-in) =====
+  // ===== Target user + kelas (dipakai juga untuk catatan yang sudah ada) =====
+  const target = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    include: { student: true, teacher: true, staff: true },
+  });
+  if (!target || !target.isActive) throw ApiError.unauthorized('Akun tidak aktif.');
+  const className = target.student?.classId
+    ? (await prisma.class.findUnique({ where: { id: target.student.classId }, select: { name: true } }))?.name
+    : null;
+
+  /**
+   * Aturan "datang pertama menang, pulang terakhir menang":
+   * - Scan DANGAT berulang TIDAK menimpa catatan — jam datang PALING AWAL yang tercatat.
+   * - Scan PULANG berulang MENGGANTI catatan lama — jam pulang TERBARU yang tercatat.
+   */
+  const resolveDuplicate = async (existing: Attendance): Promise<{
+    attendance: Attendance;
+    fullName: string;
+    nis?: string | null;
+    className?: string | null;
+    alreadyExists: true;
+  }> => {
+    if (type === 'CHECK_IN') {
+      return {
+        attendance: existing,
+        alreadyExists: true,
+        fullName: target.fullName,
+        nis: target.student?.nis ?? null,
+        className,
+      };
+    }
+    // CHECK_OUT — timpa catatan lama dengan jam pulang terbaru
+    const updated = await prisma.attendance.update({
+      where: { id: existing.id },
+      data: {
+        checkOut: now,
+        earlyLeave,
+        method,
+        ...(input.deviceId ? { deviceId: input.deviceId } : {}),
+        ...(input.latitude !== undefined ? { latitude: input.latitude } : {}),
+        ...(input.longitude !== undefined ? { longitude: input.longitude } : {}),
+        ...(input.accuracy !== undefined ? { accuracy: input.accuracy } : {}),
+        locationVerified: locationVerified || existing.locationVerified,
+        faceVerified: faceVerified || existing.faceVerified,
+        livenessVerified: livenessVerified || existing.livenessVerified,
+        qrVerified: qrVerified || existing.qrVerified,
+        cardVerified: cardVerified || existing.cardVerified,
+      },
+    });
+
+    emitAttendance({
+      id: updated.id,
+      type,
+      userId: targetUserId,
+      fullName: target.fullName,
+      nis: target.student?.nis ?? null,
+      className: className ?? null,
+      time: localTime(now),
+      status: updated.status,
+      method,
+      lateMinutes: updated.lateMinutes ?? 0,
+    });
+
+    if (target.student) {
+      await notifyParentsOfStudent(
+        target.student.id,
+        'Info Absensi',
+        `Anak Anda, ${target.fullName}, jam pulang diperbarui menjadi pukul ${localTime(now)}.`,
+        { type: 'attendance', attendanceId: updated.id },
+      );
+      await sendNotification({
+        userId: targetUserId,
+        title: 'Absensi Berhasil',
+        body: `Kamu absen pulang pukul ${localTime(now)}${earlyLeave ? ' (Pulang Awal)' : ''} — jam pulang diperbarui.`,
+        data: { type: 'attendance', attendanceId: updated.id },
+      });
+    }
+
+    await audit({
+      userId: actor.id,
+      action: 'ATTENDANCE_UPDATED',
+      entity: 'Attendance',
+      entityId: updated.id,
+      newValue: { type, method, earlyLeave, checkOut: localTime(now), userId: targetUserId },
+      request: actor.request,
+    });
+
+    return {
+      attendance: updated,
+      alreadyExists: true,
+      fullName: target.fullName,
+      nis: target.student?.nis ?? null,
+      className,
+    };
+  };
+
+  const existing = await prisma.attendance.findUnique({
+    where: { userId_date_type: { userId: targetUserId, date: dayStart, type } },
+  });
+  if (existing) return resolveDuplicate(existing);
+
+  // ===== Status & keterlambatan (hanya untuk catatan BARU) =====
   let status: AttendanceStatus = 'PRESENT';
   let lateMinutes = 0;
   if (type === 'CHECK_IN') {
@@ -225,12 +318,6 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
     });
     if (checkIn) status = checkIn.status;
   }
-
-  const target = await prisma.user.findUnique({
-    where: { id: targetUserId },
-    include: { student: true, teacher: true, staff: true },
-  });
-  if (!target || !target.isActive) throw ApiError.unauthorized('Akun tidak aktif.');
 
   let attendance;
   try {
@@ -261,17 +348,17 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
       },
     });
   } catch (e) {
-    // Race kondisi: dua permintaan bersamaan untuk user yang sama → satu absen saja
+    // Race kondisi: dua permintaan bersamaan untuk user yang sama → terapkan aturan yang sama
     if ((e as { code?: string }).code === 'P2002') {
-      const prefix = type === 'CHECK_IN' ? 'Anda sudah melakukan absensi datang hari ini' : 'Anda sudah melakukan absensi pulang hari ini';
-      throw ApiError.conflict('ALREADY_ATTENDANCE', `${prefix}.`);
+      const winner = await prisma.attendance.findUnique({
+        where: { userId_date_type: { userId: targetUserId, date: dayStart, type } },
+      });
+      if (winner) return resolveDuplicate(winner);
     }
     throw e;
   }
 
   // ===== Realtime + notifikasi + audit =====
-  const className = target.student?.classId ? (await prisma.class.findUnique({ where: { id: target.student.classId }, select: { name: true } }))?.name : null;
-
   emitAttendance({
     id: attendance.id,
     type,
@@ -287,33 +374,39 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
 
   if (target.student) {
     const label = type === 'CHECK_IN' ? 'datang' : 'pulang';
-    await notifyParentsOfStudent(
-      target.student.id,
-      'Info Absensi',
-      `Anak Anda, ${target.fullName}, telah melakukan absensi ${label} pada ${localTime(now)}.`,
-      { type: 'attendance', attendanceId: attendance.id },
-    );
-    if (status === 'LATE' && type === 'CHECK_IN') {
+    try {
       await notifyParentsOfStudent(
         target.student.id,
-        'Keterlambatan',
-        `${target.fullName} hari ini terlambat ${lateMinutes} menit.`,
-        { type: 'late', attendanceId: attendance.id },
+        'Info Absensi',
+        `Anak Anda, ${target.fullName}, telah melakukan absensi ${label} pada ${localTime(now)}.`,
+        { type: 'attendance', attendanceId: attendance.id },
       );
+      if (status === 'LATE' && type === 'CHECK_IN') {
+        await notifyParentsOfStudent(
+          target.student.id,
+          'Keterlambatan',
+          `${target.fullName} hari ini terlambat ${lateMinutes} menit.`,
+          { type: 'late', attendanceId: attendance.id },
+        );
+      }
+      // Notifikasi in-app untuk SISWA itu sendiri (muncul realtime di halaman Notifikasi)
+      const detail =
+        type === 'CHECK_IN'
+          ? status === 'LATE'
+            ? `pukul ${localTime(now)} — Terlambat ${lateMinutes} menit`
+            : `pukul ${localTime(now)}`
+          : `pukul ${localTime(now)}${earlyLeave ? ' (Pulang Awal)' : ''}`;
+      await sendNotification({
+        userId: targetUserId,
+        title: 'Absensi Berhasil',
+        body: `Kamu absen ${label} ${detail}.`,
+        data: { type: 'attendance', attendanceId: attendance.id },
+      });
+    } catch (err) {
+      // Kegagalan notifikasi tidak boleh menggagalkan absensi yang sudah tercatat
+      // eslint-disable-next-line no-console
+      console.error('[attendance] gagal mengirim notifikasi:', err);
     }
-    // Notifikasi in-app untuk SISWA itu sendiri (muncul realtime di halaman Notifikasi)
-    const detail =
-      type === 'CHECK_IN'
-        ? status === 'LATE'
-          ? `pukul ${localTime(now)} — Terlambat ${lateMinutes} menit`
-          : `pukul ${localTime(now)}`
-        : `pukul ${localTime(now)}${earlyLeave ? ' (Pulang Awal)' : ''}`;
-    await sendNotification({
-      userId: targetUserId,
-      title: 'Absensi Berhasil',
-      body: `Kamu absen ${label} ${detail}.`,
-      data: { type: 'attendance', attendanceId: attendance.id },
-    });
   }
 
   await audit({

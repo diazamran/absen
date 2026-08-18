@@ -29,16 +29,56 @@ describe('Mesin Absensi', () => {
     expect(['PRESENT', 'LATE']).toContain(body.data.status);
   });
 
-  it('absensi ganda ditolak (duplicate prevention)', async () => {
+  it('absen datang berulang: tetap sukses, jam datang PALING AWAL yang tercatat', async () => {
     const token = await issueQrToken(fx.studentUserId, 'dynamic');
-    const res = await app.inject({
+    const first = await app.inject({
       method: 'POST',
       url: '/api/attendance/qr',
       headers: { authorization: `Bearer ${fx.studentToken}` },
       payload: { type: 'CHECK_IN', token },
     });
-    expect(res.statusCode).toBe(409);
-    expect(JSON.parse(res.body).code).toBe('ALREADY_ATTENDANCE');
+    expect(first.statusCode).toBe(200);
+    const firstTime = JSON.parse(first.body).data.time;
+
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/attendance/qr',
+      headers: { authorization: `Bearer ${fx.studentToken}` },
+      payload: { type: 'CHECK_IN', token },
+    });
+    expect(second.statusCode).toBe(200);
+    const body2 = JSON.parse(second.body);
+    expect(body2.data.alreadyExists).toBe(true);
+    // Jam datang tetap yang paling awal (tidak tertimpa scan berikutnya)
+    expect(body2.data.time).toBe(firstTime);
+    const count = await prisma.attendance.count({ where: { userId: fx.studentUserId, type: 'CHECK_IN' } });
+    expect(count).toBe(1);
+  });
+
+  it('absen pulang berulang: jam pulang TERBARU menggantikan catatan lama', async () => {
+    const token = await issueQrToken(fx.studentUserId, 'dynamic');
+    const out1 = await app.inject({
+      method: 'POST',
+      url: '/api/attendance/qr',
+      headers: { authorization: `Bearer ${fx.studentToken}` },
+      payload: { type: 'CHECK_OUT', token },
+    });
+    expect(out1.statusCode).toBe(200);
+    const id1 = JSON.parse(out1.body).data.id;
+
+    const out2 = await app.inject({
+      method: 'POST',
+      url: '/api/attendance/qr',
+      headers: { authorization: `Bearer ${fx.studentToken}` },
+      payload: { type: 'CHECK_OUT', token },
+    });
+    expect(out2.statusCode).toBe(200);
+    const body2 = JSON.parse(out2.body);
+    expect(body2.data.alreadyExists).toBe(true);
+    // Catatan yang sama ditimpa, bukan dibuat baru
+    expect(body2.data.id).toBe(id1);
+    const count = await prisma.attendance.count({ where: { userId: fx.studentUserId, type: 'CHECK_OUT' } });
+    expect(count).toBe(1);
   });
 
   it('check-out tanpa check-in ditolak', async () => {

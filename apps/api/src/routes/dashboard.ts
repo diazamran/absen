@@ -301,7 +301,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
                     lateMinutes: checkInAtt.lateMinutes,
                   }
                 : null,
-              checkOut: checkOutAtt ? { time: checkOutAtt.checkOut ? localTime(checkOutAtt.checkOut) : null } : null,
+              checkOut: checkOutAtt ? { time: checkOutAtt.checkOut ? localTime(checkOutAtt.checkOut) : null, earlyLeave: checkOutAtt.earlyLeave ?? false } : null,
             },
             today: {
               checkIn: checkInAtt,

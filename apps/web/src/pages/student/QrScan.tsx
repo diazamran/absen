@@ -73,11 +73,15 @@ export default function QrScan() {
           if (token) {
             busyRef.current = true;
             try {
-              const res = await api<{ success: boolean; message: string; data: { fullName: string; className: string; time: string; status: string } }>('/attendance/qr', {
+              const res = await api<{ success: boolean; message: string; data: { fullName: string; className: string; time: string; status: string; alreadyExists?: boolean } }>('/attendance/qr', {
                 method: 'POST',
                 body: { type, token, deviceId: 'web' },
               });
-              setResult({ ok: true, message: res.message, ...res.data });
+              if (res.data.alreadyExists && type === 'CHECK_IN') {
+                setResult({ ok: false, already: true, message: res.message, fullName: res.data.fullName, className: res.data.className, time: res.data.time });
+              } else {
+                setResult({ ok: true, message: res.message, ...res.data });
+              }
             } catch (e) {
               if (e instanceof ApiError && e.code === 'ALREADY_ATTENDANCE') {
                 setResult({ ok: false, already: true, message: e.message });
@@ -113,20 +117,22 @@ export default function QrScan() {
 
       <div className="flex flex-col items-center gap-3 px-4 pb-3">
         {!isStudent && (
-          <Segmented
-            value={mode}
-            onChange={setMode}
-            options={[{ value: 'scan', label: 'Pindai QR' }]}
-          />
+          <>
+            <Segmented
+              value={mode}
+              onChange={setMode}
+              options={[{ value: 'scan', label: 'Pindai QR' }]}
+            />
+            <Segmented
+              value={type}
+              onChange={setType}
+              options={[
+                { value: 'CHECK_IN', label: 'Datang' },
+                { value: 'CHECK_OUT', label: 'Pulang' },
+              ]}
+            />
+          </>
         )}
-        <Segmented
-          value={type}
-          onChange={setType}
-          options={[
-            { value: 'CHECK_IN', label: 'Datang' },
-            { value: 'CHECK_OUT', label: 'Pulang' },
-          ]}
-        />
       </div>
 
       {mode === 'scan' ? (
@@ -158,32 +164,6 @@ export default function QrScan() {
         </div>
       )}
 
-      <div className="flex justify-center bg-black py-5">
-        {mode === 'show' && (
-          <button
-            onClick={async () => {
-              try {
-                const res = await api<{ success: boolean; message: string; data: { fullName: string; className: string; time: string; status: string } }>('/attendance/qr', {
-                  method: 'POST',
-                  body: { type, token: (await api<{ success: boolean; data: { token: string } }>('/qr/me')).data.token },
-                });
-                setResult({ ok: true, message: res.message, ...res.data });
-              } catch (e) {
-                if (e instanceof ApiError && e.code === 'ALREADY_ATTENDANCE') {
-                  setResult({ ok: false, already: true, message: e.message });
-                } else {
-                  setResult({ ok: false, message: e instanceof ApiError ? e.message : 'Gagal absen.' });
-                }
-              }
-              setTimeout(() => setResult(null), 3500);
-            }}
-            className="rounded-2xl bg-primary px-8 py-3.5 font-bold text-white shadow-float active:scale-95"
-          >
-            Absen Sekarang ({type === 'CHECK_IN' ? 'Datang' : 'Pulang'})
-          </button>
-        )}
-      </div>
-
       {result && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm">
           {result.ok ? (
@@ -207,8 +187,9 @@ export default function QrScan() {
               <p className="text-xl font-extrabold text-amber-600 dark:text-amber-300">
                 {type === 'CHECK_IN' ? 'SUDAH ABSEN DATANG' : 'SUDAH ABSEN PULANG'}
               </p>
-              <p className="mt-1 text-lg font-bold text-ink">{user?.fullName}</p>
-              {user?.student?.className && <p className="text-sm font-medium text-muted">Kelas {user.student.className}</p>}
+              <p className="mt-1 text-lg font-bold text-ink">{result.fullName || user?.fullName}</p>
+              {(result.className || user?.student?.className) && <p className="text-sm font-medium text-muted">Kelas {result.className || user?.student?.className}</p>}
+              {result.time && <p className="font-mono text-3xl font-extrabold text-ink">{result.time}</p>}
               <p className="mt-1 text-sm text-muted">{result.message}</p>
             </div>
           ) : (

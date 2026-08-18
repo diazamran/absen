@@ -59,7 +59,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
     });
     return reply.send({
       success: true,
-      message: 'Absensi berhasil dicatat.',
+      message: result.alreadyExists ? 'Anda sudah absen datang hari ini — jam datang tetap yang paling awal.' : 'Absensi berhasil dicatat.',
       data: {
         id: result.attendance.id,
         fullName: result.fullName,
@@ -70,6 +70,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         lateMinutes: result.attendance.lateMinutes,
         earlyLeave: result.attendance.earlyLeave,
         method: result.attendance.method,
+        alreadyExists: result.alreadyExists ?? false,
       },
     });
   });
@@ -88,13 +89,14 @@ export async function attendanceRoutes(app: FastifyInstance) {
     });
     return reply.send({
       success: true,
-      message: 'Absensi pulang berhasil dicatat.',
+      message: result.alreadyExists ? 'Jam pulang diperbarui.' : 'Absensi pulang berhasil dicatat.',
       data: {
         id: result.attendance.id,
         fullName: result.fullName,
         time: localTime(result.attendance.checkOut ?? new Date()),
         status: result.attendance.status,
         earlyLeave: result.attendance.earlyLeave,
+        alreadyExists: result.alreadyExists ?? false,
       },
     });
   });
@@ -137,6 +139,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         earlyLeave: result.attendance.earlyLeave,
         faceVerified: true,
         livenessVerified: true,
+        alreadyExists: result.alreadyExists ?? false,
       },
     });
   });
@@ -169,6 +172,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         status: result.attendance.status,
         earlyLeave: result.attendance.earlyLeave,
         qrVerified: true,
+        alreadyExists: result.alreadyExists ?? false,
       },
     });
   });
@@ -201,6 +205,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         status: result.attendance.status,
         earlyLeave: result.attendance.earlyLeave,
         cardVerified: true,
+        alreadyExists: result.alreadyExists ?? false,
       },
     });
   });
@@ -231,6 +236,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         lateMinutes: result.attendance.lateMinutes,
         earlyLeave: result.attendance.earlyLeave,
         method: result.attendance.method,
+        alreadyExists: result.alreadyExists ?? false,
       },
     });
   });

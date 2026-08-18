@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  FilePlus2, FileText, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, XCircle, CalendarDays, MapPin, ShieldCheck, ScanFace, BarChart3, ClipboardCheck,
+  FilePlus2, FileText, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, LogOut, XCircle, CalendarDays, MapPin, ShieldCheck, ScanFace, BarChart3, ClipboardCheck,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -15,7 +15,7 @@ interface HomeData {
   date: string;
   myAttendance: {
     checkIn: { status: string; statusLabel: string; time: string | null; lateMinutes: number } | null;
-    checkOut: { time: string | null } | null;
+    checkOut: { time: string | null; earlyLeave?: boolean } | null;
   } | null;
   schedules: { id: string; subject: string; className: string; classId: string; startTime: string; endTime: string; room: string | null }[];
   myClass?: { id: string; name: string; studentCount: number } | null;
@@ -135,26 +135,52 @@ export default function TeacherHome() {
         </Card>
       )}
 
-      {/* Kehadiran saya — khusus siswa; guru/petugas piket tidak memerlukan kartu ini */}
-      {isStudent && (
-        <Card className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${att?.checkIn ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-slate-100 text-slate-400 dark:bg-slate-700'}`}>
-              {att?.checkIn ? <CheckCircle2 className="h-7 w-7" /> : <Clock3 className="h-7 w-7" />}
+      {/* Kehadiran saya — khusus siswa; guru/petugas piket tidak memerlukan kartu ini.
+          Menampilkan kejadian absen TERAKHIR: jam pulang bila sudah pulang, selain itu jam datang. */}
+      {isStudent && (() => {
+        const lastTime = att?.checkOut?.time ?? att?.checkIn?.time ?? null;
+        const isOut = Boolean(att?.checkOut?.time);
+        const statusText = !lastTime
+          ? 'Belum absen'
+          : isOut
+            ? att?.checkOut?.earlyLeave
+              ? 'Pulang Awal'
+              : 'Sudah pulang'
+            : att?.checkIn?.status === 'LATE'
+              ? `Terlambat ${att.checkIn.lateMinutes} menit`
+              : 'Hadir tepat waktu';
+        const boxCls = isOut
+          ? att?.checkOut?.earlyLeave
+            ? 'bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300'
+            : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300'
+          : att?.checkIn
+            ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300'
+            : 'bg-slate-100 text-slate-400 dark:bg-slate-700';
+        const textCls = isOut
+          ? att?.checkOut?.earlyLeave
+            ? 'text-amber-600 dark:text-amber-400'
+            : 'text-emerald-600 dark:text-emerald-400'
+          : att?.checkIn
+            ? 'text-emerald-600 dark:text-emerald-400'
+            : 'text-muted';
+        return (
+          <Card className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${boxCls}`}>
+                {lastTime ? (isOut ? <LogOut className="h-7 w-7" /> : <CheckCircle2 className="h-7 w-7" />) : <Clock3 className="h-7 w-7" />}
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted">Kehadiran Saya</p>
+                <p className="font-mono text-3xl font-extrabold leading-none text-ink">{lastTime || '--:--'}</p>
+                <p className={`mt-1 text-sm font-semibold ${textCls}`}>{statusText}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-medium text-muted">Kehadiran Saya</p>
-              <p className="font-mono text-3xl font-extrabold leading-none text-ink">{att?.checkIn?.time || '--:--'}</p>
-              <p className="mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                {att?.checkIn ? (att.checkIn.status === 'LATE' ? `Terlambat ${att.checkIn.lateMinutes} menit` : 'Hadir tepat waktu') : 'Belum absen'}
-              </p>
-            </div>
-          </div>
-          <Button variant="secondary" onClick={quickAction} className="shrink-0">
-            <Camera className="h-4 w-4" /> Absen
-          </Button>
-        </Card>
-      )}
+            <Button variant="secondary" onClick={quickAction} className="shrink-0">
+              <Camera className="h-4 w-4" /> Absen
+            </Button>
+          </Card>
+        );
+      })()}
 
       {/* Menu grid */}
       <div className="grid grid-cols-3 gap-3">
