@@ -45,7 +45,7 @@ function DayHeader({ dateStr }: { dateStr: string }) {
 
 const STAT_COLS = ['S', 'I', 'A', 'D', 'P'] as const;
 
-export default function RecapTable({ data }: { data: RecapData }) {
+export default function RecapTable({ data, headmasterName, headmasterNip, piketName, piketNip }: { data: RecapData; headmasterName?: string; headmasterNip?: string; piketName?: string; piketNip?: string }) {
   if (!data?.rows?.length) return null;
   const todayKey = data.today;
 
@@ -136,21 +136,18 @@ export default function RecapTable({ data }: { data: RecapData }) {
       {/* Signature area */}
       <div className="mt-6 flex items-start justify-between px-4 text-xs text-muted">
         {/* Kiri: Kepala Sekolah */}
-        <div className="text-center">
+        <div>
           <p className="mb-1">Mengetahui,</p>
-          <p className="mb-8">Kepala Sekolah</p>
-          <p className="mb-1">_________________________</p>
-          <p className="font-semibold text-ink">( _____________________ )</p>
-          <p>NIP. _____________________</p>
+          <p className="mb-6">Kepala Sekolah</p>
+          <p className="font-bold text-ink">{headmasterName?.toUpperCase() || '( _____________________ )'}</p>
+          <p>NIP. {headmasterNip || '_________________________'}</p>
         </div>
         {/* Kanan: Petugas Piket */}
-        <div className="text-center">
+        <div className="text-right">
           <p className="mb-1">{data.today}</p>
-          <p className="mb-1">Petugas Piket,</p>
-          <p className="mb-8">&nbsp;</p>
-          <p className="mb-1">_________________________</p>
-          <p className="font-semibold text-ink">( _____________________ )</p>
-          <p>NIP. _____________________</p>
+          <p className="mb-6">Petugas Piket,</p>
+          <p className="font-bold text-ink">{piketName?.toUpperCase() || '( _____________________ )'}</p>
+          <p>NIP. {piketNip || '_________________________'}</p>
         </div>
       </div>
     </Card>

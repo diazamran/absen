@@ -212,7 +212,13 @@ export default function Reports() {
       )}
 
       {tab === 'recap' && report?.dateColumns ? (
-        <RecapTable data={report as any} />
+        <RecapTable
+          data={report as any}
+          headmasterName={headmasterName || undefined}
+          headmasterNip={headmasterNip || undefined}
+          piketName={piketName || undefined}
+          piketNip={piketNip || undefined}
+        />
       ) : null}
 
       {tab !== 'recap' && classId === '' && report?.classSummary?.length ? (
