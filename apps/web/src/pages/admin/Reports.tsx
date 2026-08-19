@@ -71,7 +71,12 @@ export default function Reports() {
   // Ambil semua data user (kepala sekolah + diri sendiri) untuk tanda tangan
   const { data: allUsers } = useQuery({
     queryKey: ['export-users'],
-    queryFn: () => api<{ success: boolean; data: { id: string; fullName: string; roleKey: string; nip?: string | null }[] }>('/users?pageSize=200').then((r) => r.data),
+    queryFn: () => api<{ success: boolean; data: { id: string; fullName: string; roleKey: string; nip?: string | null }[] }>('/users').then((r) => {
+      console.log('[Reports] All users:', r.data?.map(u => ({ name: u.fullName, role: u.roleKey, nip: u.nip })));
+      return r.data;
+    }),
+    staleTime: 0,
+    refetchOnMount: true,
   });
   const headmasterUser = allUsers?.find((u) => u.roleKey === 'HEADMASTER');
   const selfUser = allUsers?.find((u) => u.id === user?.id);

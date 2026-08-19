@@ -286,4 +286,25 @@ export async function userRoutes(app: FastifyInstance) {
     });
     return reply.send({ success: true, message: 'Akun dihapus permanen.' });
   });
+
+  // Debug: check HEADMASTER + PIKET teacher records
+  app.get('/users/debug-nip', { preHandler: app.requirePermission(PERMISSION_KEYS.usersRead) }, async (_request, reply) => {
+    const users = await prisma.user.findMany({
+      where: { role: { key: { in: ['HEADMASTER', 'PIKET'] } } },
+      include: { role: true, teacher: true, staff: true },
+    });
+    return reply.send({
+      success: true,
+      data: users.map((u) => ({
+        id: u.id,
+        fullName: u.fullName,
+        roleKey: u.role.key,
+        hasTeacher: !!u.teacher,
+        teacherId: u.teacher?.id ?? null,
+        nip: u.teacher?.nip ?? u.staff?.nip ?? null,
+        position: u.teacher?.position ?? null,
+        isPiket: u.teacher?.isPiket ?? false,
+      })),
+    });
+  });
 }
