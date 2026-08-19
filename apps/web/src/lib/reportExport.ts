@@ -151,40 +151,28 @@ export function exportReportPdf(opts: ReportExportOptions): void {
   doc.setFont('helvetica', 'normal');
   doc.text('Mengetahui,', leftX, y);
   doc.text(`Kepala ${opts.schoolName}`, leftX, y + 6);
-
-  // Nama kepala sekolah di ATAS garis (bold)
+  // Nama + NIP langsung tanpa garis
   doc.setFont('helvetica', 'bold');
   if (opts.headmasterName) {
     doc.text(opts.headmasterName.toUpperCase(), leftX, y + 22);
   }
-
-  // Garis tanda tangan
   doc.setFont('helvetica', 'normal');
-  doc.text('_'.repeat(35), leftX, y + 27);
-
-  // NIP di BAWAH garis
   if (opts.headmasterNip) {
-    doc.text(`NIP. ${opts.headmasterNip}`, leftX, y + 32);
+    doc.text(`NIP. ${opts.headmasterNip}`, leftX, y + 28);
   }
 
   // === KANAN: Petugas Piket (dari user yang login) ===
   doc.setFont('helvetica', 'normal');
   doc.text(`${city}, ${formatLongDate(todayJakartaKey())}`, rightX, y);
   doc.text('Petugas Piket,', rightX, y + 6);
-
-  // Nama petugas piket di ATAS garis (bold)
+  // Nama + NIP langsung tanpa garis
   doc.setFont('helvetica', 'bold');
   if (opts.signatureName) {
     doc.text(opts.signatureName.toUpperCase(), rightX, y + 22);
   }
-
-  // Garis tanda tangan
   doc.setFont('helvetica', 'normal');
-  doc.text('_'.repeat(35), rightX, y + 27);
-
-  // NIP di BAWAH garis
   if (opts.signatureNip) {
-    doc.text(`NIP. ${opts.signatureNip}`, rightX, y + 32);
+    doc.text(`NIP. ${opts.signatureNip}`, rightX, y + 28);
   }
 
   doc.save(opts.filename);
