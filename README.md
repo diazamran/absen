@@ -398,6 +398,7 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 - **Hapus riwayat hanya Super Admin** — tombol hapus catatan absensi di Riwayat & Absensi Hari Ini hanya muncul untuk akun Super Admin.
 - **Klik kelas di Rekap per Kelas** — baris kelas di tabel rekap harian/bulanan bisa diklik untuk melihat detail siswa dalam kelas tersebut.
 - **Layout tanda tangan PDF** — Kepala Sekolah di kiri (dari role HEADMASTER), Petugas Piket di kanan (dari user login). Nama + NIP langsung tanpa garis.
+- **Fix NIP tidak tersimpan untuk Kepala Sekolah & Petugas Piket** — Root cause: query `existing` user tidak include `role: true` → roleKey undefined → teacher record tidak dibuat/diupdate. Sekarang sudah diperbaiki + teacher record dibuat otomatis jika belum ada.
 
 ---
 
