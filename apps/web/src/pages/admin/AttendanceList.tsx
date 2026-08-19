@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ScanLine, Search, ClipboardEdit, Filter, Pencil, Trash2 } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
 import { Card, Input, Select, Button, Badge, Modal, Field, EmptyState } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
@@ -13,8 +14,10 @@ interface AttRow {
 }
 
 export default function AttendanceList() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const canDelete = user?.roleKey === 'SUPER_ADMIN';
   const [classId, setClassId] = useState('');
   const [status, setStatus] = useState('');
   const [q, setQ] = useState('');
@@ -118,15 +121,17 @@ export default function AttendanceList() {
             >
               <Pencil className="h-4 w-4" />
             </button>
-            <button
-              onClick={() => {
-                if (window.confirm(`Hapus PERMANEN catatan absen ${r.name} (${r.time || '-'})? Data akan terhapus bersih dari database dan tidak bisa dikembalikan.`)) deleteMutation.mutate(r.id);
-              }}
-              className="rounded-xl p-2 text-muted transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
-              title="Hapus catatan absen"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+            {canDelete && (
+              <button
+                onClick={() => {
+                  if (window.confirm(`Hapus PERMANEN catatan absen ${r.name} (${r.time || '-'})? Data akan terhapus bersih dari database dan tidak bisa dikembalikan.`)) deleteMutation.mutate(r.id);
+                }}
+                className="rounded-xl p-2 text-muted transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
+                title="Hapus catatan absen"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
           </Card>
         ))}
         {rows && rows.length === 0 && (

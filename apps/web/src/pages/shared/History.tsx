@@ -24,8 +24,8 @@ export default function History() {
   const qc = useQueryClient();
   const [month, setMonth] = useState(currentMonthKey());
 
-  // Admin / piket / wali kelas bisa menghapus bersih catatan absensi siswa
-  const canDelete = ['ADMIN', 'SUPER_ADMIN', 'PIKET', 'HOMEROOM_TEACHER'].includes(user?.roleKey || '');
+  // Hanya Super Admin bisa menghapus bersih catatan absensi siswa
+  const canDelete = user?.roleKey === 'SUPER_ADMIN';
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api(`/attendance/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
