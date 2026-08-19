@@ -150,6 +150,9 @@ export async function attendanceRoutes(app: FastifyInstance) {
         type: z.enum(['CHECK_IN', 'CHECK_OUT']).default('CHECK_IN'),
         token: z.string().min(1),
         deviceId: z.string().optional(),
+        latitude: z.number().optional(),
+        longitude: z.number().optional(),
+        accuracy: z.number().optional(),
       }),
       request.body,
     );
@@ -159,6 +162,9 @@ export async function attendanceRoutes(app: FastifyInstance) {
       method: 'QR',
       proof: { token: body.token },
       deviceId: body.deviceId,
+      latitude: body.latitude,
+      longitude: body.longitude,
+      accuracy: body.accuracy,
     });
     return reply.send({
       success: true,

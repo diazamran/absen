@@ -6,6 +6,7 @@ import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
 import { startCamera, stopCamera, decodeQrFromVideo } from '../../lib/camera';
+import { getCurrentPosition } from '../../lib/geo';
 import { Segmented, Badge } from '../../lib/ui';
 import { STATUS_LABELS } from '../../lib/format';
 
@@ -73,9 +74,16 @@ export default function QrScan() {
           if (token) {
             busyRef.current = true;
             try {
+              // Ambil GPS sebelum kirim — diperlukan bila pengaturan lokasi aktif
+              const gps = await getCurrentPosition();
               const res = await api<{ success: boolean; message: string; data: { fullName: string; className: string; time: string; status: string; alreadyExists?: boolean } }>('/attendance/qr', {
                 method: 'POST',
-                body: { type, token, deviceId: 'web' },
+                body: {
+                  type,
+                  token,
+                  deviceId: 'web',
+                  ...(gps ? { latitude: gps.latitude, longitude: gps.longitude, accuracy: gps.accuracy } : {}),
+                },
               });
               if (res.data.alreadyExists && type === 'CHECK_IN') {
                 setResult({ ok: false, already: true, message: res.message, fullName: res.data.fullName, className: res.data.className, time: res.data.time });

@@ -6,6 +6,7 @@ import { useToast } from '../../lib/toast';
 import { useAuth } from '../../lib/auth';
 import { startCamera, stopCamera, captureFrame } from '../../lib/camera';
 import { detectFaceDescriptor, framesHaveMotion, initFaceModels, isFaceModelReady } from '../../lib/face';
+import { getCurrentPosition } from '../../lib/geo';
 import { feedbackSuccess, feedbackInfo, feedbackError } from '../../lib/feedback';
 import { Segmented, Badge, Button } from '../../lib/ui';
 import { STATUS_LABELS } from '../../lib/format';
@@ -40,6 +41,7 @@ export default function FaceScan() {
   const [error, setError] = useState('');
   const [scanning, setScanning] = useState(false);
   const [modelsLoading, setModelsLoading] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [hint, setHint] = useState('');
 
@@ -117,13 +119,32 @@ export default function FaceScan() {
           return;
         }
 
+        // Ambil GPS sebelum kirim — diperlukan bila pengaturan lokasi aktif
+        setGpsLoading(true);
+        const gps = await getCurrentPosition();
+        setGpsLoading(false);
+        if (!gps) {
+          if (manual) {
+            setResult({ ok: false, message: 'GPS tidak aktif. Aktifkan GPS di HP Anda lalu coba lagi.' });
+          } else {
+            setHint('GPS belum aktif — Aktifkan GPS di HP');
+          }
+          return;
+        }
+
         const res = await api<{
           success: boolean;
           message: string;
           data: { fullName: string; className: string; time: string; status: string; lateMinutes: number; earlyLeave: boolean; alreadyExists?: boolean };
         }>('/attendance/face', {
           method: 'POST',
-          body: { type, descriptor: Array.from(descriptor), liveness: true, deviceId: 'web' },
+          body: {
+            type,
+            descriptor: Array.from(descriptor),
+            liveness: true,
+            deviceId: 'web',
+            ...(gps ? { latitude: gps.latitude, longitude: gps.longitude, accuracy: gps.accuracy } : {}),
+          },
         });
         if (res.data.alreadyExists && type === 'CHECK_IN') {
           // Sudah absen datang → jam datang PALING AWAL tetap yang tercatat
@@ -145,6 +166,12 @@ export default function FaceScan() {
         } else if (e instanceof ApiError && e.code === 'FACE_NOT_RECOGNIZED') {
           setResult({ ok: false, message: 'Wajah tidak dikenali. Coba lagi.' });
           feedbackInfo();
+        } else if (e instanceof ApiError && (e.code === 'LOCATION_REQUIRED' || e.code === 'LOCATION_INACCURATE')) {
+          setResult({ ok: false, message: e.message });
+          feedbackError();
+        } else if (e instanceof ApiError && e.code === 'OUTSIDE_LOCATION') {
+          setResult({ ok: false, message: e.message });
+          feedbackError();
         } else {
           setResult({ ok: false, message: e instanceof ApiError ? e.message : 'Wajah tidak dikenali.' });
           feedbackError();
@@ -241,6 +268,8 @@ export default function FaceScan() {
             <p className="absolute inset-x-0 bottom-4 px-4 text-center text-sm text-white/90">
               {hint ? (
                 <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-amber-300">{hint}</span>
+              ) : gpsLoading ? (
+                'Mengambil lokasi GPS…'
               ) : scanning ? (
                 'Memverifikasi wajah…'
               ) : modelsLoading ? (
