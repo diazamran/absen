@@ -25,7 +25,7 @@ function cityFromSchool(name: string): string {
   return parts[parts.length - 1] || 'Kota';
 }
 
-export function exportRecapPdf(data: RecapData, opts: { schoolName?: string; signatureName?: string; signatureNip?: string }, filename?: string): void {
+export function exportRecapPdf(data: RecapData, opts: { schoolName?: string; headmasterName?: string; headmasterNip?: string; signatureName?: string; signatureNip?: string }, filename?: string): void {
   const { today, semesterName, dateColumns, rows } = data;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -108,50 +108,49 @@ export function exportRecapPdf(data: RecapData, opts: { schoolName?: string; sig
   const city = cityFromSchool(schoolName);
 
   // Layout: Kepala Sekolah (kiri) | Petugas Piket (kanan)
+  // Format: Nama di ATAS garis, NIP di BAWAH garis
   const leftX = 30;
   const rightX = pageWidth - 80;
-  const lineLen = 50;
 
-  // === KIRI: Kepala Sekolah ===
+  // === KIRI: Kepala Sekolah (dari role HEADMASTER) ===
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.text('Mengetahui,', leftX, y);
   doc.text(`Kepala ${schoolName}`, leftX, y + 6);
 
+  // Nama kepala sekolah di ATAS garis (bold)
+  doc.setFont('helvetica', 'bold');
+  if (opts.headmasterName) {
+    doc.text(opts.headmasterName.toUpperCase(), leftX, y + 22);
+  }
+
   // Garis tanda tangan
   doc.setFont('helvetica', 'normal');
-  doc.text('_'.repeat(35), leftX, y + 28);
+  doc.text('_'.repeat(35), leftX, y + 27);
 
-  // Nama kepala sekolah (bold, tanpa underline)
-  doc.setFont('helvetica', 'bold');
-  if (opts.signatureName) {
-    doc.text(opts.signatureName.toUpperCase(), leftX, y + 33);
+  // NIP di BAWAH garis
+  if (opts.headmasterNip) {
+    doc.text(`NIP. ${opts.headmasterNip}`, leftX, y + 32);
   }
 
-  // NIP
-  doc.setFont('helvetica', 'normal');
-  if (opts.signatureNip) {
-    doc.text(`NIP. ${opts.signatureNip}`, leftX, y + 38);
-  }
-
-  // === KANAN: Petugas Piket ===
+  // === KANAN: Petugas Piket (dari user yang login) ===
   doc.setFont('helvetica', 'normal');
   doc.text(`${city}, ${today}`, rightX, y);
   doc.text('Petugas Piket,', rightX, y + 6);
 
-  // Garis tanda tangan
-  doc.text('_'.repeat(35), rightX, y + 28);
-
-  // Nama petugas piket (bold)
+  // Nama petugas piket di ATAS garis (bold)
   doc.setFont('helvetica', 'bold');
   if (opts.signatureName) {
-    doc.text(opts.signatureName.toUpperCase(), rightX, y + 33);
+    doc.text(opts.signatureName.toUpperCase(), rightX, y + 22);
   }
 
-  // NIP
+  // Garis tanda tangan
   doc.setFont('helvetica', 'normal');
+  doc.text('_'.repeat(35), rightX, y + 27);
+
+  // NIP di BAWAH garis
   if (opts.signatureNip) {
-    doc.text(`NIP. ${opts.signatureNip}`, rightX, y + 38);
+    doc.text(`NIP. ${opts.signatureNip}`, rightX, y + 32);
   }
 
   doc.save(filename || `rekap_absensi_${today}.pdf`);
