@@ -342,7 +342,7 @@ export async function importRoutes(app: FastifyInstance) {
             roleId: role.id,
           },
         });
-        if (row.roleKey === 'TEACHER' || row.roleKey === 'HOMEROOM_TEACHER') {
+        if (row.roleKey === 'TEACHER' || row.roleKey === 'HOMEROOM_TEACHER' || row.roleKey === 'HEADMASTER') {
           await prisma.teacher.create({
             data: {
               userId: user.id,
@@ -353,6 +353,10 @@ export async function importRoutes(app: FastifyInstance) {
           });
         } else if (row.roleKey === 'STAFF') {
           await prisma.staff.create({ data: { userId: user.id, nip: row.nip, position: row.position } });
+        } else if (row.roleKey === 'PIKET') {
+          await prisma.teacher.create({
+            data: { userId: user.id, nip: row.nip, position: row.position, isPiket: true },
+          });
         }
         created++;
       } catch (e) {

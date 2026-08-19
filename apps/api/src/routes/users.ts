@@ -90,14 +90,18 @@ export async function userRoutes(app: FastifyInstance) {
           roleId: role.id,
         },
       });
-      if (body.roleKey === 'TEACHER' || body.roleKey === 'HOMEROOM_TEACHER') {
+      if (body.roleKey === 'TEACHER' || body.roleKey === 'HOMEROOM_TEACHER' || body.roleKey === 'HEADMASTER') {
         await tx.teacher.create({
           data: { userId: u.id, nip, position, subjectId, isPiket: body.isPiket },
         });
       } else if (body.roleKey === 'STAFF') {
         await tx.staff.create({ data: { userId: u.id, nip, position } });
+      } else if (body.roleKey === 'PIKET') {
+        // Petugas Piket juga butuh teacher record untuk menyimpan NIP
+        await tx.teacher.create({
+          data: { userId: u.id, nip, position, isPiket: true },
+        });
       }
-      // PIKET: cukup akun dengan role Petugas Piket (tanpa data guru/staff)
       return u;
     });
 
@@ -153,17 +157,33 @@ export async function userRoutes(app: FastifyInstance) {
 
     await prisma.user.update({ where: { id }, data });
 
-    if (existing.teacher && (body.nip !== undefined || body.position !== undefined || body.subjectId !== undefined || body.isPiket !== undefined)) {
-      await prisma.teacher.update({
-        where: { userId: id },
-        data: { nip: body.nip || undefined, position: body.position || undefined, subjectId: body.subjectId || undefined, isPiket: body.isPiket },
-      });
-    }
-    if (existing.staff && (body.nip !== undefined || body.position !== undefined)) {
-      await prisma.staff.update({
-        where: { userId: id },
-        data: { nip: body.nip || undefined, position: body.position || undefined },
-      });
+    // Update atau buat teacher record jika perlu
+    if (body.nip !== undefined || body.position !== undefined || body.subjectId !== undefined || body.isPiket !== undefined) {
+      const roleKey = body.roleKey || existing.role?.key;
+      const isTeacherRole = ['TEACHER', 'HOMEROOM_TEACHER', 'HEADMASTER', 'PIKET'].includes(roleKey || '');
+      if (isTeacherRole) {
+        if (existing.teacher) {
+          await prisma.teacher.update({
+            where: { userId: id },
+            data: { nip: body.nip || undefined, position: body.position || undefined, subjectId: body.subjectId || undefined, isPiket: body.isPiket ?? roleKey === 'PIKET' },
+          });
+        } else {
+          await prisma.teacher.create({
+            data: { userId: id, nip: body.nip, position: body.position, subjectId: body.subjectId, isPiket: body.isPiket ?? roleKey === 'PIKET' },
+          });
+        }
+      } else if (roleKey === 'STAFF') {
+        if (existing.staff) {
+          await prisma.staff.update({
+            where: { userId: id },
+            data: { nip: body.nip || undefined, position: body.position || undefined },
+          });
+        } else {
+          await prisma.staff.create({
+            data: { userId: id, nip: body.nip, position: body.position },
+          });
+        }
+      }
     }
 
     // PIKET: role khusus petugas piket — lepas relasi guru/staff agar tidak "menyatu" dengan rule guru
