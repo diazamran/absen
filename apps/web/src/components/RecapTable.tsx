@@ -134,20 +134,24 @@ export default function RecapTable({ data, headmasterName, headmasterNip, piketN
       </div>
 
       {/* Signature area */}
-      <div className="mt-6 flex items-start justify-between px-4 text-xs text-muted">
+      <div className="mt-6 flex items-start justify-between px-6 text-xs text-muted">
         {/* Kiri: Kepala Sekolah */}
-        <div>
-          <p className="mb-1">Mengetahui,</p>
-          <p className="mb-6">Kepala Sekolah</p>
-          <p className="font-bold text-ink">{headmasterName?.toUpperCase() || '( _____________________ )'}</p>
-          <p>NIP. {headmasterNip || '_________________________'}</p>
+        <div className="w-60">
+          <p>Mengetahui,</p>
+          <p>Kepala Sekolah</p>
+          <div className="mt-12">
+            <p className="whitespace-nowrap font-bold text-ink">{headmasterName?.toUpperCase() || '( _____________________ )'}</p>
+            <p className="whitespace-nowrap">NIP. {headmasterNip || '_________________________'}</p>
+          </div>
         </div>
         {/* Kanan: Petugas Piket */}
-        <div className="text-right">
-          <p className="mb-1">{data.today}</p>
-          <p className="mb-6">Petugas Piket,</p>
-          <p className="font-bold text-ink">{piketName?.toUpperCase() || '( _____________________ )'}</p>
-          <p>NIP. {piketNip || '_________________________'}</p>
+        <div className="w-60 text-right">
+          <p>{data.today}</p>
+          <p>Petugas Piket,</p>
+          <div className="mt-12">
+            <p className="whitespace-nowrap font-bold text-ink">{piketName?.toUpperCase() || '( _____________________ )'}</p>
+            <p className="whitespace-nowrap">NIP. {piketNip || '_________________________'}</p>
+          </div>
         </div>
       </div>
     </Card>

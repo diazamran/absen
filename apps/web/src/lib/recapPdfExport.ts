@@ -116,29 +116,29 @@ export function exportRecapPdf(data: RecapData, opts: { schoolName?: string; hea
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.text('Mengetahui,', leftX, y);
-  doc.text(`Kepala ${schoolName}`, leftX, y + 6);
-  // Nama + NIP langsung tanpa garis
+  doc.text(`Kepala ${schoolName}`, leftX, y + 5);
+  // Nama + NIP dengan jarak cukup untuk tanda tangan
   doc.setFont('helvetica', 'bold');
   if (opts.headmasterName) {
-    doc.text(opts.headmasterName.toUpperCase(), leftX, y + 22);
+    doc.text(opts.headmasterName.toUpperCase(), leftX, y + 24);
   }
   doc.setFont('helvetica', 'normal');
   if (opts.headmasterNip) {
-    doc.text(`NIP. ${opts.headmasterNip}`, leftX, y + 28);
+    doc.text(`NIP. ${opts.headmasterNip}`, leftX, y + 30);
   }
 
   // === KANAN: Petugas Piket (dari user yang login) ===
   doc.setFont('helvetica', 'normal');
   doc.text(`${city}, ${today}`, rightX, y);
-  doc.text('Petugas Piket,', rightX, y + 6);
-  // Nama + NIP langsung tanpa garis
+  doc.text('Petugas Piket,', rightX, y + 5);
+  // Nama + NIP dengan jarak cukup untuk tanda tangan
   doc.setFont('helvetica', 'bold');
   if (opts.signatureName) {
-    doc.text(opts.signatureName.toUpperCase(), rightX, y + 22);
+    doc.text(opts.signatureName.toUpperCase(), rightX, y + 24);
   }
   doc.setFont('helvetica', 'normal');
   if (opts.signatureNip) {
-    doc.text(`NIP. ${opts.signatureNip}`, rightX, y + 28);
+    doc.text(`NIP. ${opts.signatureNip}`, rightX, y + 30);
   }
 
   doc.save(filename || `rekap_absensi_${today}.pdf`);
