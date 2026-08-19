@@ -59,7 +59,7 @@ export async function detectFaceDescriptor(
 ): Promise<Float32Array | null> {
   await initFaceModels();
   const detection = await faceapi
-    .detectSingleFace(input, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 }))
+    .detectSingleFace(input, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.35 }))
     .withFaceLandmarks()
     .withFaceDescriptor();
   if (!detection || !detection.descriptor || detection.descriptor.length !== FACE_DESCRIPTOR_SIZE) {
@@ -73,7 +73,7 @@ export async function detectFaceDescriptor(
  * Frame yang nyaris identik (foto diam / layar HP) → dianggap bukan orang asli.
  * Sedikit pergerakan alami wajah → lolos.
  */
-export async function framesHaveMotion(frameA: string, frameB: string, minDiff = 0.015): Promise<boolean> {
+export async function framesHaveMotion(frameA: string, frameB: string, minDiff = 0.008): Promise<boolean> {
   const diff = await frameDifference(frameA, frameB);
   return diff > minDiff;
 }

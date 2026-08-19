@@ -51,11 +51,18 @@ function normMinute(v: unknown, fallback: number): number {
   return normTimePart(v, fallback, 59);
 }
 
+let _rulesCache: AttendanceRules | null = null;
+let _rulesCacheTime = 0;
+
+export function invalidateRulesCache() { _rulesCache = null; }
+
 export async function getAttendanceRules(): Promise<AttendanceRules> {
+  const now = Date.now();
+  if (_rulesCache && now - _rulesCacheTime < 60_000) return _rulesCache;
   const row = await prisma.schoolSetting.findUnique({ where: { key: 'attendanceRules' } });
   const v = (row?.value as Record<string, unknown>) || {};
   const school = await prisma.school.findFirst();
-  return {
+  const rules: AttendanceRules = {
     lateAfterHour: normHour(v.lateAfterHour, config.lateAfterHour),
     lateAfterMinute: normMinute(v.lateAfterMinute, config.lateAfterMinute),
     checkOutAfterHour: normHour(v.checkOutAfterHour, config.checkOutAfterHour),
@@ -72,6 +79,9 @@ export async function getAttendanceRules(): Promise<AttendanceRules> {
     schoolLongitude: school?.longitude ?? config.schoolLongitude,
     checkOutAllowed: v.checkOutAllowed !== false,
   };
+  _rulesCache = rules;
+  _rulesCacheTime = Date.now();
+  return rules;
 }
 
 const DEFAULT_LOGIN_TEXTS: LoginTexts = {

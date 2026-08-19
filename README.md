@@ -390,6 +390,12 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 - **Logo baru** — ikon aplikasi didesain ulang terinspirasi emblem SMKN 1 Kras (perisai biru, bingkai emas, aksen magenta, bintang, tanda centang absen, buku terbuka). Berlaku untuk PWA (`apps/web/public/icons/`), favicon, dan semua ikon Android (TWA + WebView). Sumber SVG + script ada di `deploy/icon/` (regenerate: `cd deploy/icon && npm install && npm run render`).
 - **Perbaikan halaman Riwayat** — error `Cannot read properties of undefined (reading 'slice')` saat guru/staff membuka Riwayat Absensi (data laporan bulanan tidak punya `dayKey`). Kini aman dengan fallback ke tanggal.
 
+- **Scan Wajah dipercepat & diperakurasi** ⚡ — perubahan: (1) Liveness check dipercepat dari 3×300ms → 2×150ms + threshold diturunkan; (2) Deteksi wajah inputSize 320→416 (akurat) + scoreThreshold 0.4→0.35 (toleran cahaya); (3) Auto-scan interval 1800ms→1000ms; (4) Server: in-memory cache embeddings 60 detik + threshold 0.6→0.65 + margin 0.15→0.12; (5) Attendance rules di-cache 60 detik.
+- **Wali Kelas di form kelas** — dropdown "Wali Kelas" ditambahkan di form tambah/edit kelas (backend + frontend).
+- **Pilih semua di Siswa** — checkbox "Pilih semua" kini memilih SEMUA siswa aktif (bukan hanya halaman terlihat), fetch `/students/all-ids` tanpa pagination.
+- **Layout menu Siswa grid 3 kolom** — samakan dengan Guru & Staff: kartu dalam grid 3 kolom + "Pilih semua" di atas.
+- **Registrasi Wajah: setujui massal** — checkbox + tombol "Setujui Semua" / "Hapus Semua" di daftar pending registrasi wajah.
+
 ---
 
 Dibangun dengan Fastify, Prisma, PostgreSQL, Socket.IO, React, Vite, Tailwind CSS, dan PWA.

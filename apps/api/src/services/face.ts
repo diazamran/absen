@@ -62,8 +62,12 @@ function euclidean(a: number[], b: number[]): number {
   return Math.sqrt(sum);
 }
 
-const DEFAULT_THRESHOLD = 0.6; // jarak euclidean maksimum dianggap "cocok" (konvensi face-api)
-const DEFAULT_MARGIN = 0.15; // user kedua harus lebih jauh minimal ini (cegah false positive saat banyak siswa)
+const DEFAULT_THRESHOLD = 0.65; // jarak euclidean maksimum dianggap "cocok" (longgarkan sedikit dari 0.6)
+const DEFAULT_MARGIN = 0.12; // user kedua harus lebih jauh minimal ini (longgarkan dari 0.15)
+
+// In-memory cache untuk embeddings (hindari query DB setiap scan)
+let cachedEmbeddings: any[] | null = null;
+let cachedEmbeddingsTime = 0;
 
 /**
  * Provider nyata: descriptor dihitung di browser (face-api.js), dibandingkan di server.
@@ -105,6 +109,8 @@ class FaceNetWebProvider implements FaceRecognitionProvider {
         version: FACENET_VERSION,
       })),
     });
+    // Invalidate cache agar enroll baru langsung terlihat
+    cachedEmbeddings = null;
 
     return { dimensions: FACENET_DIMENSIONS, samples: descriptors.length };
   }
@@ -120,13 +126,20 @@ class FaceNetWebProvider implements FaceRecognitionProvider {
     const threshold = opts?.threshold ?? DEFAULT_THRESHOLD;
     const margin = opts?.margin ?? DEFAULT_MARGIN;
 
-    const embeddings = await prisma.faceEmbedding.findMany({
-      where: { version: FACENET_VERSION },
-      include: {
-        faceProfile: { select: { status: true } },
-        user: { select: { id: true, isActive: true, student: { select: { isActive: true } } } },
-      },
-    });
+    // In-memory cache: muat embeddings sekali per 60 detik, bukan setiap request
+    const now = Date.now();
+    if (!cachedEmbeddings || now - cachedEmbeddingsTime > 60_000) {
+      const fresh = await prisma.faceEmbedding.findMany({
+        where: { version: FACENET_VERSION },
+        include: {
+          faceProfile: { select: { status: true } },
+          user: { select: { id: true, isActive: true, student: { select: { isActive: true } } } },
+        },
+      });
+      cachedEmbeddings = fresh;
+      cachedEmbeddingsTime = now;
+    }
+    const embeddings = cachedEmbeddings!;
 
     // Cari jarak terkecil per user (best distance tiap orang)
     const bestByUser = new Map<string, number>();
@@ -165,6 +178,8 @@ class FaceNetWebProvider implements FaceRecognitionProvider {
   async deleteEmbeddings(userId: string): Promise<void> {
     await prisma.faceEmbedding.deleteMany({ where: { userId } });
     await prisma.faceProfile.updateMany({ where: { userId }, data: { status: 'DISABLED', samplesCount: 0 } });
+    // Invalidate cache
+    cachedEmbeddings = null;
   }
 }
 

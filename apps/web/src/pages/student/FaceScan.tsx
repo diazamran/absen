@@ -88,14 +88,14 @@ export default function FaceScan() {
       setHint('');
       if (!isFaceModelReady()) setModelsLoading(true);
       try {
-        // Liveness ringan: coba sampai 3 pasang frame; satu saja ada pergerakan → lolos
+        // Liveness ringan: coba sampai 2 pasang frame; satu saja ada pergerakan → lolos
         let motion = false;
-        for (let attempt = 0; attempt < 3 && !motion; attempt++) {
+        for (let attempt = 0; attempt < 2 && !motion; attempt++) {
           const frame1 = captureFrame(video);
-          await new Promise((r) => setTimeout(r, 300));
+          await new Promise((r) => setTimeout(r, 150));
           const frame2 = captureFrame(video);
           if (!frame1 || !frame2) continue;
-          motion = await framesHaveMotion(frame1, frame2, 0.01);
+          motion = await framesHaveMotion(frame1, frame2, 0.006);
         }
         if (!motion) {
           if (manual) {
@@ -169,7 +169,7 @@ export default function FaceScan() {
     const loop = async () => {
       if (!alive || doneRef.current) return;
       if (!runningRef.current) await runScan();
-      setTimeout(loop, 1800);
+      setTimeout(loop, 1000);
     };
     void loop();
     return () => {

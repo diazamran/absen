@@ -5,7 +5,7 @@ import { validate } from '../utils/validate.js';
 import { audit } from '../lib/audit.js';
 import { ApiError } from '../utils/errors.js';
 import { PERMISSION_KEYS } from '../rbac/permissions.js';
-import { getBranding, getAttendanceRules } from '../services/settings.js';
+import { getBranding, getAttendanceRules, invalidateRulesCache } from '../services/settings.js';
 import { storage, MAX_UPLOAD_SIZE } from '../services/storage.js';
 
 const LOGO_MIME = ['image/jpeg', 'image/png', 'image/webp'];
@@ -73,6 +73,9 @@ export async function settingRoutes(app: FastifyInstance) {
       newValue: body,
       request,
     });
+
+    // Invalidate cache aturan absensi agar perubahan langsung berlaku
+    if (body.attendanceRules) invalidateRulesCache();
 
     return reply.send({ success: true, message: 'Pengaturan disimpan.', data: { updated } });
   });
