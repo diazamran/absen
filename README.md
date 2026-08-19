@@ -395,6 +395,7 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 - **Pilih semua di Siswa** — checkbox "Pilih semua" kini memilih SEMUA siswa aktif (bukan hanya halaman terlihat), fetch `/students/all-ids` tanpa pagination.
 - **Layout menu Siswa grid 3 kolom** — samakan dengan Guru & Staff: kartu dalam grid 3 kolom + "Pilih semua" di atas.
 - **Registrasi Wajah: setujui massal** — checkbox + tombol "Setujui Semua" / "Hapus Semua" di daftar pending registrasi wajah.
+- **Hapus riwayat hanya Super Admin** — tombol hapus catatan absensi di Riwayat & Absensi Hari Ini hanya muncul untuk akun Super Admin.
 
 ---
 
