@@ -44,6 +44,7 @@ export default function FaceScan() {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [hint, setHint] = useState('');
+  const [rules, setRules] = useState<Record<string, unknown> | null>(null);
 
   // Nyalakan kamera — default langsung "Absen Datang" tanpa perlu menekan tombol.
   // Dipanggil otomatis saat halaman dibuka, atau lewat tombol "Mulai Kamera" bila gagal.
@@ -73,7 +74,32 @@ export default function FaceScan() {
     initFaceModels().catch(() => {
       // tidak fatal; runScan akan mencoba lagi
     });
+    // Muat aturan absensi untuk tentukan tab mana yang aktif
+    fetch('/api/settings/public')
+      .then((r) => r.json())
+      .then((d) => setRules(d?.data?.rules ?? null))
+      .catch(() => {});
   }, []);
+
+  // Hitung tab yang aktif berdasarkan waktu sekarang
+  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+  const canCheckIn = rules
+    ? nowMinutes <= ((rules.checkInDeadlineHour ?? 23) * 60 + (rules.checkInDeadlineMinute ?? 59))
+    : true;
+  const pulangAwalMinutes = (rules ? (rules.earlyLeaveBeforeHour ?? rules.checkOutAfterHour ?? 15) : 15) * 60 + (rules ? (rules.earlyLeaveBeforeMinute ?? rules.checkOutAfterMinute ?? 0) : 0);
+  const canCheckOut = rules ? nowMinutes >= pulangAwalMinutes : true;
+
+  // Jika tab aktif tidak tersedia, pindah ke tab yang tersedia
+  useEffect(() => {
+    if (!rules) return;
+    if (type === 'CHECK_IN' && !canCheckIn && canCheckOut) {
+      doneRef.current = false;
+      setType('CHECK_OUT');
+    } else if (type === 'CHECK_OUT' && !canCheckOut && canCheckIn) {
+      doneRef.current = false;
+      setType('CHECK_IN');
+    }
+  }, [rules, canCheckIn, canCheckOut, type]);
 
   /**
    * Satu siklus scan: liveness ringan (dengan retry) → deteksi wajah → verifikasi di server.
@@ -195,6 +221,11 @@ export default function FaceScan() {
     let alive = true;
     const loop = async () => {
       if (!alive || doneRef.current) return;
+      // Jangan scan jika tab saat ini tidak tersedia
+      if ((type === 'CHECK_IN' && !canCheckIn) || (type === 'CHECK_OUT' && !canCheckOut)) {
+        setTimeout(loop, 1000);
+        return;
+      }
       if (!runningRef.current) await runScan();
       setTimeout(loop, 1000);
     };
@@ -202,7 +233,7 @@ export default function FaceScan() {
     return () => {
       alive = false;
     };
-  }, [ready, auto, runScan]);
+  }, [ready, auto, runScan, type, canCheckIn, canCheckOut]);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black">
@@ -219,15 +250,14 @@ export default function FaceScan() {
         <Segmented
           value={type}
           onChange={(t) => {
-            // Ganti ke pulang (atau datang) → izinkan scan lagi & tutup popup lama
             doneRef.current = false;
             setType(t);
             setResult(null);
             setHint('');
           }}
           options={[
-            { value: 'CHECK_IN', label: 'Absen Datang' },
-            { value: 'CHECK_OUT', label: 'Absen Pulang' },
+            ...(canCheckIn ? [{ value: 'CHECK_IN' as Type, label: 'Absen Datang' }] : []),
+            ...(canCheckOut ? [{ value: 'CHECK_OUT' as Type, label: 'Absen Pulang' }] : []),
           ]}
         />
       </div>
@@ -268,6 +298,10 @@ export default function FaceScan() {
             <p className="absolute inset-x-0 bottom-4 px-4 text-center text-sm text-white/90">
               {hint ? (
                 <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-amber-300">{hint}</span>
+              ) : !canCheckIn && type === 'CHECK_IN' ? (
+                <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-amber-300">Absen datang sudah ditutup. Tunggu waktu absen pulang.</span>
+              ) : !canCheckOut && type === 'CHECK_OUT' ? (
+                <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-amber-300">Absen pulang belum dibuka. Kembali absen datang.</span>
               ) : gpsLoading ? (
                 'Mengambil lokasi GPS…'
               ) : scanning ? (

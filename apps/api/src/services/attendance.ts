@@ -160,6 +160,19 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   if (type === 'CHECK_OUT' && rules.checkOutAllowed === false) {
     throw ApiError.badRequest('CHECK_OUT_DISABLED', 'Absensi pulang dinonaktifkan oleh sekolah.');
   }
+  const nowMinutes = localMinutesOf(now);
+
+  // ===== Blokir CHECK_IN setelah batas akhir datang =====
+  if (type === 'CHECK_IN') {
+    const deadlineMinutes = rules.checkInDeadlineHour * 60 + rules.checkInDeadlineMinute;
+    if (deadlineMinutes < 23 * 60 + 59 && nowMinutes > deadlineMinutes) {
+      throw ApiError.badRequest(
+        'CHECK_IN_CLOSED',
+        `Absen datang sudah ditutup pukul ${String(rules.checkInDeadlineHour).padStart(2, '0')}:${String(rules.checkInDeadlineMinute).padStart(2, '0')}. Hubungi petugas piket/administrator untuk koreksi.`,
+      );
+    }
+  }
+
   if (type === 'CHECK_OUT') {
     const checkIn = await prisma.attendance.findUnique({
       where: { userId_date_type: { userId: targetUserId, date: dayStart, type: 'CHECK_IN' } },
@@ -167,11 +180,17 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
     if (!checkIn) {
       throw ApiError.badRequest('NO_CHECK_IN', 'Absensi pulang hanya bisa dilakukan setelah absensi datang.');
     }
-    // Pulang sebelum batas "mulai dihitung pulang awal" (default: jam pulang sekolah) → ditandai "pulang awal"
-    // Gunakan menit waktu LOKAL sekolah (WIB), bukan waktu lokal server yang bisa UTC di container
+    // ===== Blokir CHECK_OUT sebelum jam "Mulai dihitung Pulang Awal" =====
     const batasPulangAwal = rules.earlyLeaveBeforeHour * 60 + rules.earlyLeaveBeforeMinute;
-    const nowMinutes = localMinutesOf(now);
     if (nowMinutes < batasPulangAwal) {
+      throw ApiError.badRequest(
+        'CHECK_OUT_NOT_OPEN',
+        `Absen pulang baru bisa dilakukan mulai pukul ${String(rules.earlyLeaveBeforeHour).padStart(2, '0')}:${String(rules.earlyLeaveBeforeMinute).padStart(2, '0')}.`,
+      );
+    }
+    // Pulang setelah jam pulang sekolah tapi sebelum batas → ditandai "pulang awal"
+    const batasPulangSekolah = rules.checkOutAfterHour * 60 + rules.checkOutAfterMinute;
+    if (nowMinutes < batasPulangSekolah) {
       earlyLeave = true;
     }
   }
