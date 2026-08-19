@@ -396,6 +396,7 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 - **Layout menu Siswa grid 3 kolom** — samakan dengan Guru & Staff: kartu dalam grid 3 kolom + "Pilih semua" di atas.
 - **Registrasi Wajah: setujui massal** — checkbox + tombol "Setujui Semua" / "Hapus Semua" di daftar pending registrasi wajah.
 - **Hapus riwayat hanya Super Admin** — tombol hapus catatan absensi di Riwayat & Absensi Hari Ini hanya muncul untuk akun Super Admin.
+- **Klik kelas di Rekap per Kelas** — baris kelas di tabel rekap harian/bulanan bisa diklik untuk melihat detail siswa dalam kelas tersebut.
 
 ---
 
