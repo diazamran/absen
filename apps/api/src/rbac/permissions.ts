@@ -27,6 +27,7 @@ export const PERMISSION_KEYS = {
   leaveCreate: 'leave:create',
   leaveApprove: 'leave:approve',
   leaveRead: 'leave:read',
+  leaveDelete: 'leave:delete',
   journalCreate: 'journal:create',
   journalRead: 'journal:read',
   reportsRead: 'reports:read',

@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, X, FileText, Paperclip, Eye, Download } from 'lucide-react';
+import { Check, X, FileText, Paperclip, Eye, Download, Trash2 } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
+import { useAuth } from '../../lib/auth';
 import { Card, Badge, Button, Segmented, EmptyState, Modal, Field, Textarea } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
 import { LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS, shortDate } from '../../lib/format';
@@ -15,9 +16,12 @@ interface LeaveRow {
 export default function LeaveAdmin() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const isSuperAdmin = user?.roleKey === 'SUPER_ADMIN';
   const [tab, setTab] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'>('PENDING');
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [detailLeave, setDetailLeave] = useState<LeaveRow | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data: leaves } = useQuery({
     queryKey: ['leave-all', tab],
@@ -33,6 +37,11 @@ export default function LeaveAdmin() {
     mutationFn: (payload: { id: string; reason: string }) => api(`/leave/${payload.id}/reject`, { method: 'POST', body: { reason: payload.reason } }),
     onSuccess: () => { toast('success', 'Pengajuan ditolak.'); qc.invalidateQueries({ queryKey: ['leave-all'] }); setRejectId(null); },
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal.'),
+  });
+  const deleteLeave = useMutation({
+    mutationFn: (id: string) => api(`/leave/${id}`, { method: 'DELETE' }),
+    onSuccess: () => { toast('success', 'Pengajuan izin berhasil dihapus.'); qc.invalidateQueries({ queryKey: ['leave-all'] }); setDeleteId(null); },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus.'),
   });
 
   return (
@@ -92,12 +101,23 @@ export default function LeaveAdmin() {
               </div>
               <Badge status={l.status} label={LEAVE_STATUS_LABELS[l.status]} />
             </div>
-            {l.status === 'PENDING' && (
-              <div className="mt-3 flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setRejectId(l.id)}><X className="h-4 w-4" /> Tolak</Button>
-                <Button onClick={() => approve.mutate(l.id)}><Check className="h-4 w-4" /> Setujui</Button>
-              </div>
-            )}
+            <div className="mt-3 flex items-center justify-between">
+              {isSuperAdmin && (
+                <button
+                  onClick={() => setDeleteId(l.id)}
+                  className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"
+                  title="Hapus pengajuan izin"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Hapus
+                </button>
+              )}
+              {l.status === 'PENDING' && (
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setRejectId(l.id)}><X className="h-4 w-4" /> Tolak</Button>
+                  <Button onClick={() => approve.mutate(l.id)}><Check className="h-4 w-4" /> Setujui</Button>
+                </div>
+              )}
+            </div>
           </Card>
         ))}
         {leaves?.length === 0 && <EmptyState icon={FileText} title="Tidak ada pengajuan" description="Pengajuan izin siswa/guru akan tampil di sini." />}
@@ -160,6 +180,13 @@ export default function LeaveAdmin() {
           </div>
         </Modal>
       )}
+
+      {deleteId && (
+        <DeleteConfirmModal
+          onClose={() => setDeleteId(null)}
+          onConfirm={() => deleteLeave.mutate(deleteId)}
+        />
+      )}
     </div>
   );
 }
@@ -174,6 +201,18 @@ function RejectModal({ leaveId, onClose, onReject }: { leaveId: string; onClose:
       <div className="mt-4 flex justify-end gap-2">
         <Button variant="outline" onClick={onClose}>Batal</Button>
         <Button variant="danger" onClick={() => reason.trim() && onReject(reason.trim())} disabled={!reason.trim()}>Tolak</Button>
+      </div>
+    </Modal>
+  );
+}
+
+function DeleteConfirmModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: () => void }) {
+  return (
+    <Modal open onClose={onClose} title="Hapus Pengajuan Izin">
+      <p className="text-sm text-ink">Apakah Anda yakin ingin menghapus pengajuan izin ini? Tindakan ini tidak dapat dibatalkan.</p>
+      <div className="mt-4 flex justify-end gap-2">
+        <Button variant="outline" onClick={onClose}>Batal</Button>
+        <Button variant="danger" onClick={onConfirm}><Trash2 className="h-4 w-4" /> Hapus</Button>
       </div>
     </Modal>
   );

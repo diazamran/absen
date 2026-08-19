@@ -144,4 +144,21 @@ export async function leaveRoutes(app: FastifyInstance) {
     emitLeaveUpdate({ id, action: 'rejected' });
     return reply.send({ success: true, message: 'Pengajuan ditolak.', data: updated });
   });
+
+  // ===== Hapus (super admin) =====
+  app.delete('/leave/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.leaveDelete) }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const leave = await prisma.leaveRequest.findUnique({ where: { id } });
+    if (!leave) throw ApiError.notFound('Pengajuan tidak ditemukan.');
+    await prisma.leaveApproval.deleteMany({ where: { leaveRequestId: id } });
+    await prisma.leaveRequest.delete({ where: { id } });
+    await audit({
+      userId: request.user!.id,
+      action: 'LEAVE_DELETED',
+      entity: 'LeaveRequest',
+      entityId: id,
+      request,
+    });
+    return reply.send({ success: true, message: 'Pengajuan izin berhasil dihapus.' });
+  });
 }
