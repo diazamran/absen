@@ -68,25 +68,18 @@ export default function Reports() {
     queryFn: () => api<{ success: boolean; data: { id: string; name: string }[] }>('/classes').then((r) => r.data),
   });
 
-  // Ambil data Kepala Sekolah (role HEADMASTER) untuk tanda tangan
-  const { data: headmasterData } = useQuery({
-    queryKey: ['headmaster'],
-    queryFn: async () => {
-      const res = await api<{ success: boolean; data: { id: string; fullName: string; roleKey: string; nip?: string | null }[] }>('/users?pageSize=100');
-      return res.data.find((u) => u.roleKey === 'HEADMASTER') || null;
-    },
+  // Ambil semua data user (kepala sekolah + diri sendiri) untuk tanda tangan
+  const { data: allUsers } = useQuery({
+    queryKey: ['export-users'],
+    queryFn: () => api<{ success: boolean; data: { id: string; fullName: string; roleKey: string; nip?: string | null }[] }>('/users?pageSize=200').then((r) => r.data),
   });
-  // Ambil data diri sendiri untuk NIP (jika admin tanpa teacher/staff record)
-  const { data: myNip } = useQuery({
-    queryKey: ['my-nip'],
-    queryFn: async () => {
-      if (user?.teacher?.nip || user?.staff?.nip) return null; // sudah punya NIP
-      const res = await api<{ success: boolean; data: { id: string; fullName: string; roleKey: string; nip?: string | null }[] }>(`/users?search=${encodeURIComponent(user?.username || '')}&pageSize=5`);
-      const me = res.data.find((u) => u.id === user?.id);
-      return me?.nip || null;
-    },
-    enabled: !!user && !user?.teacher?.nip && !user?.staff?.nip,
-  });
+  const headmasterUser = allUsers?.find((u) => u.roleKey === 'HEADMASTER');
+  const selfUser = allUsers?.find((u) => u.id === user?.id);
+  // NIP: dari HEADMASTER user, atau dari diri sendiri
+  const headmasterName = headmasterUser?.fullName || null;
+  const headmasterNip = headmasterUser?.nip || null;
+  const piketName = user?.fullName || null;
+  const piketNip = user?.teacher?.nip || user?.staff?.nip || selfUser?.nip || null;
 
   const chartData = SUMMARY_KEYS.map((s) => ({ name: s.label, value: report?.summary?.[s.key] || 0, color: STATUS_COLORS[s.key] }));
 
@@ -103,10 +96,10 @@ export default function Reports() {
       rows: report.rows as ReportExportRow[],
       summary: report.summary as unknown as Record<string, number | undefined>,
       classSummary: report.classSummary || [],
-      headmasterName: headmasterData?.fullName || user?.fullName || null,
-      headmasterNip: headmasterData?.nip || myNip || user?.teacher?.nip || user?.staff?.nip || null,
-      signatureName: user?.fullName,
-      signatureNip: user?.teacher?.nip || user?.staff?.nip || null,
+      headmasterName: headmasterName,
+      headmasterNip: headmasterNip,
+      signatureName: piketName,
+      signatureNip: piketNip,
       filename: `laporan_${tab}_${date || month}.${kind === 'pdf' ? 'pdf' : 'xlsx'}`,
     };
     try {
@@ -132,10 +125,10 @@ export default function Reports() {
                   if (report?.dateColumns && report?.rows) {
                     exportRecapPdf(report as any, {
                       schoolName: branding?.schoolName || 'Sekolah',
-                      headmasterName: headmasterData?.fullName || user?.fullName || undefined,
-                      headmasterNip: headmasterData?.nip || myNip || user?.teacher?.nip || user?.staff?.nip || undefined,
-                      signatureName: user?.fullName,
-                      signatureNip: user?.teacher?.nip || user?.staff?.nip || undefined,
+                      headmasterName: headmasterName || undefined,
+                      headmasterNip: headmasterNip || undefined,
+                      signatureName: piketName || undefined,
+                      signatureNip: piketNip || undefined,
                     });
                     toast('success', 'Rekap PDF diunduh.');
                   } else toast('info', 'Belum ada data rekap.');
