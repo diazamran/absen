@@ -45,12 +45,13 @@ export async function userRoutes(app: FastifyInstance) {
     });
 
     // Auto-create teacher record untuk HEADMASTER/PIKET yang belum punya
+    const autoCreated = new Map<string, { nip: string | null; position: string | null; isPiket: boolean }>();
     for (const u of rows) {
       if (['HEADMASTER', 'PIKET'].includes(u.role.key) && !u.teacher) {
         const created = await prisma.teacher.create({
           data: { userId: u.id, nip: null, position: u.role.key === 'PIKET' ? 'Petugas Piket' : 'Kepala Sekolah', isPiket: u.role.key === 'PIKET' },
         });
-        u.teacher = created as typeof u.teacher;
+        autoCreated.set(u.id, { nip: created.nip, position: created.position, isPiket: created.isPiket });
       }
     }
 
@@ -62,8 +63,8 @@ export async function userRoutes(app: FastifyInstance) {
         fullName: u.fullName,
         roleKey: u.role.key,
         roleName: ROLE_LABELS[u.role.key] || u.role.name,
-        nip: u.teacher?.nip ?? u.staff?.nip ?? null,
-        position: u.teacher?.position ?? u.staff?.position ?? null,
+        nip: u.teacher?.nip ?? u.staff?.nip ?? autoCreated.get(u.id)?.nip ?? null,
+        position: u.teacher?.position ?? u.staff?.position ?? autoCreated.get(u.id)?.position ?? null,
         isPiket: u.teacher?.isPiket ?? false,
         subjectId: u.teacher?.subjectId ?? null,
         subjectName: u.teacher?.subject?.name ?? null,
