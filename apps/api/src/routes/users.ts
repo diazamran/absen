@@ -186,12 +186,6 @@ export async function userRoutes(app: FastifyInstance) {
       }
     }
 
-    // PIKET: role khusus petugas piket — lepas relasi guru/staff agar tidak "menyatu" dengan rule guru
-    if (body.roleKey === 'PIKET') {
-      if (existing.teacher) await prisma.teacher.delete({ where: { userId: id } });
-      if (existing.staff) await prisma.staff.delete({ where: { userId: id } });
-    }
-
     await audit({
       userId: request.user!.id,
       action: 'USER_UPDATED',
