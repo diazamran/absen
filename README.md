@@ -397,7 +397,7 @@ Format error standar: `{ success: false, message: "…", code: "ERROR_CODE" }` �
 - **Registrasi Wajah: setujui massal** — checkbox + tombol "Setujui Semua" / "Hapus Semua" di daftar pending registrasi wajah.
 - **Hapus riwayat hanya Super Admin** — tombol hapus catatan absensi di Riwayat & Absensi Hari Ini hanya muncul untuk akun Super Admin.
 - **Klik kelas di Rekap per Kelas** — baris kelas di tabel rekap harian/bulanan bisa diklik untuk melihat detail siswa dalam kelas tersebut.
-- **Layout tanda tangan PDF** — Kepala Sekolah di kiri (dari role HEADMASTER), Petugas Piket di kanan (dari user login). Nama di atas garis, NIP di bawah garis.
+- **Layout tanda tangan PDF** — Kepala Sekolah di kiri (dari role HEADMASTER), Petugas Piket di kanan (dari user login). Nama + NIP langsung tanpa garis.
 
 ---
 
