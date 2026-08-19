@@ -82,11 +82,12 @@ export default function FaceScan() {
   }, []);
 
   // Hitung tab yang aktif berdasarkan waktu sekarang
+  const num = (v: unknown, d: number) => (typeof v === 'number' ? v : d);
   const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
   const canCheckIn = rules
-    ? nowMinutes <= ((rules.checkInDeadlineHour ?? 23) * 60 + (rules.checkInDeadlineMinute ?? 59))
+    ? nowMinutes <= (num(rules.checkInDeadlineHour, 23) * 60 + num(rules.checkInDeadlineMinute, 59))
     : true;
-  const pulangAwalMinutes = (rules ? (rules.earlyLeaveBeforeHour ?? rules.checkOutAfterHour ?? 15) : 15) * 60 + (rules ? (rules.earlyLeaveBeforeMinute ?? rules.checkOutAfterMinute ?? 0) : 0);
+  const pulangAwalMinutes = (num(rules?.earlyLeaveBeforeHour ?? rules?.checkOutAfterHour, 15)) * 60 + (num(rules?.earlyLeaveBeforeMinute ?? rules?.checkOutAfterMinute, 0));
   const canCheckOut = rules ? nowMinutes >= pulangAwalMinutes : true;
 
   // Jika tab aktif tidak tersedia, pindah ke tab yang tersedia
