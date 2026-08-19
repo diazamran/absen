@@ -72,9 +72,20 @@ export default function Reports() {
   const { data: headmasterData } = useQuery({
     queryKey: ['headmaster'],
     queryFn: async () => {
-      const res = await api<{ success: boolean; data: { id: string; fullName: string; roleKey: string; teacher?: { nip?: string | null } | null; staff?: { nip?: string | null } | null }[] }>('/users?pageSize=100');
+      const res = await api<{ success: boolean; data: { id: string; fullName: string; roleKey: string; nip?: string | null }[] }>('/users?pageSize=100');
       return res.data.find((u) => u.roleKey === 'HEADMASTER') || null;
     },
+  });
+  // Ambil data diri sendiri untuk NIP (jika admin tanpa teacher/staff record)
+  const { data: myNip } = useQuery({
+    queryKey: ['my-nip'],
+    queryFn: async () => {
+      if (user?.teacher?.nip || user?.staff?.nip) return null; // sudah punya NIP
+      const res = await api<{ success: boolean; data: { id: string; fullName: string; roleKey: string; nip?: string | null }[] }>(`/users?search=${encodeURIComponent(user?.username || '')}&pageSize=5`);
+      const me = res.data.find((u) => u.id === user?.id);
+      return me?.nip || null;
+    },
+    enabled: !!user && !user?.teacher?.nip && !user?.staff?.nip,
   });
 
   const chartData = SUMMARY_KEYS.map((s) => ({ name: s.label, value: report?.summary?.[s.key] || 0, color: STATUS_COLORS[s.key] }));
@@ -92,8 +103,8 @@ export default function Reports() {
       rows: report.rows as ReportExportRow[],
       summary: report.summary as unknown as Record<string, number | undefined>,
       classSummary: report.classSummary || [],
-      headmasterName: headmasterData?.fullName || null,
-      headmasterNip: headmasterData?.teacher?.nip || headmasterData?.staff?.nip || null,
+      headmasterName: headmasterData?.fullName || user?.fullName || null,
+      headmasterNip: headmasterData?.nip || myNip || user?.teacher?.nip || user?.staff?.nip || null,
       signatureName: user?.fullName,
       signatureNip: user?.teacher?.nip || user?.staff?.nip || null,
       filename: `laporan_${tab}_${date || month}.${kind === 'pdf' ? 'pdf' : 'xlsx'}`,
@@ -121,8 +132,8 @@ export default function Reports() {
                   if (report?.dateColumns && report?.rows) {
                     exportRecapPdf(report as any, {
                       schoolName: branding?.schoolName || 'Sekolah',
-                      headmasterName: headmasterData?.fullName || undefined,
-                      headmasterNip: headmasterData?.teacher?.nip || headmasterData?.staff?.nip || undefined,
+                      headmasterName: headmasterData?.fullName || user?.fullName || undefined,
+                      headmasterNip: headmasterData?.nip || myNip || user?.teacher?.nip || user?.staff?.nip || undefined,
                       signatureName: user?.fullName,
                       signatureNip: user?.teacher?.nip || user?.staff?.nip || undefined,
                     });
