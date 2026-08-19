@@ -177,10 +177,16 @@ function UserForm({ onClose, subjects, initial }: { onClose: () => void; subject
   }));
 
   const mutation = useMutation({
-    mutationFn: () =>
-      initial
-        ? api(`/users/${initial.id}`, { method: 'PUT', body: form })
-        : api('/users', { method: 'POST', body: { ...form, password: form.password || 'guru123' } }),
+    mutationFn: () => {
+      if (initial) {
+        // Edit: jangan kirim password jika kosong
+        const { password, ...rest } = form;
+        const body: Record<string, unknown> = { ...rest };
+        if (password) body.password = password;
+        return api(`/users/${initial.id}`, { method: 'PUT', body });
+      }
+      return api('/users', { method: 'POST', body: { ...form, password: form.password || 'guru123' } });
+    },
     onSuccess: () => {
       toast('success', initial ? 'Akun diperbarui.' : 'Akun berhasil dibuat.');
       qc.invalidateQueries({ queryKey: ['users'] });
