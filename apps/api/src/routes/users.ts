@@ -136,7 +136,7 @@ export async function userRoutes(app: FastifyInstance) {
       request.body,
     );
 
-    const existing = await prisma.user.findUnique({ where: { id }, include: { teacher: true, staff: true } });
+    const existing = await prisma.user.findUnique({ where: { id }, include: { role: true, teacher: true, staff: true } });
     if (!existing) throw ApiError.notFound('Akun tidak ditemukan.');
 
     const data: Record<string, unknown> = {};
@@ -157,33 +157,48 @@ export async function userRoutes(app: FastifyInstance) {
 
     await prisma.user.update({ where: { id }, data });
 
-    // Update atau buat teacher record jika perlu
-    if (body.nip !== undefined || body.position !== undefined || body.subjectId !== undefined || body.isPiket !== undefined) {
-      const roleKey = body.roleKey || existing.role?.key;
-      const isTeacherRole = ['TEACHER', 'HOMEROOM_TEACHER', 'HEADMASTER', 'PIKET'].includes(roleKey || '');
-      if (isTeacherRole) {
-        if (existing.teacher) {
-          await prisma.teacher.update({
-            where: { userId: id },
-            data: { nip: body.nip || undefined, position: body.position || undefined, subjectId: body.subjectId || undefined, isPiket: body.isPiket ?? roleKey === 'PIKET' },
-          });
-        } else {
-          await prisma.teacher.create({
-            data: { userId: id, nip: body.nip, position: body.position, subjectId: body.subjectId, isPiket: body.isPiket ?? roleKey === 'PIKET' },
-          });
-        }
-      } else if (roleKey === 'STAFF') {
-        if (existing.staff) {
-          await prisma.staff.update({
-            where: { userId: id },
-            data: { nip: body.nip || undefined, position: body.position || undefined },
-          });
-        } else {
-          await prisma.staff.create({
-            data: { userId: id, nip: body.nip, position: body.position },
-          });
-        }
+    // Update atau buat teacher/staff record untuk menyimpan NIP
+    const effectiveRole = body.roleKey || existing.role?.key || '';
+    const isTeacherRole = ['TEACHER', 'HOMEROOM_TEACHER', 'HEADMASTER', 'PIKET'].includes(effectiveRole);
+    const isStaffRole = effectiveRole === 'STAFF';
+    const hasNipOrPosition = body.nip !== undefined || body.position !== undefined || body.subjectId !== undefined || body.isPiket !== undefined;
+
+    if (isTeacherRole) {
+      if (existing.teacher) {
+        await prisma.teacher.update({
+          where: { userId: id },
+          data: {
+            ...(body.nip !== undefined && { nip: body.nip || null }),
+            ...(body.position !== undefined && { position: body.position || null }),
+            ...(body.subjectId !== undefined && { subjectId: body.subjectId || null }),
+            ...(body.isPiket !== undefined ? { isPiket: body.isPiket } : (effectiveRole === 'PIKET' ? { isPiket: true } : {})),
+          },
+        });
+      } else {
+        await prisma.teacher.create({
+          data: { userId: id, nip: body.nip || null, position: body.position || null, subjectId: body.subjectId || null, isPiket: body.isPiket ?? effectiveRole === 'PIKET' },
+        });
       }
+    } else if (isStaffRole) {
+      if (existing.staff) {
+        await prisma.staff.update({
+          where: { userId: id },
+          data: {
+            ...(body.nip !== undefined && { nip: body.nip || null }),
+            ...(body.position !== undefined && { position: body.position || null }),
+          },
+        });
+      } else {
+        await prisma.staff.create({
+          data: { userId: id, nip: body.nip || null, position: body.position || null },
+        });
+      }
+    }
+    // Jika role berubah dari STAFF ke TEACHER/HEADMASTER/PIKET, buat teacher record
+    if (isTeacherRole && !existing.teacher) {
+      await prisma.teacher.create({
+        data: { userId: id, nip: body.nip || null, position: body.position || null, subjectId: body.subjectId || null, isPiket: body.isPiket ?? effectiveRole === 'PIKET' },
+      });
     }
 
     await audit({
