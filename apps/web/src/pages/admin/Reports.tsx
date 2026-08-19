@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
-import { FileText, FileSpreadsheet, BarChart3, Table } from 'lucide-react';
+import { FileText, FileSpreadsheet, BarChart3, Table, X } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { useAuth } from '../../lib/auth';
 import { useTheme } from '../../lib/theme';
-import { Card, Select, Field, Button, EmptyState, Segmented } from '../../lib/ui';
+import { Card, Select, Field, Button, EmptyState, Segmented, Badge } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
 import { STATUS_LABELS, STATUS_COLORS, currentMonthKey, todayJakartaKey } from '../../lib/format';
 import { exportReportPdf, exportReportExcel, formatLongDate, type ReportExportRow } from '../../lib/reportExport';
@@ -40,6 +40,7 @@ export default function Reports() {
   const [date, setDate] = useState(todayJakartaKey());
   const [month, setMonth] = useState(currentMonthKey());
   const [classId, setClassId] = useState('');
+  const [detailClass, setDetailClass] = useState<{ className: string; date: string } | null>(null);
 
   // Date range for recap (default: last 30 days)
   const [recapFrom, setRecapFrom] = useState(() => {
@@ -200,6 +201,7 @@ export default function Reports() {
       {tab !== 'recap' && classId === '' && report?.classSummary?.length ? (
         <Card className="mt-4">
           <h3 className="mb-3 font-bold text-ink">Rekap per Kelas — Semua Kelas</h3>
+          <p className="mb-3 text-xs text-muted">Klik nama kelas untuk melihat detail siswa</p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-left text-xs uppercase text-muted">
@@ -214,8 +216,8 @@ export default function Reports() {
               </thead>
               <tbody className="divide-y divide-line">
                 {report.classSummary!.map((c: any) => (
-                  <tr key={c.className}>
-                    <td className="px-3 py-2 font-semibold text-ink">{c.className}</td>
+                  <tr key={c.className} className="cursor-pointer transition-colors hover:bg-primary-soft/40" onClick={() => setDetailClass({ className: c.className, date: tab === 'daily' ? date : `${month}-01` })}>
+                    <td className="px-3 py-2 font-semibold text-primary-dark">{c.className} →</td>
                     <td className="px-3 py-2 text-muted">{c.total}</td>
                     <td className="px-3 py-2 font-semibold text-emerald-600 dark:text-emerald-400">{c.present}</td>
                     <td className="px-3 py-2 font-semibold text-amber-600 dark:text-amber-400">{c.late}</td>
@@ -228,6 +230,15 @@ export default function Reports() {
           </div>
         </Card>
       ) : null}
+
+      {detailClass && (
+        <ClassDetailModal
+          className={detailClass.className}
+          date={detailClass.date}
+          tab={tab}
+          onClose={() => setDetailClass(null)}
+        />
+      )}
 
       {tab !== 'recap' && (
         <Card className="mt-4">
@@ -266,6 +277,124 @@ export default function Reports() {
           )}
         </Card>
       )}
+    </div>
+  );
+}
+
+function ClassDetailModal({ className, date, tab, onClose }: { className: string; date: string; tab: string; onClose: () => void }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['class-detail', className, date, tab],
+    queryFn: async () => {
+      if (tab === 'daily') {
+        const res = await api<{ success: boolean; data: { rows: { name: string; nis?: string | null; className?: string | null; time?: string | null; status: string; method: string; lateMinutes: number }[] } }>(
+          `/reports/daily?date=${date}`,
+        );
+        return res.data.rows.filter((r: any) => r.className === className);
+      } else {
+        // Find class ID from classes list
+        const classes = await api<{ success: boolean; data: { id: string; name: string }[] }>('/classes');
+        const cls = classes.data.find((c) => c.name === className);
+        if (!cls) return [];
+        const month = date.slice(0, 7);
+        const res = await api<{ success: boolean; data: { className: string; month: string; rows: { name: string; nis?: string | null; total: number; present: number; late: number; excused: number; absent: number; attendanceRate: number }[] } }>(
+          `/reports/class/${cls.id}?month=${month}`,
+        );
+        // Convert summary rows to detail rows
+        return res.data.rows;
+      }
+    },
+    enabled: true,
+  });
+
+  const rows = data || [];
+  const counts = rows.reduce<Record<string, number>>((acc, r: any) => { acc[r.status] = (acc[r.status] || 0) + 1; return acc; }, {});
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-800" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-ink">Detail Kelas {className}</h3>
+            <p className="text-xs text-muted">{tab === 'daily' ? `Tanggal: ${date}` : `Bulan: ${date}`}</p>
+          </div>
+          <button onClick={onClose} className="rounded-xl p-2 hover:bg-slate-100 dark:hover:bg-slate-700"><X className="h-5 w-5" /></button>
+        </div>
+
+        <div className="mb-3 grid grid-cols-4 gap-2">
+          {Object.entries(STATUS_LABELS).filter(([k]) => counts[k]).map(([k, label]) => (
+            <div key={k} className="rounded-xl border border-line/60 p-2 text-center">
+              <p className="text-lg font-extrabold" style={{ color: STATUS_COLORS[k] }}>{counts[k] || 0}</p>
+              <p className="text-[10px] text-muted">{label}</p>
+            </div>
+          ))}
+        </div>
+
+        {isLoading ? (
+          <p className="py-6 text-center text-sm text-muted">Memuat data…</p>
+        ) : rows.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted">Tidak ada data absensi untuk kelas ini.</p>
+        ) : tab === 'daily' ? (
+          <div className="max-h-[24rem] overflow-y-auto rounded-2xl border border-line">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-surface text-left text-xs uppercase text-muted dark:bg-slate-800">
+                <tr>
+                  <th className="px-3 py-2">No</th>
+                  <th className="px-3 py-2">Nama</th>
+                  <th className="px-3 py-2">NISN</th>
+                  <th className="px-3 py-2">Jam</th>
+                  <th className="px-3 py-2">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {rows.map((r: any, i: number) => (
+                  <tr key={i}>
+                    <td className="px-3 py-2 text-muted">{i + 1}</td>
+                    <td className="px-3 py-2 font-medium text-ink">{r.name}</td>
+                    <td className="px-3 py-2 text-muted">{r.nis || '—'}</td>
+                    <td className="px-3 py-2 font-mono text-muted">{r.time || '—'}</td>
+                    <td className="px-3 py-2">
+                      <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: `${STATUS_COLORS[r.status]}1a`, color: STATUS_COLORS[r.status] }}>
+                        {STATUS_LABELS[r.status]}{r.status === 'LATE' && r.lateMinutes ? ` (${r.lateMinutes}m)` : ''}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="max-h-[24rem] overflow-y-auto rounded-2xl border border-line">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-surface text-left text-xs uppercase text-muted dark:bg-slate-800">
+                <tr>
+                  <th className="px-3 py-2">No</th>
+                  <th className="px-3 py-2">Nama</th>
+                  <th className="px-3 py-2">NISN</th>
+                  <th className="px-3 py-2">Hadir</th>
+                  <th className="px-3 py-2">Terlambat</th>
+                  <th className="px-3 py-2">Izin/Sakit</th>
+                  <th className="px-3 py-2">Absen</th>
+                  <th className="px-3 py-2">%</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {rows.map((r: any, i: number) => (
+                  <tr key={i}>
+                    <td className="px-3 py-2 text-muted">{i + 1}</td>
+                    <td className="px-3 py-2 font-medium text-ink">{r.name}</td>
+                    <td className="px-3 py-2 text-muted">{r.nis || '—'}</td>
+                    <td className="px-3 py-2 font-semibold text-emerald-600">{r.present}</td>
+                    <td className="px-3 py-2 font-semibold text-amber-600">{r.late}</td>
+                    <td className="px-3 py-2 font-semibold text-sky-600">{r.excused}</td>
+                    <td className="px-3 py-2 font-semibold text-red-500">{r.absent}</td>
+                    <td className="px-3 py-2 text-muted">{r.attendanceRate}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
