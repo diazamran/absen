@@ -137,17 +137,52 @@ export function exportReportPdf(opts: ReportExportOptions): void {
     y = 24;
   }
 
-  const sig = signatureRows(opts);
-  const sigX = pageWidth - 75;
-  doc.setFont('helvetica', 'normal');
+  const city = cityFromSchool(opts.schoolName);
+
+  // Layout: Kepala Sekolah (kiri) | Petugas Piket (kanan)
+  const leftX = 30;
+  const rightX = pageWidth - 80;
+
+  // === KIRI: Kepala Sekolah ===
   doc.setFontSize(10);
-  doc.text(sig[0], sigX, y);
-  doc.text(sig[1], sigX, y + 6);
-  const nameY = y + 6 + 22;
-  doc.setFont('helvetica', 'bold');
-  doc.text(sig[3], sigX, nameY);
   doc.setFont('helvetica', 'normal');
-  if (sig[4]) doc.text(sig[4], sigX, nameY + 6);
+  doc.text('Mengetahui,', leftX, y);
+  doc.text(`Kepala ${opts.schoolName}`, leftX, y + 6);
+
+  // Garis tanda tangan
+  doc.text('_'.repeat(35), leftX, y + 28);
+
+  // Nama kepala sekolah (bold)
+  doc.setFont('helvetica', 'bold');
+  if (opts.signatureName) {
+    doc.text(opts.signatureName.toUpperCase(), leftX, y + 33);
+  }
+
+  // NIP
+  doc.setFont('helvetica', 'normal');
+  if (opts.signatureNip) {
+    doc.text(`NIP. ${opts.signatureNip}`, leftX, y + 38);
+  }
+
+  // === KANAN: Petugas Piket ===
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${city}, ${formatLongDate(todayJakartaKey())}`, rightX, y);
+  doc.text('Petugas Piket,', rightX, y + 6);
+
+  // Garis tanda tangan
+  doc.text('_'.repeat(35), rightX, y + 28);
+
+  // Nama petugas piket (bold)
+  doc.setFont('helvetica', 'bold');
+  if (opts.signatureName) {
+    doc.text(opts.signatureName.toUpperCase(), rightX, y + 33);
+  }
+
+  // NIP
+  doc.setFont('helvetica', 'normal');
+  if (opts.signatureNip) {
+    doc.text(`NIP. ${opts.signatureNip}`, rightX, y + 38);
+  }
 
   doc.save(opts.filename);
 }

@@ -106,24 +106,52 @@ export function exportRecapPdf(data: RecapData, opts: { schoolName?: string; sig
 
   const schoolName = opts.schoolName || 'Sekolah';
   const city = cityFromSchool(schoolName);
-  const sigX = pageWidth - 80;
 
+  // Layout: Kepala Sekolah (kiri) | Petugas Piket (kanan)
+  const leftX = 30;
+  const rightX = pageWidth - 80;
+  const lineLen = 50;
+
+  // === KIRI: Kepala Sekolah ===
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text(`${city}, ${today}`, sigX, y);
-  doc.text('Mengetahui,', sigX, y + 6);
-  doc.text('Petugas Piket,', sigX, y + 32);
+  doc.text('Mengetahui,', leftX, y);
+  doc.text(`Kepala ${schoolName}`, leftX, y + 6);
 
+  // Garis tanda tangan
+  doc.setFont('helvetica', 'normal');
+  doc.text('_'.repeat(35), leftX, y + 28);
+
+  // Nama kepala sekolah (bold, tanpa underline)
   doc.setFont('helvetica', 'bold');
-  doc.text('_________________________', sigX, y + 18);
-  doc.text('Kepala Sekolah', sigX, y + 22);
-  doc.text('_________________________', sigX, y + 44);
   if (opts.signatureName) {
-    doc.text(opts.signatureName.toUpperCase(), sigX, y + 48);
+    doc.text(opts.signatureName.toUpperCase(), leftX, y + 33);
   }
+
+  // NIP
+  doc.setFont('helvetica', 'normal');
   if (opts.signatureNip) {
-    doc.setFont('helvetica', 'normal');
-    doc.text(`NIP. ${opts.signatureNip}`, sigX, y + 52);
+    doc.text(`NIP. ${opts.signatureNip}`, leftX, y + 38);
+  }
+
+  // === KANAN: Petugas Piket ===
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${city}, ${today}`, rightX, y);
+  doc.text('Petugas Piket,', rightX, y + 6);
+
+  // Garis tanda tangan
+  doc.text('_'.repeat(35), rightX, y + 28);
+
+  // Nama petugas piket (bold)
+  doc.setFont('helvetica', 'bold');
+  if (opts.signatureName) {
+    doc.text(opts.signatureName.toUpperCase(), rightX, y + 33);
+  }
+
+  // NIP
+  doc.setFont('helvetica', 'normal');
+  if (opts.signatureNip) {
+    doc.text(`NIP. ${opts.signatureNip}`, rightX, y + 38);
   }
 
   doc.save(filename || `rekap_absensi_${today}.pdf`);
