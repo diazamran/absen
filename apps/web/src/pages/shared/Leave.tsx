@@ -9,7 +9,7 @@ import { PageHeader } from '../../components/AppShell';
 import { LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS, shortDate, todayJakartaKey } from '../../lib/format';
 
 interface LeaveRow {
-  id: string; type: string; startDate: string; endDate: string; reason: string; status: string; rejectionReason?: string | null; createdAt: string;
+  id: string; type: string; startDate: string; endDate: string; reason: string; status: string; rejectionReason?: string | null; attachmentUrl?: string | null; createdAt: string;
 }
 
 export default function Leave() {
@@ -132,13 +132,28 @@ export default function Leave() {
       ) : (
         <div className="space-y-2">
           {mine?.map((l) => (
-            <Card key={l.id} className="flex items-center justify-between gap-3">
-              <div>
-                <p className="font-bold text-ink">{LEAVE_TYPE_LABELS[l.type]} · {shortDate(l.startDate)} — {shortDate(l.endDate)}</p>
-                <p className="text-sm text-muted">{l.reason}</p>
-                {l.rejectionReason && <p className="text-xs text-red-500">Ditolak: {l.rejectionReason}</p>}
+            <Card key={l.id}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-ink">{LEAVE_TYPE_LABELS[l.type]} · {shortDate(l.startDate)} — {shortDate(l.endDate)}</p>
+                  <p className="text-sm text-muted">{l.reason}</p>
+                  {l.attachmentUrl && (
+                    <div className="mt-1.5">
+                      {l.attachmentUrl.match(/\.(jpg|jpeg|png|webp|gif)/i) ? (
+                        <a href={l.attachmentUrl} target="_blank" rel="noreferrer" className="inline-block">
+                          <img src={l.attachmentUrl} alt="Bukti izin" className="h-14 w-14 rounded-lg border border-line object-cover hover:ring-2 hover:ring-primary" />
+                        </a>
+                      ) : (
+                        <a href={l.attachmentUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                          <Paperclip className="h-3 w-3" /> Lihat Lampiran
+                        </a>
+                      )}
+                    </div>
+                  )}
+                  {l.rejectionReason && <p className="mt-1 text-xs text-red-500">Ditolak: {l.rejectionReason}</p>}
+                </div>
+                <Badge status={l.status} label={LEAVE_STATUS_LABELS[l.status]} />
               </div>
-              <Badge status={l.status} label={LEAVE_STATUS_LABELS[l.status]} />
             </Card>
           ))}
           {mine?.length === 0 && <EmptyState icon={FilePlus2} title="Belum ada pengajuan" />}

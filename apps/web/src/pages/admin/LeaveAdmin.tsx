@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, X, FileText, Paperclip } from 'lucide-react';
+import { Check, X, FileText, Paperclip, Eye, Download } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Card, Badge, Button, Segmented, EmptyState, Modal, Field, Textarea } from '../../lib/ui';
@@ -17,6 +17,7 @@ export default function LeaveAdmin() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'>('PENDING');
   const [rejectId, setRejectId] = useState<string | null>(null);
+  const [detailLeave, setDetailLeave] = useState<LeaveRow | null>(null);
 
   const { data: leaves } = useQuery({
     queryKey: ['leave-all', tab],
@@ -62,14 +63,29 @@ export default function LeaveAdmin() {
                   <p className="mt-1 text-sm text-ink">{l.reason}</p>
                   <p className="mt-0.5 text-xs text-muted">{shortDate(l.startDate)} — {shortDate(l.endDate)}</p>
                   {l.attachmentUrl && (
-                    <a
-                      href={l.attachmentUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary-dark hover:brightness-95"
-                    >
-                      <Paperclip className="h-3.5 w-3.5" /> Lihat Bukti / Lampiran
-                    </a>
+                    <div className="mt-2 flex items-center gap-2">
+                      {l.attachmentUrl.match(/\.(jpg|jpeg|png|webp|gif)/i) ? (
+                        <button onClick={() => setDetailLeave(l)} className="group relative">
+                          <img
+                            src={l.attachmentUrl}
+                            alt="Bukti izin"
+                            className="h-16 w-16 rounded-xl border border-line object-cover transition group-hover:ring-2 group-hover:ring-primary"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/0 transition group-hover:bg-black/30">
+                            <Eye className="h-5 w-5 text-white opacity-0 transition group-hover:opacity-100" />
+                          </div>
+                        </button>
+                      ) : (
+                        <a
+                          href={l.attachmentUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary-dark hover:brightness-95"
+                        >
+                          <Paperclip className="h-3.5 w-3.5" /> Lihat Lampiran
+                        </a>
+                      )}
+                    </div>
                   )}
                   {l.rejectionReason && <p className="mt-1 text-xs text-red-500">Alasan ditolak: {l.rejectionReason}</p>}
                 </div>
@@ -88,6 +104,62 @@ export default function LeaveAdmin() {
       </div>
 
       {rejectId && <RejectModal leaveId={rejectId} onClose={() => setRejectId(null)} onReject={(reason) => reject.mutate({ id: rejectId, reason })} />}
+
+      {detailLeave && (
+        <Modal open onClose={() => setDetailLeave(null)} title="Detail Pengajuan Izin">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-primary-soft p-2.5 text-primary"><FileText className="h-5 w-5" /></div>
+              <div>
+                <p className="font-bold text-ink">{detailLeave.userName}</p>
+                <p className="text-xs text-muted">{detailLeave.nis} · {detailLeave.className}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div><span className="text-muted">Jenis:</span> <span className="font-medium text-ink">{LEAVE_TYPE_LABELS[detailLeave.type]}</span></div>
+              <div><span className="text-muted">Status:</span> <Badge status={detailLeave.status} label={LEAVE_STATUS_LABELS[detailLeave.status]} /></div>
+              <div><span className="text-muted">Dari:</span> <span className="font-medium text-ink">{shortDate(detailLeave.startDate)}</span></div>
+              <div><span className="text-muted">Sampai:</span> <span className="font-medium text-ink">{shortDate(detailLeave.endDate)}</span></div>
+            </div>
+            <div>
+              <p className="text-xs text-muted">Keterangan:</p>
+              <p className="mt-0.5 rounded-xl bg-slate-50 p-3 text-sm text-ink dark:bg-slate-800">{detailLeave.reason}</p>
+            </div>
+            {detailLeave.attachmentUrl && (
+              <div>
+                <p className="mb-1 text-xs text-muted">Bukti / Lampiran:</p>
+                {detailLeave.attachmentUrl.match(/\.(jpg|jpeg|png|webp|gif)/i) ? (
+                  <div className="overflow-hidden rounded-xl border border-line">
+                    <img
+                      src={detailLeave.attachmentUrl}
+                      alt="Bukti izin"
+                      className="w-full max-h-80 object-contain bg-slate-50 dark:bg-slate-800"
+                    />
+                  </div>
+                ) : (
+                  <a
+                    href={detailLeave.attachmentUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-primary-soft px-3 py-2 text-sm font-semibold text-primary-dark hover:brightness-95"
+                  >
+                    <Download className="h-4 w-4" /> Unduh Lampiran
+                  </a>
+                )}
+              </div>
+            )}
+            {detailLeave.rejectionReason && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 dark:bg-red-500/10">
+                <p className="text-xs font-semibold text-red-600">Alasan ditolak:</p>
+                <p className="mt-0.5 text-sm text-red-700 dark:text-red-400">{detailLeave.rejectionReason}</p>
+              </div>
+            )}
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button variant="outline" onClick={() => setDetailLeave(null)}>Tutup</Button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
