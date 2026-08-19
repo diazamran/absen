@@ -68,23 +68,24 @@ export default function Reports() {
     queryFn: () => api<{ success: boolean; data: { id: string; name: string }[] }>('/classes').then((r) => r.data),
   });
 
-  // Ambil semua data user (kepala sekolah + diri sendiri) untuk tanda tangan
-  const { data: allUsers } = useQuery({
-    queryKey: ['export-users'],
-    queryFn: () => api<{ success: boolean; data: { id: string; fullName: string; roleKey: string; nip?: string | null }[] }>('/users').then((r) => {
-      console.log('[Reports] All users:', r.data?.map(u => ({ name: u.fullName, role: u.roleKey, nip: u.nip })));
-      return r.data;
-    }),
-    staleTime: 0,
-    refetchOnMount: true,
+  // Fetch data kepala sekolah + petugas piket untuk tanda tangan (selalu jalan)
+  const { data: signatureUsers } = useQuery({
+    queryKey: ['signature-users'],
+    queryFn: async () => {
+      const res = await api<{ success: boolean; data: { id: string; fullName: string; roleKey: string; nip?: string | null }[] }>('/users');
+      return res.data;
+    },
+    staleTime: 5 * 60 * 1000, // cache 5 menit
   });
-  const headmasterUser = allUsers?.find((u) => u.roleKey === 'HEADMASTER');
-  const selfUser = allUsers?.find((u) => u.id === user?.id);
-  // NIP: dari HEADMASTER user, atau dari diri sendiri
-  const headmasterName = headmasterUser?.fullName || null;
-  const headmasterNip = headmasterUser?.nip || null;
-  const piketName = user?.fullName || null;
-  const piketNip = user?.teacher?.nip || user?.staff?.nip || selfUser?.nip || null;
+  const headmasterFromUsers = signatureUsers?.find((u) => u.roleKey === 'HEADMASTER');
+  const selfFromUsers = signatureUsers?.find((u) => u.id === user?.id);
+
+  // Data tanda tangan: prioritaskan dari recap backend, fallback ke fetch users
+  const recapData = tab === 'recap' ? (report as any) : null;
+  const headmasterName = recapData?.headmasterName || headmasterFromUsers?.fullName || null;
+  const headmasterNip = recapData?.headmasterNip || headmasterFromUsers?.nip || null;
+  const piketName = recapData?.piketName || user?.fullName || null;
+  const piketNip = recapData?.piketNip || user?.teacher?.nip || user?.staff?.nip || selfFromUsers?.nip || null;
 
   const chartData = SUMMARY_KEYS.map((s) => ({ name: s.label, value: report?.summary?.[s.key] || 0, color: STATUS_COLORS[s.key] }));
 

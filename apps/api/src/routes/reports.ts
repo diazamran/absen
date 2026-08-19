@@ -378,6 +378,16 @@ export async function reportRoutes(app: FastifyInstance) {
       };
     });
 
+    // Ambil data Kepala Sekolah + Petugas Piket untuk tanda tangan
+    const headmasterUser = await prisma.user.findFirst({
+      where: { role: { key: 'HEADMASTER' } },
+      include: { teacher: true, staff: true },
+    });
+    const currentUser = await prisma.user.findUnique({
+      where: { id: request.user!.id },
+      include: { teacher: true, staff: true },
+    });
+
     return reply.send({
       success: true,
       data: {
@@ -387,6 +397,10 @@ export async function reportRoutes(app: FastifyInstance) {
         toDate,
         dateColumns,
         rows,
+        headmasterName: headmasterUser?.fullName ?? null,
+        headmasterNip: headmasterUser?.teacher?.nip ?? headmasterUser?.staff?.nip ?? null,
+        piketName: currentUser?.fullName ?? null,
+        piketNip: currentUser?.teacher?.nip ?? currentUser?.staff?.nip ?? null,
       },
     });
   });
