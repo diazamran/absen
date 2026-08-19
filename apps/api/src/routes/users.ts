@@ -43,6 +43,17 @@ export async function userRoutes(app: FastifyInstance) {
       },
       orderBy: { createdAt: 'asc' },
     });
+
+    // Auto-create teacher record untuk HEADMASTER/PIKET yang belum punya
+    for (const u of rows) {
+      if (['HEADMASTER', 'PIKET'].includes(u.role.key) && !u.teacher) {
+        const created = await prisma.teacher.create({
+          data: { userId: u.id, nip: null, position: u.role.key === 'PIKET' ? 'Petugas Piket' : 'Kepala Sekolah', isPiket: u.role.key === 'PIKET' },
+        });
+        u.teacher = created as typeof u.teacher;
+      }
+    }
+
     return reply.send({
       success: true,
       data: rows.map((u) => ({
