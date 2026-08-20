@@ -22,27 +22,35 @@ const userCreateSchema = z.object({
 
 export async function userRoutes(app: FastifyInstance) {
   app.get('/users', { preHandler: app.requirePermission(PERMISSION_KEYS.usersRead) }, async (request, reply) => {
-    const q = request.query as { role?: string; search?: string };
-    const rows = await prisma.user.findMany({
-      where: {
-        role: { key: { notIn: ['STUDENT', 'PARENT'] } },
-        ...(q.role ? { role: { key: q.role as never } } : {}),
-        ...(q.search
-          ? {
-              OR: [
-                { fullName: { contains: q.search, mode: 'insensitive' as const } },
-                { username: { contains: q.search, mode: 'insensitive' as const } },
-              ],
-            }
-          : {}),
-      },
-      include: {
-        role: true,
-        teacher: { include: { subject: true } },
-        staff: true,
-      },
-      orderBy: { createdAt: 'asc' },
-    });
+    const q = request.query as { role?: string; search?: string; page?: string; pageSize?: string };
+    const page = Math.max(1, Number(q.page) || 1);
+    const pageSize = Math.min(200, Math.max(1, Number(q.pageSize) || 200));
+    const where = {
+      role: { key: { notIn: ['STUDENT', 'PARENT'] } },
+      ...(q.role ? { role: { key: q.role as never } } : {}),
+      ...(q.search
+        ? {
+            OR: [
+              { fullName: { contains: q.search, mode: 'insensitive' as const } },
+              { username: { contains: q.search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+    const [total, rows] = await Promise.all([
+      prisma.user.count({ where }),
+      prisma.user.findMany({
+        where,
+        include: {
+          role: true,
+          teacher: { include: { subject: true } },
+          staff: true,
+        },
+        orderBy: { createdAt: 'asc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
 
     // Auto-create teacher record untuk HEADMASTER/PIKET yang belum punya
     const autoCreated = new Map<string, { nip: string | null; position: string | null; isPiket: boolean }>();
@@ -73,6 +81,7 @@ export async function userRoutes(app: FastifyInstance) {
         isActive: u.isActive,
         lastLoginAt: u.lastLoginAt,
       })),
+      meta: { total, page, pageSize, pages: Math.ceil(total / pageSize) },
     });
   });
 
