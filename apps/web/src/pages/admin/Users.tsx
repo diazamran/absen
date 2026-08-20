@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Upload, Download, Loader2, ShieldCheck, CheckCircle2, XCircle, Pencil, Trash2 } from 'lucide-react';
 import { api, ApiError, downloadCsv } from '../../lib/api';
 import { useToast } from '../../lib/toast';
-import { Button, Input, Field, Select, Modal, Badge, EmptyState } from '../../lib/ui';
+import { Button, Card, Input, Field, Select, Modal, Badge, EmptyState } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
 
 interface UserRow {
