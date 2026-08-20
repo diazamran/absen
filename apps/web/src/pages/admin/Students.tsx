@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { GraduationCap, Plus, Search, Upload, Download, Pencil, Trash2, KeyRound, Loader2, Printer } from 'lucide-react';
+import { Plus, Search, Upload, Download, Pencil, Trash2, KeyRound, Loader2, Printer } from 'lucide-react';
 import { api, ApiError, downloadCsv } from '../../lib/api';
 import { useToast } from '../../lib/toast';
-import { Button, Card, Input, Field, Select, Modal, Badge, EmptyState } from '../../lib/ui';
+import { Button, Input, Field, Select, Modal, Badge, EmptyState } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
 import { useNavigate } from 'react-router-dom';
 
@@ -22,6 +22,8 @@ export default function Students() {
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<StudentRow | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(25);
 
   const { data: students } = useQuery({
     queryKey: ['students', search, classId],
@@ -45,10 +47,28 @@ export default function Students() {
     queryKey: ['students-all-ids', search, classId],
     queryFn: () => api<{ success: boolean; data: string[] }>(`/students/all-ids?search=${encodeURIComponent(search)}&classId=${classId}`).then((r) => r.data),
   });
-  const toggleAll = () => {
-    const ids = allIds || students?.map((s) => s.id) || [];
+  // Reset page when search/filter changes
+  useEffect(() => { setPage(1); }, [search, classId]);
+
+  const total = students?.length || 0;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const safePage = Math.min(page, totalPages);
+  const paged = useMemo(() => {
+    if (!students) return [];
+    const start = (safePage - 1) * perPage;
+    return students.slice(start, start + perPage);
+  }, [students, safePage, perPage]);
+
+  const togglePageAll = () => {
+    const ids = paged.map((s) => s.id);
     if (!ids.length) return;
-    setSelected((prev) => (prev.size === ids.length ? new Set() : new Set(ids)));
+    setSelected((prev) => {
+      const allSelected = ids.every((id) => prev.has(id));
+      const next = new Set(prev);
+      if (allSelected) ids.forEach((id) => next.delete(id));
+      else ids.forEach((id) => next.add(id));
+      return next;
+    });
   };
 
   const deleteOne = useMutation({
@@ -160,8 +180,8 @@ export default function Students() {
                 <th className="w-10 px-3 py-2.5">
                   <input
                     type="checkbox"
-                    checked={selected.size === (allIds?.length || students.length) && (allIds?.length || students.length) > 0}
-                    onChange={toggleAll}
+                    checked={paged.length > 0 && paged.every((s) => selected.has(s.id))}
+                    onChange={togglePageAll}
                     className="h-4 w-4 accent-[var(--primary)]"
                   />
                 </th>
@@ -174,7 +194,7 @@ export default function Students() {
               </tr>
             </thead>
             <tbody>
-              {students.map((s) => (
+              {paged.map((s) => (
                 <tr key={s.id} className="border-b border-line/40 last:border-0 hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                   <td className="px-3 py-2.5">
                     <input
@@ -227,6 +247,80 @@ export default function Students() {
         </div>
       ) : (
         <EmptyState icon={Search} title="Tidak ada siswa" description="Coba ubah kata kunci pencarian atau tambahkan siswa baru." />
+      )}
+
+      {/* Pagination */}
+      {total > 0 && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line/60 bg-card px-4 py-2.5 text-sm">
+          <div className="flex items-center gap-2 text-muted">
+            <span>Baris per halaman:</span>
+            <select
+              value={perPage}
+              onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }}
+              className="rounded-lg border border-line/60 bg-card px-2 py-1 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/30"
+            >
+              {[10, 25, 50, 100, 200].map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+            <span className="text-xs">({total} data)</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(1)}
+              disabled={safePage <= 1}
+              className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent dark:hover:bg-slate-800"
+            >
+              «
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+              className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent dark:hover:bg-slate-800"
+            >
+              ‹
+            </button>
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let p: number;
+              if (totalPages <= 5) {
+                p = i + 1;
+              } else if (safePage <= 3) {
+                p = i + 1;
+              } else if (safePage >= totalPages - 2) {
+                p = totalPages - 4 + i;
+              } else {
+                p = safePage - 2 + i;
+              }
+              return (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  className={`min-w-[32px] rounded-lg px-2.5 py-1.5 text-xs font-medium ${
+                    p === safePage
+                      ? 'bg-[var(--primary)] text-white shadow-sm'
+                      : 'text-muted hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {p}
+                </button>
+              );
+            })}
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safePage >= totalPages}
+              className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent dark:hover:bg-slate-800"
+            >
+              ›
+            </button>
+            <button
+              onClick={() => setPage(totalPages)}
+              disabled={safePage >= totalPages}
+              className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent dark:hover:bg-slate-800"
+            >
+              »
+            </button>
+          </div>
+        </div>
       )}
 
       {showCreate && <StudentForm onClose={() => setShowCreate(false)} classes={classes || []} />}
