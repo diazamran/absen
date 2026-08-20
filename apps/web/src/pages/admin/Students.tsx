@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Upload, Download, Pencil, Trash2, KeyRound, Loader2, Printer } from 'lucide-react';
 import { api, ApiError, downloadCsv } from '../../lib/api';
@@ -25,11 +25,15 @@ export default function Students() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
 
-  const { data: students } = useQuery({
-    queryKey: ['students', search, classId],
+  const { data: studentsRes } = useQuery({
+    queryKey: ['students', search, classId, page, perPage],
     queryFn: () =>
-      api<{ success: boolean; data: StudentRow[] }>(`/students?search=${encodeURIComponent(search)}&classId=${classId}`).then((r) => r.data),
+      api<{ success: boolean; data: StudentRow[]; meta: { total: number; page: number; pageSize: number; pages: number } }>(
+        `/students?search=${encodeURIComponent(search)}&classId=${classId}&page=${page}&pageSize=${perPage}`
+      ),
   });
+  const students = studentsRes?.data;
+  const meta = studentsRes?.meta;
   const { data: classes } = useQuery({
     queryKey: ['classes'],
     queryFn: () => api<{ success: boolean; data: { id: string; name: string }[] }>('/classes').then((r) => r.data),
@@ -50,14 +54,10 @@ export default function Students() {
   // Reset page when search/filter changes
   useEffect(() => { setPage(1); }, [search, classId]);
 
-  const total = students?.length || 0;
-  const totalPages = Math.max(1, Math.ceil(total / perPage));
-  const safePage = Math.min(page, totalPages);
-  const paged = useMemo(() => {
-    if (!students) return [];
-    const start = (safePage - 1) * perPage;
-    return students.slice(start, start + perPage);
-  }, [students, safePage, perPage]);
+  const total = meta?.total || 0;
+  const totalPages = meta?.pages || 1;
+  const safePage = meta?.page || page;
+  const paged = students || [];
 
   const togglePageAll = () => {
     const ids = paged.map((s) => s.id);

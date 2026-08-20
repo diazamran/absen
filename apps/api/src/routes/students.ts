@@ -43,7 +43,7 @@ export async function studentRoutes(app: FastifyInstance) {
   app.get('/students', { preHandler: app.requirePermission(PERMISSION_KEYS.studentsRead) }, async (request, reply) => {
     const q = request.query as { search?: string; classId?: string; majorId?: string; page?: string; pageSize?: string; faceOnly?: string; cardOnly?: string };
     const page = Math.max(1, Number(q.page) || 1);
-    const pageSize = Math.min(100, Math.max(1, Number(q.pageSize) || 20));
+    const pageSize = Math.min(200, Math.max(1, Number(q.pageSize) || 20));
     const where = {
       isActive: q.cardOnly === 'true' ? true : undefined,
       ...(q.classId ? { classId: q.classId } : {}),
