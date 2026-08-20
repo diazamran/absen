@@ -5,6 +5,7 @@ import { api, ApiError, downloadCsv } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Input, Field, Select, Modal, Badge, EmptyState } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
+import { useAuth } from '../../lib/auth';
 
 interface UserRow {
   id: string; username: string; fullName: string; roleKey: string; roleName: string; nip?: string | null;
@@ -220,6 +221,8 @@ export default function Users() {
 function UserForm({ onClose, subjects, initial }: { onClose: () => void; subjects: { id: string; name: string }[]; initial?: UserRow }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const isSuperAdmin = user?.roleKey === 'SUPER_ADMIN';
   const [form, setForm] = useState(() => ({
     username: initial?.username || '',
     password: '',
@@ -257,7 +260,7 @@ function UserForm({ onClose, subjects, initial }: { onClose: () => void; subject
         <Field label="Username *"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoCapitalize="none" /></Field>
         <Field label="Role">
           <Select value={form.roleKey} onChange={(e) => setForm({ ...form, roleKey: e.target.value })}>
-            <option value="SUPER_ADMIN">Super Admin</option>
+            {isSuperAdmin && <option value="SUPER_ADMIN">Super Admin</option>}
             <option value="ADMIN">Admin</option>
             <option value="HEADMASTER">Kepala Sekolah</option>
             <option value="HOMEROOM_TEACHER">Wali Kelas</option>

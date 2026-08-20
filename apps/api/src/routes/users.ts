@@ -25,8 +25,9 @@ export async function userRoutes(app: FastifyInstance) {
     const q = request.query as { role?: string; search?: string; page?: string; pageSize?: string };
     const page = Math.max(1, Number(q.page) || 1);
     const pageSize = Math.min(200, Math.max(1, Number(q.pageSize) || 200));
+    const isSuperAdmin = request.user?.roleKey === 'SUPER_ADMIN';
     const where = {
-      role: { key: { notIn: ['STUDENT', 'PARENT'] } },
+      role: { key: { notIn: ['STUDENT', 'PARENT', ...(!isSuperAdmin ? ['SUPER_ADMIN'] : [])] } },
       ...(q.role ? { role: { key: q.role as never } } : {}),
       ...(q.search
         ? {
@@ -87,6 +88,10 @@ export async function userRoutes(app: FastifyInstance) {
 
   app.post('/users', { preHandler: app.requirePermission(PERMISSION_KEYS.usersCreate) }, async (request, reply) => {
     const body = validate(userCreateSchema, request.body);
+    // Hanya Super Admin boleh membuat akun Super Admin
+    if (body.roleKey === 'SUPER_ADMIN' && request.user?.roleKey !== 'SUPER_ADMIN') {
+      throw ApiError.forbidden('FORBIDDEN', 'Hanya Super Admin yang bisa membuat akun Super Admin.');
+    }
     if (await prisma.user.findUnique({ where: { username: body.username } })) {
       throw ApiError.conflict('USERNAME_EXISTS', 'Username sudah digunakan.');
     }
@@ -159,6 +164,10 @@ export async function userRoutes(app: FastifyInstance) {
 
     const existing = await prisma.user.findUnique({ where: { id }, include: { role: true, teacher: true, staff: true } });
     if (!existing) throw ApiError.notFound('Akun tidak ditemukan.');
+    // Hanya Super Admin boleh edit akun Super Admin
+    if (existing.role?.key === 'SUPER_ADMIN' && request.user?.roleKey !== 'SUPER_ADMIN') {
+      throw ApiError.forbidden('FORBIDDEN', 'Hanya Super Admin yang bisa mengedit akun Super Admin.');
+    }
 
     const data: Record<string, unknown> = {};
     if (body.username && body.username !== existing.username) {
@@ -238,6 +247,11 @@ export async function userRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     if (id === request.user!.id) {
       throw ApiError.badRequest('CANNOT_DELETE_SELF', 'Tidak bisa menghapus akun sendiri.');
+    }
+    // Hanya Super Admin boleh hapus akun Super Admin
+    const targetUser = await prisma.user.findUnique({ where: { id }, include: { role: true } });
+    if (targetUser?.role?.key === 'SUPER_ADMIN' && request.user?.roleKey !== 'SUPER_ADMIN') {
+      throw ApiError.forbidden('FORBIDDEN', 'Hanya Super Admin yang bisa menghapus akun Super Admin.');
     }
     const existing = await prisma.user.findUnique({
       where: { id },
