@@ -121,12 +121,7 @@ export default function Students() {
         </div>
       </div>
 
-      {students && students.length > 0 && (
-        <label className="mb-3 flex w-fit items-center gap-2 text-sm text-muted">
-          <input type="checkbox" checked={selected.size === (allIds?.length || students.length) && (allIds?.length || students.length) > 0} onChange={toggleAll} className="h-4 w-4 accent-[var(--primary)]" />
-          Pilih semua ({allIds?.length || students.length})
-        </label>
-      )}
+
 
       {selected.size > 0 && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-line/70 bg-primary-soft/60 px-4 py-2.5 dark:bg-primary-500/10">
@@ -157,60 +152,82 @@ export default function Students() {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {students?.map((s) => (
-          <Card key={s.id} className="flex items-center gap-3 p-3.5">
-            <input
-              type="checkbox"
-              checked={selected.has(s.id)}
-              onChange={() => toggle(s.id)}
-              className="h-4 w-4 shrink-0 accent-[var(--primary)]"
-              title="Pilih untuk hapus massal"
-            />
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary-soft text-primary">
-              <GraduationCap className="h-5 w-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-bold text-ink">{s.fullName}</p>
-              <p className="text-xs text-muted">{s.nis} · {s.className || 'Tanpa kelas'} {s.majorName ? `· ${s.majorName}` : ''}</p>
-              <p className="mt-0.5 truncate font-mono text-[11px] text-primary">Login: NISN {s.nis}</p>
-            </div>
-            <div className="hidden items-center gap-1.5 sm:flex">
-              {s.faceRegistered ? <Badge status="PRESENT" label="Wajah" /> : <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-muted dark:bg-slate-700">No wajah</span>}
-              {s.hasCard ? <Badge status="APPROVED" label="Kartu" /> : null}
-              {!s.isActive && <Badge status="BLOCKED" label="Nonaktif" />}
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => {
-                  if (window.confirm(`Reset password ${s.fullName} (NISN ${s.nis}) ke smkn1kras?`)) resetPassword.mutate([s.id]);
-                }}
-                className="rounded-xl p-2 text-muted hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-500/10"
-                title="Reset password ke smkn1kras"
-              >
-                <KeyRound className="h-4 w-4" />
-              </button>
-              <button onClick={() => setEditing(s)} className="rounded-xl p-2 text-muted hover:bg-primary-soft hover:text-primary" title="Edit">
-                <Pencil className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => {
-                  if (window.confirm(`Hapus PERMANEN ${s.fullName} (NISN ${s.nis})? Riwayat absen, izin, dan data wajah ikut terhapus dan tidak bisa dikembalikan.`)) deleteOne.mutate(s.id);
-                }}
-                className="rounded-xl p-2 text-muted hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
-                title="Hapus"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          </Card>
-        ))}
-        {students?.length === 0 && (
-          <div className="sm:col-span-2 lg:col-span-3">
-            <EmptyState icon={Search} title="Tidak ada siswa" description="Coba ubah kata kunci pencarian atau tambahkan siswa baru." />
-          </div>
-        )}
-      </div>
+      {students && students.length > 0 ? (
+        <div className="overflow-x-auto rounded-xl border border-line/60 bg-card">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-line/60 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-muted dark:bg-slate-800/60">
+                <th className="w-10 px-3 py-2.5">
+                  <input
+                    type="checkbox"
+                    checked={selected.size === (allIds?.length || students.length) && (allIds?.length || students.length) > 0}
+                    onChange={toggleAll}
+                    className="h-4 w-4 accent-[var(--primary)]"
+                  />
+                </th>
+                <th className="px-3 py-2.5">Nama</th>
+                <th className="px-3 py-2.5">NISN</th>
+                <th className="px-3 py-2.5">Kelas</th>
+                <th className="px-3 py-2.5">L/P</th>
+                <th className="px-3 py-2.5">Status</th>
+                <th className="w-28 px-3 py-2.5 text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {students.map((s) => (
+                <tr key={s.id} className="border-b border-line/40 last:border-0 hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                  <td className="px-3 py-2.5">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(s.id)}
+                      onChange={() => toggle(s.id)}
+                      className="h-4 w-4 accent-[var(--primary)]"
+                      title="Pilih untuk hapus massal"
+                    />
+                  </td>
+                  <td className="max-w-[200px] truncate px-3 py-2.5 font-medium text-ink">{s.fullName}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-muted">{s.nis}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-muted">{s.className || '-'} {s.majorName ? `(${s.majorName})` : ''}</td>
+                  <td className="px-3 py-2.5 text-muted">{s.gender === 'MALE' ? 'L' : 'P'}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex flex-wrap gap-1">
+                      {s.faceRegistered ? <Badge status="PRESENT" label="Wajah" /> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-muted dark:bg-slate-700">No wajah</span>}
+                      {!s.isActive && <Badge status="BLOCKED" label="Nonaktif" />}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Reset password ${s.fullName} (NISN ${s.nis}) ke smkn1kras?`)) resetPassword.mutate([s.id]);
+                        }}
+                        className="rounded-lg p-1.5 text-muted hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-500/10"
+                        title="Reset password"
+                      >
+                        <KeyRound className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => setEditing(s)} className="rounded-lg p-1.5 text-muted hover:bg-primary-soft hover:text-primary" title="Edit">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Hapus PERMANEN ${s.fullName} (NISN ${s.nis})? Riwayat absen, izin, dan data wajah ikut terhapus.`)) deleteOne.mutate(s.id);
+                        }}
+                        className="rounded-lg p-1.5 text-muted hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
+                        title="Hapus"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <EmptyState icon={Search} title="Tidak ada siswa" description="Coba ubah kata kunci pencarian atau tambahkan siswa baru." />
+      )}
 
       {showCreate && <StudentForm onClose={() => setShowCreate(false)} classes={classes || []} />}
       {editing && <StudentEdit student={editing} classes={classes || []} onClose={() => setEditing(null)} />}
