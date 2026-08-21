@@ -95,12 +95,3 @@ export async function hasCameraPermission(): Promise<boolean> {
     return false;
   }
 }
-
-export async function hasCameraPermission(): Promise<boolean> {
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    return devices.some((d) => d.kind === 'videoinput');
-  } catch {
-    return false;
-  }
-}
