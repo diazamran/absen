@@ -276,17 +276,10 @@ export default function PklManagement() {
       <PageHeader
         title="Manajemen PKL"
         subtitle="Kelola lokasi PKL, penugasan siswa, dan guru pembimbing"
-        action={
-          <div className="flex gap-2">
-            <Button onClick={() => setShowForm('add-location')}>
-              <Plus className="h-4 w-4" /> Tambah Lokasi
-            </Button>
-          </div>
-        }
       />
 
       {/* Tabs */}
-      <div className="mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <Segmented
           value={tab}
           onChange={(v) => setTab(v as 'locations' | 'assignments')}
@@ -295,44 +288,51 @@ export default function PklManagement() {
             { value: 'assignments', label: `Penugasan (${allStudents?.length ?? 0})` },
           ]}
         />
+        {tab === 'locations' && (
+          <Button onClick={() => setShowForm('add-location')}>
+            <Plus className="h-4 w-4" /> Tambah Lokasi
+          </Button>
+        )}
       </div>
 
-      {/* Add Location Form */}
-      {showForm === 'add-location' && (
-        <Card className="mb-4">
-          <p className="mb-3 font-bold text-ink">Tambah Lokasi PKL</p>
-          <LocationForm onClose={() => setShowForm(null)} />
-        </Card>
-      )}
+      {/* ===== TAB LOKASI ===== */}
+      {tab === 'locations' && (
+        <>
+          {/* Add Location Form */}
+          {showForm === 'add-location' && (
+            <Card className="mb-4">
+              <p className="mb-3 font-bold text-ink">Tambah Lokasi PKL</p>
+              <LocationForm onClose={() => setShowForm(null)} />
+            </Card>
+          )}
 
-      {/* Edit Location Form */}
-      {editLocation && (
-        <Card className="mb-4">
-          <p className="mb-3 font-bold text-ink">Edit Lokasi PKL</p>
-          <LocationForm initial={editLocation} onClose={() => setEditLocation(null)} />
-        </Card>
-      )}
+          {/* Edit Location Form */}
+          {editLocation && (
+            <Card className="mb-4">
+              <p className="mb-3 font-bold text-ink">Edit Lokasi PKL</p>
+              <LocationForm initial={editLocation} onClose={() => setEditLocation(null)} />
+            </Card>
+          )}
 
-      {/* Assignment Form */}
-      {assignTo && (
-        <Card className="mb-4">
-          <p className="mb-3 font-bold text-ink">Tugaskan Siswa ke Lokasi</p>
-          <AssignmentForm locationId={assignTo} onClose={() => setAssignTo(null)} />
-        </Card>
-      )}
+          {/* Assignment Form */}
+          {assignTo && (
+            <Card className="mb-4">
+              <p className="mb-3 font-bold text-ink">Tugaskan Siswa ke Lokasi</p>
+              <AssignmentForm locationId={assignTo} onClose={() => setAssignTo(null)} />
+            </Card>
+          )}
 
-      {/* Search */}
-      <div className="mb-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <Input className="pl-10" placeholder="Cari lokasi / kota..." value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-      </div>
+          {/* Search */}
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              <Input className="pl-10" placeholder="Cari lokasi / kota..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+          </div>
 
-      {/* Content */}
-      {isLoading && <Skeleton className="h-32 w-full" />}
-
-      {!isLoading && tab === 'locations' && (
+          {/* Locations list */}
+          {isLoading && <Skeleton className="h-32 w-full" />}
+          {!isLoading && (
         <div className="space-y-3">
           {locations && locations.length === 0 && (
             <EmptyState icon={MapPin} title="Belum ada lokasi PKL" description="Klik 'Tambah Lokasi' untuk menambahkan tempat PKL." />
@@ -390,39 +390,58 @@ export default function PklManagement() {
               )}
             </Card>
           ))}
+          {!isLoading && locations && locations.length === 0 && (
+            <EmptyState icon={MapPin} title="Belum ada lokasi PKL" description="Klik 'Tambah Lokasi' untuk menambahkan tempat PKL." />
+          )}
         </div>
+        )}
+        </>
       )}
 
-      {!isLoading && tab === 'assignments' && (
-        <div className="space-y-3">
-          {allStudents && allStudents.length === 0 && (
-            <EmptyState icon={GraduationCap} title="Belum ada siswa PKL" description="Tugaskan siswa ke lokasi PKL dari tab Lokasi." />
-          )}
-          {/* Group by location */}
-          {locations?.filter((l) => l.students.length > 0).map((loc) => (
-            <Card key={loc.id}>
-              <p className="mb-2 font-bold text-ink">{loc.name} <span className="text-xs font-normal text-muted">({loc.city ?? '-'})</span></p>
-              <div className="space-y-1.5">
-                {loc.students.map((s) => (
-                  <div key={s.assignmentId} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/50">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-ink">{s.fullName}</p>
-                      <p className="text-xs text-muted">{s.nis} · {s.className ?? '-'}{s.supervisorName ? ` · 👨‍🏫 ${s.supervisorName}` : ''}</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        if (window.confirm(`Hapus penugasan ${s.fullName} dari ${loc.name}?`)) deleteAssignment.mutate(s.assignmentId);
-                      }}
-                      className="rounded p-1 text-muted hover:bg-red-50 hover:text-red-500"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+      {/* ===== TAB PENUGASAN ===== */}
+      {tab === 'assignments' && (
+        <>
+          {/* Search */}
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              <Input className="pl-10" placeholder="Cari siswa / lokasi..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+          </div>
+
+          {isLoading && <Skeleton className="h-32 w-full" />}
+          {!isLoading && (
+            <div className="space-y-3">
+              {allStudents && allStudents.length === 0 && (
+                <EmptyState icon={GraduationCap} title="Belum ada siswa PKL" description="Tugaskan siswa ke lokasi PKL dari tab Lokasi." />
+              )}
+              {/* Group by location */}
+              {locations?.filter((l) => l.students.length > 0).map((loc) => (
+                <Card key={loc.id}>
+                  <p className="mb-2 font-bold text-ink">{loc.name} <span className="text-xs font-normal text-muted">({loc.city ?? '-'})</span></p>
+                  <div className="space-y-1.5">
+                    {loc.students.map((s) => (
+                      <div key={s.assignmentId} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/50">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold text-ink">{s.fullName}</p>
+                          <p className="text-xs text-muted">{s.nis} · {s.className ?? '-'}{s.supervisorName ? ` · 👨‍🏫 ${s.supervisorName}` : ''}</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Hapus penugasan ${s.fullName} dari ${loc.name}?`)) deleteAssignment.mutate(s.assignmentId);
+                          }}
+                          className="rounded p-1 text-muted hover:bg-red-50 hover:text-red-500"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </Card>
-          ))}
-        </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
