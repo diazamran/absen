@@ -152,12 +152,9 @@ export async function faceRoutes(app: FastifyInstance) {
     });
   });
 
-  // Reset/hapus data wajah (privasi: siswa bisa hapus datanya sendiri; admin bila ada masalah)
-  app.delete('/face/:userId', { preHandler: app.authenticate }, async (request, reply) => {
+  // Reset/hapus data wajah — hanya admin/superadmin yang bisa reset wajah siswa
+  app.delete('/face/:userId', { preHandler: app.requirePermission(PERMISSION_KEYS.faceDelete) }, async (request, reply) => {
     const { userId } = request.params as { userId: string };
-    if (request.user!.id !== userId && !roleHasPermission(request.user!.roleKey, PERMISSION_KEYS.faceDelete)) {
-      throw ApiError.forbidden();
-    }
     await faceService.deleteEmbeddings(userId);
     await prisma.student.updateMany({ where: { userId }, data: { faceRegistered: false } });
     await audit({

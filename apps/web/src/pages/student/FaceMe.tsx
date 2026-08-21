@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Camera, CheckCircle2, Clock, Loader2, RefreshCw, ScanFace, ShieldCheck, Trash2 } from 'lucide-react';
+import { Camera, CheckCircle2, Clock, Loader2, RefreshCw, ScanFace, ShieldCheck } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
@@ -95,18 +95,6 @@ export default function FaceMe() {
     }
   };
 
-  const reset = useMutation({
-    mutationFn: () => api(`/face/${user!.id}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      toast('success', 'Data wajah kamu telah dihapus.');
-      setReEnroll(false);
-      setDescriptors([]);
-      setPreviews([]);
-      qc.invalidateQueries({ queryKey: ['face-status'] });
-    },
-    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus data wajah.'),
-  });
-
   const submit = useMutation({
     mutationFn: () => api('/face/register', { method: 'POST', body: { descriptors, consent } }),
     onSuccess: () => {
@@ -140,19 +128,8 @@ export default function FaceMe() {
             <div>
               <p className="font-bold text-ink">Wajah sudah terdaftar & aktif</p>
               <p className="text-xs text-muted">Kamu bisa langsung absen melalui menu <b>Absen → Absen Wajah</b>.</p>
+              <p className="mt-1 text-[11px] text-muted">Untuk mengubah atau mendaftar ulang wajah, hubungi admin / TU.</p>
             </div>
-          </div>
-          <div className="flex justify-end">
-            <Button
-              variant="danger"
-              onClick={() => {
-                if (window.confirm('Hapus data wajah kamu? Kamu harus mendaftar ulang untuk absen wajah.')) reset.mutate();
-              }}
-              disabled={reset.isPending}
-            >
-              {reset.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              Hapus Data Wajah
-            </Button>
           </div>
         </Card>
       )}
