@@ -17,6 +17,16 @@ interface StudentRow {
   faceRegistered: boolean;
 }
 
+interface RegisteredFace {
+  userId: string;
+  fullName: string;
+  nis: string | null;
+  className: string | null;
+  samples: number;
+  embeddingsCount: number;
+  status: string;
+}
+
 interface FaceStatus {
   registered: boolean;
   pending: boolean;
@@ -49,6 +59,7 @@ export default function FaceRegister() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<StudentRow | null>(null);
   const [pendingSelected, setPendingSelected] = useState<Set<string>>(new Set());
+  const [registeredSelected, setRegisteredSelected] = useState<Set<string>>(new Set());
   const [descriptors, setDescriptors] = useState<number[][]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [consent, setConsent] = useState(false);
@@ -126,6 +137,40 @@ export default function FaceRegister() {
   const toggleAllPending = () => {
     if (!pending?.length) return;
     setPendingSelected((prev) => (prev.size === pending.length ? new Set() : new Set(pending.map((p) => p.userId))));
+  };
+
+  // Daftar siswa yang sudah punya wajah terdaftar
+  const { data: registeredFaces, isLoading: regLoading } = useQuery({
+    queryKey: ['face-registered'],
+    queryFn: () => api<{ success: boolean; data: RegisteredFace[] }>('/face/registered').then((r) => r.data),
+  });
+
+  const bulkResetRegistered = useMutation({
+    mutationFn: async () => {
+      for (const userId of registeredSelected) {
+        await api(`/face/${userId}`, { method: 'DELETE' });
+      }
+    },
+    onSuccess: () => {
+      toast('success', `${registeredSelected.size} data wajah dihapus.`);
+      setRegisteredSelected(new Set());
+      qc.invalidateQueries({ queryKey: ['face-registered'] });
+      qc.invalidateQueries({ queryKey: ['face-status'] });
+      qc.invalidateQueries({ queryKey: ['students'] });
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus massal.'),
+  });
+
+  const toggleRegistered = (userId: string) => {
+    setRegisteredSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId); else next.add(userId);
+      return next;
+    });
+  };
+  const toggleAllRegistered = () => {
+    if (!registeredFaces?.length) return;
+    setRegisteredSelected((prev) => (prev.size === registeredFaces.length ? new Set() : new Set(registeredFaces.map((r) => r.userId))));
   };
 
   // Nyalakan kamera saat siswa dipilih & belum terdaftar
@@ -265,6 +310,55 @@ export default function FaceRegister() {
                     <CheckCircle2 className="h-3.5 w-3.5" /> Setujui
                   </Button>
                 </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Siswa dengan wajah terdaftar */}
+      {regLoading && <Skeleton className="mb-4 h-24 w-full" />}
+      {!regLoading && registeredFaces && registeredFaces.length > 0 && (
+        <Card className="mb-4 border-emerald-200 bg-emerald-50/50 dark:bg-emerald-500/5">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              <p className="font-bold text-ink">Wajah Terdaftar ({registeredFaces.length})</p>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-muted">
+              <input type="checkbox" checked={registeredSelected.size === registeredFaces.length && registeredFaces.length > 0} onChange={toggleAllRegistered} className="h-4 w-4 accent-[var(--primary)]" />
+              Pilih semua
+            </label>
+          </div>
+          {registeredSelected.size > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-red-300 bg-red-100/60 px-3 py-2 dark:bg-red-500/10">
+              <span className="text-xs font-semibold text-ink">{registeredSelected.size} dipilih</span>
+              <Button variant="danger" className="!px-3 !py-1.5 text-xs" onClick={() => {
+                if (window.confirm(`Hapus data wajah ${registeredSelected.size} siswa? Semua harus mendaftar ulang.`)) bulkResetRegistered.mutate();
+              }} disabled={bulkResetRegistered.isPending}>
+                {bulkResetRegistered.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                Reset Massal
+              </Button>
+            </div>
+          )}
+          <div className="max-h-64 space-y-1.5 overflow-y-auto">
+            {registeredFaces.map((r) => (
+              <div key={r.userId} className={`flex items-center gap-3 rounded-xl border p-2.5 dark:bg-slate-800/70 ${registeredSelected.has(r.userId) ? 'border-primary bg-primary-soft/30' : 'border-line/60 bg-surface'}`}>
+                <input type="checkbox" checked={registeredSelected.has(r.userId)} onChange={() => toggleRegistered(r.userId)} className="h-4 w-4 shrink-0 accent-[var(--primary)]" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-ink">{r.fullName}</p>
+                  <p className="text-xs text-muted">{r.nis ?? '-'} · {r.className ?? '-'} · {r.embeddingsCount} embedding</p>
+                </div>
+                <Badge status="APPROVED" label="Aktif" />
+                <button
+                  onClick={() => {
+                    if (window.confirm(`Reset wajah ${r.fullName}? Siswa harus mendaftar ulang.`)) resetMutation.mutate(r.userId);
+                  }}
+                  className="rounded-lg p-1.5 text-muted hover:bg-red-50 hover:text-red-500"
+                  title="Reset wajah"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
             ))}
           </div>

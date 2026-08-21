@@ -152,6 +152,35 @@ export async function faceRoutes(app: FastifyInstance) {
     });
   });
 
+  // Daftar siswa yang sudah punya wajah terdaftar (untuk bulk reset)
+  app.get('/face/registered', { preHandler: app.requirePermission(PERMISSION_KEYS.faceDelete) }, async (request, reply) => {
+    const profiles = await prisma.faceProfile.findMany({
+      where: { status: 'REGISTERED' },
+      include: {
+        user: {
+          include: {
+            student: { include: { class: { select: { name: true } } } },
+            teacher: { select: { nip: true } },
+          },
+        },
+        embeddings: { select: { id: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    return reply.send({
+      success: true,
+      data: profiles.map((p) => ({
+        userId: p.userId,
+        fullName: p.user?.fullName ?? '-',
+        nis: p.user?.student?.nis ?? null,
+        className: p.user?.student?.class?.name ?? null,
+        samples: p.samplesCount,
+        embeddingsCount: p.embeddings.length,
+        status: p.status,
+      })),
+    });
+  });
+
   // Reset/hapus data wajah — hanya admin/superadmin yang bisa reset wajah siswa
   app.delete('/face/:userId', { preHandler: app.requirePermission(PERMISSION_KEYS.faceDelete) }, async (request, reply) => {
     const { userId } = request.params as { userId: string };
