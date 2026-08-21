@@ -23,6 +23,7 @@ const Audit = lazy(() => import('./pages/admin/Audit'));
 const Settings = lazy(() => import('./pages/admin/Settings'));
 const ImportStudents = lazy(() => import('./pages/admin/ImportStudents'));
 const QrCards = lazy(() => import('./pages/admin/QrCards'));
+const PklManagement = lazy(() => import('./pages/admin/PklManagement'));
 
 // Guru / Staff / Siswa
 const TeacherHome = lazy(() => import('./pages/teacher/TeacherHome'));
@@ -36,6 +37,8 @@ const QrScan = lazy(() => import('./pages/student/QrScan'));
 const CardTap = lazy(() => import('./pages/student/CardTap'));
 const History = lazy(() => import('./pages/shared/History'));
 const Leave = lazy(() => import('./pages/shared/Leave'));
+const PklAbsent = lazy(() => import('./pages/student/PklAbsent'));
+const PklDashboard = lazy(() => import('./pages/teacher/PklDashboard'));
 
 // Orang tua
 const ParentHome = lazy(() => import('./pages/parent/ParentHome'));
@@ -94,12 +97,17 @@ export default function App() {
         <Route path="settings" element={<Page><Settings /></Page>} />
         <Route path="import" element={<Page><ImportStudents /></Page>} />
         <Route path="qr-cards" element={<Page><QrCards /></Page>} />
+        <Route path="pkl" element={<Page><PklManagement /></Page>} />
 
         {/* Guru / Orang tua */}
         <Route path="home" element={<HomeSwitch />} />
         <Route path="gate" element={<Page><Gate /></Page>} />
         <Route path="class/:id" element={<Page><ClassAttendance /></Page>} />
         <Route path="journal" element={<Page><Journal /></Page>} />
+
+        {/* Siswa PKL */}
+        <Route path="pkl-absent" element={<Page><PklAbsent /></Page>} />
+        <Route path="pkl-monitor" element={<Page><PklDashboard /></Page>} />
 
         {/* Siswa */}
         <Route path="absent" element={<Page><Absent /></Page>} />

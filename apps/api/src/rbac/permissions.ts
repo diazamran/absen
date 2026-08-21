@@ -41,6 +41,9 @@ export const PERMISSION_KEYS = {
   faceApprove: 'face:approve',
   faceDelete: 'face:delete',
   monitorView: 'monitor:view',
+  pklManage: 'pkl:manage',
+  pklRead: 'pkl:read',
+  pklAttendance: 'pkl:attendance',
 } as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[keyof typeof PERMISSION_KEYS];
@@ -106,6 +109,8 @@ const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     PERMISSION_KEYS.notificationsRead,
     PERMISSION_KEYS.faceRegister,
     PERMISSION_KEYS.monitorView,
+    PERMISSION_KEYS.pklRead,
+    PERMISSION_KEYS.pklAttendance,
   ],
   STAFF: [
     PERMISSION_KEYS.dashboardView,
@@ -138,6 +143,7 @@ const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     PERMISSION_KEYS.scheduleRead,
     PERMISSION_KEYS.notificationsRead,
     PERMISSION_KEYS.faceRegister,
+    PERMISSION_KEYS.pklAttendance,
   ],
   PARENT: [
     PERMISSION_KEYS.dashboardView,

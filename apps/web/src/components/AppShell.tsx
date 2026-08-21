@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Home, ScanLine, Users, FileText, LayoutDashboard, GraduationCap, CalendarDays, BookOpen,
   ClipboardList, Smartphone, BarChart3, Bell, ScrollText, Settings, LogOut, Menu, X, ShieldCheck,
-  ClipboardCheck, History, FilePlus2, UserRound, Baby, ScanFace, QrCode,
+  ClipboardCheck, History, FilePlus2, UserRound, Baby, ScanFace, QrCode, MapPin, Building2,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useTheme } from '../lib/theme';
@@ -28,6 +28,7 @@ const ADMIN_MENU: NavItem[] = [
   { to: '/app/classes', label: 'Kelas', icon: <ClipboardList className="h-5 w-5" /> },
   { to: '/app/leave', label: 'Izin', icon: <FileText className="h-5 w-5" /> },
   { to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-5 w-5" /> },
+  { to: '/app/pkl', label: 'PKL', icon: <MapPin className="h-5 w-5" /> },
   { to: '/app/notifications', label: 'Notifikasi', icon: <Bell className="h-5 w-5" /> },
   { to: '/app/devices', label: 'Perangkat', icon: <Smartphone className="h-5 w-5" /> },
   { to: '/app/audit', label: 'Audit Log', icon: <ScrollText className="h-5 w-5" /> },
@@ -38,6 +39,7 @@ const ADMIN_MENU: NavItem[] = [
 function roleMenu(role?: string): NavItem[] {
   const items: NavItem[] = [{ to: '/app/home', label: 'Beranda', icon: <Home className="h-5 w-5" /> }];
   if (role === 'STUDENT') {
+    items.push({ to: '/app/pkl-absent', label: 'Absen PKL', icon: <MapPin className="h-5 w-5" /> });
     items.push({ to: '/app/face-me', label: 'Registrasi Wajah', icon: <ScanFace className="h-5 w-5" /> });
   }
   items.push({ to: '/app/history', label: 'Riwayat', icon: <History className="h-5 w-5" /> });
@@ -53,8 +55,11 @@ function roleMenu(role?: string): NavItem[] {
     items.push({ to: '/app/qr-cards', label: 'Kartu QR', icon: <QrCode className="h-5 w-5" /> });
     items.push({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
     items.push({ to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-5 w-5" /> });
+  } else if (role === 'TEACHER') {
+    // Guru: monitor PKL
+    items.push({ to: '/app/pkl-monitor', label: 'Monitor PKL', icon: <MapPin className="h-5 w-5" /> });
   } else {
-    // Guru: tanpa menu Ajukan Izin & Absen
+    // Guru lain / Staff: tanpa menu Ajukan Izin & Absen
     if (role !== 'PARENT' && role !== 'TEACHER') {
       items.push({ to: '/app/leave/mine', label: 'Ajukan Izin', icon: <FilePlus2 className="h-5 w-5" /> });
     }
@@ -89,6 +94,7 @@ const BOTTOM_NAV: Record<string, NavItem[]> = {
   TEACHER: [
     { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
     { to: '/app/classes', label: 'Kelas', icon: <GraduationCap className="h-6 w-6" /> },
+    { to: '/app/pkl-monitor', label: 'PKL', icon: <MapPin className="h-6 w-6" /> },
     { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
     { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
   ],
@@ -109,12 +115,14 @@ const BOTTOM_NAV: Record<string, NavItem[]> = {
   PIKET: [
     { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
     { to: '/app/gate', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> },
+    { to: '/app/pkl-monitor', label: 'PKL', icon: <MapPin className="h-6 w-6" /> },
     { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
     { to: '/app/leave', label: 'Persetujuan', icon: <FilePlus2 className="h-6 w-6" /> },
     { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
   ],
   STUDENT: [
     { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
+    { to: '/app/pkl-absent', label: 'PKL', icon: <MapPin className="h-6 w-6" /> },
     { to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> },
     { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
     { to: '/app/leave/mine', label: 'Izin', icon: <FilePlus2 className="h-6 w-6" /> },

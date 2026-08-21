@@ -31,6 +31,7 @@ import { auditRoutes } from './routes/audit.js';
 import { settingRoutes } from './routes/settings.js';
 import { uploadRoutes } from './routes/upload.js';
 import { importRoutes } from './routes/import.js';
+import { pklRoutes } from './routes/pkl.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOADS_DIR = path.resolve(__dirname, '../uploads');
@@ -104,6 +105,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     await api.register(settingRoutes);
     await api.register(uploadRoutes);
     await api.register(importRoutes);
+    await api.register(pklRoutes);
   }, { prefix: '/api' });
 
   // 404 API
