@@ -425,4 +425,139 @@ export async function pklRoutes(app: FastifyInstance) {
       })),
     });
   });
+
+  // ===== LAPORAN PKL =====
+
+  // Laporan PKL harian
+  app.get('/pkl/report/daily', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
+    const { date, locationId, classId } = request.query as { date?: string; locationId?: string; classId?: string };
+    const targetDate = date ? new Date(`${date}T00:00:00+07:00`) : todayStart();
+    const dayEnd = new Date(targetDate.getTime() + 24 * 3600_000);
+
+    // Ambil semua assignment aktif
+    const whereAssignment: Record<string, unknown> = { isActive: true };
+    if (locationId) whereAssignment.pklLocationId = locationId;
+    if (classId) whereAssignment.student = { classId };
+
+    const assignments = await prisma.pklAssignment.findMany({
+      where: whereAssignment,
+      include: {
+        student: {
+          include: {
+            user: { select: { fullName: true } },
+            class: { select: { name: true } },
+            attendance: {
+              where: { date: targetDate, type: 'CHECK_IN' },
+              take: 1,
+            },
+          },
+        },
+        pklLocation: true,
+        supervisor: { include: { user: { select: { fullName: true } } } },
+      },
+      orderBy: { student: { user: { fullName: 'asc' } } },
+    });
+
+    // Stats
+    const present = assignments.filter((a) => a.student?.attendance[0]?.status === 'PRESENT' || a.student?.attendance[0]?.status === 'LATE').length;
+    const late = assignments.filter((a) => a.student?.attendance[0]?.status === 'LATE').length;
+    const sick = assignments.filter((a) => a.student?.attendance[0]?.status === 'SICK').length;
+    const excused = assignments.filter((a) => a.student?.attendance[0]?.status === 'EXCUSED').length;
+    const absent = assignments.filter((a) => !a.student?.attendance[0] || a.student.attendance[0].status === 'ABSENT').length;
+
+    return reply.send({
+      success: true,
+      data: {
+        date: targetDate.toISOString().slice(0, 10),
+        total: assignments.length,
+        present,
+        late,
+        sick,
+        excused,
+        absent,
+        rows: assignments.map((a) => {
+          const att = a.student?.attendance[0];
+          return {
+            studentId: a.studentId,
+            fullName: a.student?.user?.fullName ?? '-',
+            nis: a.student?.nis ?? null,
+            className: a.student?.class?.name ?? null,
+            locationName: a.pklLocation.name,
+            supervisorName: a.supervisor?.user?.fullName ?? null,
+            checkIn: att?.checkIn ? localTime(att.checkIn) : null,
+            checkOut: att?.checkOut ? localTime(att.checkOut) : null,
+            status: att?.status ?? 'ABSENT',
+            method: att?.method ?? null,
+            lateMinutes: att?.lateMinutes ?? 0,
+          };
+        }),
+      },
+    });
+  });
+
+  // Laporan PKL bulanan
+  app.get('/pkl/report/monthly', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
+    const { month, locationId, classId } = request.query as { month?: string; locationId?: string; classId?: string };
+    const monthStart = month ? new Date(`${month}-01T00:00:00+07:00`) : new Date(`${new Date().toISOString().slice(0, 7)}-01T00:00:00+07:00`);
+    const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0, 23, 59, 59);
+
+    const whereAssignment: Record<string, unknown> = { isActive: true };
+    if (locationId) whereAssignment.pklLocationId = locationId;
+    if (classId) whereAssignment.student = { classId };
+
+    const assignments = await prisma.pklAssignment.findMany({
+      where: whereAssignment,
+      include: {
+        student: {
+          include: {
+            user: { select: { fullName: true } },
+            class: { select: { name: true } },
+            attendance: {
+              where: { date: { gte: monthStart, lte: monthEnd }, type: 'CHECK_IN' },
+              orderBy: { date: 'asc' },
+            },
+          },
+        },
+        pklLocation: true,
+        supervisor: { include: { user: { select: { fullName: true } } } },
+      },
+      orderBy: { student: { user: { fullName: 'asc' } } },
+    });
+
+    // Hitung hari kerja dalam bulan (Senin-Jumat)
+    let schoolDays = 0;
+    const d = new Date(monthStart);
+    while (d <= monthEnd) {
+      const day = d.getDay();
+      if (day >= 1 && day <= 5) schoolDays++;
+      d.setDate(d.getDate() + 1);
+    }
+
+    return reply.send({
+      success: true,
+      data: {
+        month: monthStart.toISOString().slice(0, 7),
+        schoolDays,
+        totalStudents: assignments.length,
+        rows: assignments.map((a) => {
+          const atts = a.student?.attendance ?? [];
+          return {
+            studentId: a.studentId,
+            fullName: a.student?.user?.fullName ?? '-',
+            nis: a.student?.nis ?? null,
+            className: a.student?.class?.name ?? null,
+            locationName: a.pklLocation.name,
+            supervisorName: a.supervisor?.user?.fullName ?? null,
+            totalDays: atts.length,
+            present: atts.filter((at) => at.status === 'PRESENT').length,
+            late: atts.filter((at) => at.status === 'LATE').length,
+            sick: atts.filter((at) => at.status === 'SICK').length,
+            excused: atts.filter((at) => at.status === 'EXCUSED').length,
+            absent: Math.max(0, schoolDays - atts.length),
+            percentage: schoolDays > 0 ? Math.round((atts.filter((at) => at.status === 'PRESENT' || at.status === 'LATE').length / schoolDays) * 100) : 0,
+          };
+        }),
+      },
+    });
+  });
 }

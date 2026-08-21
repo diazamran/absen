@@ -29,6 +29,7 @@ const ADMIN_MENU: NavItem[] = [
   { to: '/app/leave', label: 'Izin', icon: <FileText className="h-5 w-5" /> },
   { to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-5 w-5" /> },
   { to: '/app/pkl', label: 'PKL', icon: <MapPin className="h-5 w-5" /> },
+  { to: '/app/pkl-reports', label: 'Laporan PKL', icon: <BarChart3 className="h-5 w-5" /> },
   { to: '/app/notifications', label: 'Notifikasi', icon: <Bell className="h-5 w-5" /> },
   { to: '/app/devices', label: 'Perangkat', icon: <Smartphone className="h-5 w-5" /> },
   { to: '/app/audit', label: 'Audit Log', icon: <ScrollText className="h-5 w-5" /> },
