@@ -587,4 +587,100 @@ export async function importRoutes(app: FastifyInstance) {
     reply.header('Content-Disposition', 'attachment; filename="guru-staff.csv"');
     return reply.send(csv);
   });
+
+  // ===== PKL LOCATIONS =====
+
+  // Template CSV untuk import lokasi PKL
+  app.get('/import/pkl-locations/template', { preHandler: app.requirePermission(PERMISSION_KEYS.pklManage) }, async (_request, reply) => {
+    const csv = '\uFEFFNama Tempat,Kota,Alamat,Latitude,Longitude,Radius (meter),Kontak / PIC,No. HP\nPT. Maju Jaya,Kediri,Jl. Raya No. 123,-7.8205,112.0153,100,Budi Santoso,08123456789\n';
+    reply.header('Content-Type', 'text/csv; charset=utf-8');
+    reply.header('Content-Disposition', 'attachment; filename="template-lokasi-pkl.csv"');
+    return reply.send(csv);
+  });
+
+  // Preview import lokasi PKL
+  app.post('/import/pkl-locations/preview', { preHandler: app.requirePermission(PERMISSION_KEYS.pklManage) }, async (request, reply) => {
+    const data = await request.file();
+    if (!data) throw ApiError.badRequest('FILE_REQUIRED', 'Pilih file CSV terlebih dahulu.');
+    const text = (await data.toBuffer()).toString('utf8').replace(/^\uFEFF/, '');
+    const rows = parseCsv(text);
+    if (rows.length < 2) throw ApiError.badRequest('EMPTY_CSV', 'File CSV kosong atau tidak memiliki data.');
+
+    const headers = rows[0].map((h) => h.trim().toLowerCase());
+    const nameIdx = headers.findIndex((h) => h.includes('nama'));
+    if (nameIdx === -1) throw ApiError.badRequest('INVALID_CSV', 'Kolom "Nama Tempat" tidak ditemukan.');
+
+    const cityIdx = headers.findIndex((h) => h.includes('kota'));
+    const addrIdx = headers.findIndex((h) => h.includes('alamat'));
+    const latIdx = headers.findIndex((h) => h.includes('lat'));
+    const lngIdx = headers.findIndex((h) => h.includes('long') || h.includes('lng'));
+    const radiusIdx = headers.findIndex((h) => h.includes('radius'));
+    const contactIdx = headers.findIndex((h) => h.includes('kontak') || h.includes('pic'));
+    const phoneIdx = headers.findIndex((h) => h.includes('hp') || h.includes('telp'));
+
+    const preview: Array<{ row: number; name: string; city: string; address: string; latitude: number | null; longitude: number | null; radiusMeter: number; contactName: string; phone: string; error?: string }> = [];
+    let errors = 0;
+
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const name = r[nameIdx]?.trim();
+      if (!name) { errors++; preview.push({ row: i + 1, name: '(kosong)', city: '', address: '', latitude: null, longitude: null, radiusMeter: 100, contactName: '', phone: '', error: 'Nama kosong' }); continue; }
+      const city = r[cityIdx]?.trim() ?? '';
+      const address = r[addrIdx]?.trim() ?? '';
+      const lat = latIdx >= 0 ? parseFloat(r[latIdx]) : null;
+      const lng = lngIdx >= 0 ? parseFloat(r[lngIdx]) : null;
+      const radius = radiusIdx >= 0 ? parseInt(r[radiusIdx]) || 100 : 100;
+      const contact = r[contactIdx]?.trim() ?? '';
+      const phone = r[phoneIdx]?.trim() ?? '';
+      preview.push({ row: i + 1, name, city, address, latitude: isNaN(lat as number) ? null : lat, longitude: isNaN(lng as number) ? null : lng, radiusMeter: isNaN(radius) ? 100 : radius, contactName: contact, phone });
+    }
+
+    return reply.send({ success: true, data: { total: preview.length, errors, rows: preview } });
+  });
+
+  // Import lokasi PKL dari CSV
+  app.post('/import/pkl-locations', { preHandler: app.requirePermission(PERMISSION_KEYS.pklManage) }, async (request, reply) => {
+    const data = await request.file();
+    if (!data) throw ApiError.badRequest('FILE_REQUIRED', 'Pilih file CSV terlebih dahulu.');
+    const text = (await data.toBuffer()).toString('utf8').replace(/^\uFEFF/, '');
+    const rows = parseCsv(text);
+    if (rows.length < 2) throw ApiError.badRequest('EMPTY_CSV', 'File CSV kosong.');
+
+    const headers = rows[0].map((h) => h.trim().toLowerCase());
+    const nameIdx = headers.findIndex((h) => h.includes('nama'));
+    if (nameIdx === -1) throw ApiError.badRequest('INVALID_CSV', 'Kolom "Nama Tempat" tidak ditemukan.');
+
+    const cityIdx = headers.findIndex((h) => h.includes('kota'));
+    const addrIdx = headers.findIndex((h) => h.includes('alamat'));
+    const latIdx = headers.findIndex((h) => h.includes('lat'));
+    const lngIdx = headers.findIndex((h) => h.includes('long') || h.includes('lng'));
+    const radiusIdx = headers.findIndex((h) => h.includes('radius'));
+    const contactIdx = headers.findIndex((h) => h.includes('kontak') || h.includes('pic'));
+    const phoneIdx = headers.findIndex((h) => h.includes('hp') || h.includes('telp'));
+
+    let created = 0, skipped = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const name = r[nameIdx]?.trim();
+      if (!name) { skipped++; continue; }
+      const existing = await prisma.pklLocation.findFirst({ where: { name } });
+      if (existing) { skipped++; continue; }
+      await prisma.pklLocation.create({
+        data: {
+          name,
+          city: r[cityIdx]?.trim() || undefined,
+          address: r[addrIdx]?.trim() || undefined,
+          latitude: latIdx >= 0 ? parseFloat(r[latIdx]) || undefined : undefined,
+          longitude: lngIdx >= 0 ? parseFloat(r[lngIdx]) || undefined : undefined,
+          radiusMeter: radiusIdx >= 0 ? parseInt(r[radiusIdx]) || 100 : 100,
+          contactName: r[contactIdx]?.trim() || undefined,
+          phone: r[phoneIdx]?.trim() || undefined,
+        },
+      });
+      created++;
+    }
+
+    await audit({ userId: request.user!.id, action: 'PKL_LOCATIONS_IMPORTED', entity: 'PklLocation', entityId: `${created}`, request });
+    return reply.send({ success: true, message: `${created} lokasi ditambahkan, ${skipped} dilewati.` });
+  });
 }

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { MapPin, Plus, Trash2, Edit, Users, Search, Loader2, X, ChevronDown, Building2, GraduationCap } from 'lucide-react';
+import { MapPin, Plus, Trash2, Edit, Users, Search, Loader2, X, ChevronDown, Building2, GraduationCap, Download, Upload } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Input, Badge, EmptyState, Skeleton } from '../../lib/ui';
@@ -241,6 +241,8 @@ export default function PklManagement() {
   const [editLocation, setEditLocation] = useState<PklLocation | null>(null);
   const [assignTo, setAssignTo] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [importing, setImporting] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: locations, isLoading } = useQuery({
     queryKey: ['pkl-locations', search],
@@ -271,6 +273,36 @@ export default function PklManagement() {
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus.'),
   });
 
+  const downloadTemplate = () => {
+    window.open('/api/import/pkl-locations/template', '_blank');
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/import/pkl-locations', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: formData,
+      }).then((r) => r.json());
+      if (res.success) {
+        toast('success', res.message);
+        qc.invalidateQueries({ queryKey: ['pkl-locations'] });
+      } else {
+        toast('error', res.message || 'Gagal import.');
+      }
+    } catch {
+      toast('error', 'Gagal import lokasi PKL.');
+    } finally {
+      setImporting(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -289,9 +321,18 @@ export default function PklManagement() {
           ]}
         />
         {tab === 'locations' && (
-          <Button onClick={() => setShowForm('add-location')}>
-            <Plus className="h-4 w-4" /> Tambah Lokasi
-          </Button>
+          <div className="flex gap-2">
+            <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleImport} />
+            <Button variant="outline" onClick={downloadTemplate}>
+              <Download className="h-4 w-4" /> Template
+            </Button>
+            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importing}>
+              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Import CSV
+            </Button>
+            <Button onClick={() => setShowForm('add-location')}>
+              <Plus className="h-4 w-4" /> Tambah Lokasi
+            </Button>
+          </div>
         )}
       </div>
 
