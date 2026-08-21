@@ -8,7 +8,7 @@ import { useTheme } from '../../lib/theme';
 import { useToast } from '../../lib/toast';
 import { Button } from '../../lib/ui';
 import { useSocketEvent, joinDashboard } from '../../lib/socket';
-import { startCamera, stopCamera, decodeQrFromVideo } from '../../lib/camera';
+import { startCamera, stopCamera, decodeQrFromVideo, resetQrCache } from '../../lib/camera';
 import { detectFaceDescriptor, initFaceModels, isFaceModelReady } from '../../lib/face';
 import { feedbackSuccess, feedbackInfo, feedbackError } from '../../lib/feedback';
 import { Badge } from '../../lib/ui';
@@ -42,6 +42,8 @@ export default function Gate() {
   const streamRef = useRef<MediaStream | null>(null);
   const busyRef = useRef(false);
   const lastAlreadyAtRef = useRef(0);
+  const lastScanAtRef = useRef(0);
+  const qrHitAtRef = useRef(0); // cooldown: setelah QR berhasil, skip face sebentar
   const nfcReaderRef = useRef<NfcReader | null>(null);
 
   const [ready, setReady] = useState(false);
@@ -95,7 +97,7 @@ export default function Gate() {
       }
     } finally {
       busyRef.current = false;
-      setTimeout(() => setResult(null), 4000);
+      setTimeout(() => setResult(null), 2500);
     }
   }, []);
 
@@ -142,6 +144,7 @@ export default function Gate() {
     void startNfc();
     return () => {
       cancelled = true;
+      resetQrCache();
       stopCamera(streamRef.current);
       try {
         void nfcReaderRef.current?.stop?.();
@@ -151,15 +154,22 @@ export default function Gate() {
     };
   }, [startNfc]);
 
-  // Loop scan otomatis: QR ATAU wajah, tanpa klik sama sekali
+  // Loop scan otomatis: QR (prioritas) ATAU wajah — sangat cepat (±200ms)
   useEffect(() => {
     if (!ready) return;
     let alive = true;
     const loop = async () => {
       if (!alive) return;
       const video = videoRef.current;
+      const now = Date.now();
+      // Throttle: jangan scan terlalu cepat (min 150ms antar iterasi)
+      if (now - lastScanAtRef.current < 150) {
+        setTimeout(loop, 50);
+        return;
+      }
+      lastScanAtRef.current = now;
       if (video && video.readyState >= 2 && !busyRef.current) {
-        // 1) coba QR
+        // 1) coba QR DULU (prioritas — sangat cepat)
         let qrToken: string | null = null;
         try {
           qrToken = await decodeQrFromVideo(video);
@@ -167,20 +177,24 @@ export default function Gate() {
           qrToken = null;
         }
         if (qrToken) {
+          qrHitAtRef.current = now; // catat waktu QR terakhir terdeteksi
           await record({ token: qrToken }, 'QR');
         } else {
-          // 2) wajah: deteksi + ekstrak descriptor langsung di HP petugas
-          try {
-            const descriptor = await detectFaceDescriptor(video);
-            if (descriptor) {
-              await record({ descriptor: Array.from(descriptor), liveness: true }, 'WAJAH');
+          // 2) wajah: hanya jika tidak ada QR baru-baru ini (skip 800ms setelah QR)
+          const sinceLastQr = now - qrHitAtRef.current;
+          if (sinceLastQr > 800) {
+            try {
+              const descriptor = await detectFaceDescriptor(video);
+              if (descriptor) {
+                await record({ descriptor: Array.from(descriptor), liveness: true }, 'WAJAH');
+              }
+            } catch {
+              // lanjut iterasi berikutnya
             }
-          } catch {
-            // lanjut iterasi berikutnya
           }
         }
       }
-      setTimeout(loop, 1200);
+      setTimeout(loop, 200);
     };
     void loop();
     return () => {

@@ -216,7 +216,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post('/attendance/gate', { preHandler: app.authenticate, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (request, reply) => {
+  app.post('/attendance/gate', { preHandler: app.authenticate, config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (request, reply) => {
     // Mode gerbang: identitas dari bukti (wajah/QR/kartu) — petugas gerbang cukup membuka kamera
     const body = validate(checkSchema, request.body);
     const result = await recordAttendance({
