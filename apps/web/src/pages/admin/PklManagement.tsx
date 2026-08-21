@@ -274,7 +274,14 @@ export default function PklManagement() {
   });
 
   const downloadTemplate = () => {
-    window.open('/api/import/pkl-locations/template', '_blank');
+    const csv = '\uFEFFNama Tempat,Kota,Alamat,Latitude,Longitude,Radius (meter),Kontak / PIC,No. HP\nPT. Maju Jaya,Kediri,Jl. Raya No. 123,-7.8205,112.0153,100,Budi Santoso,08123456789\n';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'template-lokasi-pkl.csv';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
