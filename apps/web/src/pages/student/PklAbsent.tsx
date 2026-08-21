@@ -12,6 +12,8 @@ import { STATUS_LABELS } from '../../lib/format';
 
 interface PklAssignment {
   assignmentId: string;
+  studentId: string;
+  nis: string | null;
   locationId: string;
   locationName: string;
   locationCity: string | null;
@@ -57,10 +59,12 @@ export default function PklAbsent() {
   // Fetch PKL assignment for this student
   const { data: assignments, isLoading } = useQuery({
     queryKey: ['pkl-my-assignment'],
-    queryFn: () => api<{ success: boolean; data: PklAssignment[] }>('/pkl/students').then((r) => {
-      const myData = (r.data ?? []).filter((s: PklAssignment & { studentId?: string }) => s.studentId === (user as Record<string, unknown>)?.student?.id || s.nis === (user as Record<string, unknown>)?.student?.nis);
-      return myData;
-    }),
+    queryFn: async () => {
+      const r = await api<{ success: boolean; data: PklAssignment[] }>('/pkl/students');
+      const myStudentId = user?.student?.id;
+      const myNis = user?.student?.nis;
+      return (r.data ?? []).filter((s) => s.studentId === myStudentId || s.nis === myNis);
+    },
     enabled: !!user,
   });
 
@@ -132,7 +136,8 @@ export default function PklAbsent() {
                   ...(gps ? { latitude: gps.latitude, longitude: gps.longitude } : {}),
                 },
               });
-              setResult({ ok: true, message: res.message, ...res.data });
+              const d = res.data as CheckResult;
+              setResult({ ok: true, message: res.message, status: d.status, checkIn: d.checkIn, checkOut: d.checkOut, locationVerified: d.locationVerified });
               feedbackSuccess();
               qc.invalidateQueries({ queryKey: ['dashboard'] });
             } catch (e) {
