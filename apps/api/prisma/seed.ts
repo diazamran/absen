@@ -140,7 +140,10 @@ async function main() {
     { name: 'TPTUP', code: 'TPTUP' }, // Teknik Pendingin dan Tata Udara Penerbangan
     { name: 'KULINER', code: 'KULINER' }, // Tata Boga / Kuliner
   ]) {
-    const major = await prisma.major.upsert({ where: { name: m.name }, update: {}, create: m });
+    const existing = await prisma.major.findFirst({ where: { OR: [{ name: m.name }, { code: m.code }] } });
+    const major = existing
+      ? await prisma.major.update({ where: { id: existing.id }, data: { name: m.name, code: m.code } })
+      : await prisma.major.create({ data: m });
     majors[m.name] = major.id;
   }
 
@@ -150,11 +153,10 @@ async function main() {
     { name: 'Bahasa Indonesia', code: 'BIN', color: '#2563eb' },
     { name: 'Ilmu Pengetahuan Alam', code: 'IPA', color: '#7c3aed' },
   ]) {
-    const subj = await prisma.subject.upsert({
-      where: { name: s.name },
-      update: {},
-      create: { name: s.name, code: s.code, color: s.color },
-    });
+    const existing = await prisma.subject.findFirst({ where: { OR: [{ name: s.name }, { code: s.code }] } });
+    const subj = existing
+      ? await prisma.subject.update({ where: { id: existing.id }, data: { name: s.name, code: s.code, color: s.color } })
+      : await prisma.subject.create({ data: { name: s.name, code: s.code, color: s.color } });
     subjects[s.name] = subj.id;
   }
 
