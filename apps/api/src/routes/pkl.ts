@@ -116,7 +116,7 @@ export async function pklRoutes(app: FastifyInstance) {
     const existing = await prisma.pklAssignment.findFirst({
       where: { studentId: body.studentId, pklLocationId: body.pklLocationId },
     });
-    if (existing) throw ApiError.conflict('Siswa sudah ditugaskan ke lokasi ini.');
+    if (existing) throw ApiError.conflict('ALREADY_ASSIGNED', 'Siswa sudah ditugaskan ke lokasi ini.');
     const row = await prisma.pklAssignment.create({
       data: {
         studentId: body.studentId,
@@ -267,7 +267,7 @@ export async function pklRoutes(app: FastifyInstance) {
       const existing = await prisma.attendance.findFirst({
         where: { userId: student.userId, date: today, type: 'CHECK_IN' },
       });
-      if (!existing) throw ApiError.badRequest('Belum absen PKL hari ini.');
+      if (!existing) throw ApiError.badRequest('NOT_CHECKED_IN', 'Belum absen PKL hari ini.');
 
       const att = await prisma.attendance.update({
         where: { id: existing.id },
