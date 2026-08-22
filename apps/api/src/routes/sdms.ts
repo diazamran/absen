@@ -284,8 +284,9 @@ export async function sdmsRoutes(app: FastifyInstance) {
     }
 
     const baseUrl = (settings.apiBaseUrl as string) || 'https://sdms.sekolah.id/api/v1/master';
+    // Try API Key as Bearer first, then API Secret
     const headers = {
-      'Authorization': `Bearer ${apiSecret}`,
+      'Authorization': `Bearer ${apiKey}`,
       'X-API-Key': apiKey,
     };
 
@@ -368,23 +369,30 @@ export async function sdmsRoutes(app: FastifyInstance) {
 
     // Try to fetch a small amount of data to verify connection
     const baseUrl = (settings.apiBaseUrl as string) || 'https://sdms.sekolah.id/api/v1/master';
-    try {
-      const res = await fetch(`${baseUrl}/siswa?limit=1`, {
-        headers: {
-          'Authorization': `Bearer ${apiSecret}`,
-          'X-API-Key': apiKey,
-        },
-      });
+    
+    // Try multiple auth methods
+    const authMethods = [
+      // Method 1: API Key as Bearer token
+      { headers: { 'Authorization': `Bearer ${apiKey}`, 'X-API-Key': apiKey } },
+      // Method 2: API Secret as Bearer token (original)
+      { headers: { 'Authorization': `Bearer ${apiSecret}`, 'X-API-Key': apiKey } },
+      // Method 3: Only X-API-Key header
+      { headers: { 'X-API-Key': apiKey } },
+    ];
 
-      if (res.ok) {
-        return reply.send({ success: true, message: 'Koneksi ke SDMS berhasil.' });
-      } else {
+    let lastError = '';
+    for (const auth of authMethods) {
+      try {
+        const res = await fetch(`${baseUrl}/siswa?limit=1`, auth);
+        if (res.ok) {
+          return reply.send({ success: true, message: 'Koneksi ke SDMS berhasil.' });
+        }
         const text = await res.text().catch(() => '');
-        return reply.status(400).send({ success: false, message: `SDMS mengembalikan error ${res.status}: ${text.slice(0, 200)}` });
+        lastError = `${res.status}: ${text.slice(0, 150)}`;
+      } catch (error: unknown) {
+        lastError = error instanceof Error ? error.message : String(error);
       }
-    } catch (error: unknown) {
-      const errMsg = error instanceof Error ? error.message : String(error);
-      throw ApiError.badRequest('CONNECTION_FAILED', `Gagal koneksi ke SDMS (${baseUrl}): ${errMsg}`);
     }
+    return reply.status(400).send({ success: false, message: `SDMS mengembalikan error: ${lastError}` });
   });
 }
