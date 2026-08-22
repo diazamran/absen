@@ -109,7 +109,7 @@ export default function SDMSIntegration() {
         <h4 className="text-sm font-bold text-ink mb-4">Konfigurasi Koneksi</h4>
         
         <div className="space-y-4">
-          <Field label="API Key SDMS" htmlFor="apiKey">
+          <Field label="API Key SDMS">
             <Input
               id="apiKey"
               value={apiKey}
@@ -118,7 +118,7 @@ export default function SDMSIntegration() {
             />
           </Field>
 
-          <Field label="API Secret SDMS" htmlFor="apiSecret">
+          <Field label="API Secret SDMS">
             <Input
               id="apiSecret"
               type="password"
@@ -128,7 +128,7 @@ export default function SDMSIntegration() {
             />
           </Field>
 
-          <Field label="Webhook URL (untuk diberikan ke SDMS)" htmlFor="webhookUrl">
+          <Field label="Webhook URL (untuk diberikan ke SDMS)">
             <Input
               id="webhookUrl"
               value={webhookUrl}
@@ -181,40 +181,42 @@ export default function SDMSIntegration() {
       </Card>
 
       {/* Sync Results */}
-      {lastSyncData?.results && (
-        <Card className="p-6">
-          <h4 className="text-sm font-bold text-ink mb-4">Hasil Sinkronisasi Terakhir</h4>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center p-3 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">{(lastSyncData.results as Record<string, unknown>).students as number || 0}</div>
-              <div className="text-xs text-green-700">Siswa</div>
-            </div>
-            <div className="text-center p-3 bg-blue-50 rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">{(lastSyncData.results as Record<string, unknown>).teachers as number || 0}</div>
-              <div className="text-xs text-blue-700">Guru</div>
-            </div>
-            <div className="text-center p-3 bg-purple-50 rounded-lg">
-              <div className="text-2xl font-bold text-purple-600">{(lastSyncData.results as Record<string, unknown>).classes as number || 0}</div>
-              <div className="text-xs text-purple-700">Kelas</div>
-            </div>
-          </div>
-          
-          {(lastSyncData.results as Record<string, unknown>).errors && 
-            ((lastSyncData.results as Record<string, unknown>).errors as string[]).length > 0 && (
-            <div className="mt-4 p-3 bg-red-50 rounded-lg">
-              <div className="flex items-center gap-2 text-red-700 text-sm font-medium mb-2">
-                <AlertCircle className="h-4 w-4" />
-                Error ({((lastSyncData.results as Record<string, unknown>).errors as string[]).length})
+      {lastSyncData?.results && (() => {
+        const res = lastSyncData.results as { students?: number; teachers?: number; classes?: number; errors?: string[] };
+        return (
+          <Card className="p-6">
+            <h4 className="text-sm font-bold text-ink mb-4">Hasil Sinkronisasi Terakhir</h4>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center p-3 bg-green-50 rounded-lg">
+                <div className="text-2xl font-bold text-green-600">{res.students || 0}</div>
+                <div className="text-xs text-green-700">Siswa</div>
               </div>
-              <ul className="text-xs text-red-600 space-y-1">
-                {((lastSyncData.results as Record<string, unknown>).errors as string[]).slice(0, 5).map((err, i) => (
-                  <li key={i}>• {err}</li>
-                ))}
-              </ul>
+              <div className="text-center p-3 bg-blue-50 rounded-lg">
+                <div className="text-2xl font-bold text-blue-600">{res.teachers || 0}</div>
+                <div className="text-xs text-blue-700">Guru</div>
+              </div>
+              <div className="text-center p-3 bg-purple-50 rounded-lg">
+                <div className="text-2xl font-bold text-purple-600">{res.classes || 0}</div>
+                <div className="text-xs text-purple-700">Kelas</div>
+              </div>
             </div>
-          )}
-        </Card>
-      )}
+            
+            {res.errors && res.errors.length > 0 && (
+              <div className="mt-4 p-3 bg-red-50 rounded-lg">
+                <div className="flex items-center gap-2 text-red-700 text-sm font-medium mb-2">
+                  <AlertCircle className="h-4 w-4" />
+                  Error ({res.errors.length})
+                </div>
+                <ul className="text-xs text-red-600 space-y-1">
+                  {res.errors.slice(0, 5).map((err, i) => (
+                    <li key={i}>• {err}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </Card>
+        );
+      })()}
 
       {/* Help */}
       <Card className="p-6 bg-amber-50 border-amber-200">
