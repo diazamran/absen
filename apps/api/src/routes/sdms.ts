@@ -122,8 +122,8 @@ async function findClassByName(sdmaName: string): Promise<string | undefined> {
   const normalized = normalizeClassName(sdmaName);
 
   // 1. Exact match
-  let kelas = await prisma.class.findFirst({ where: { name: sdmaName } });
-  if (kelas) return kelas.id;
+  const exact = await prisma.class.findFirst({ where: { name: sdmaName } });
+  if (exact) return exact.id;
 
   // 2. Normalized match (compare all classes)
   const allClasses = await prisma.class.findMany({ select: { id: true, name: true } });
@@ -136,11 +136,11 @@ async function findClassByName(sdmaName: string): Promise<string | undefined> {
   if (parts.length >= 2) {
     const grade = parts[0]; // X, XI, XII
     const majorCode = parts[1]; // KULINER, TKJ, TKR
-    kelas = allClasses.find((c) => {
+    const partial = allClasses.find((c) => {
       const cn = normalizeClassName(c.name);
       return cn.includes(grade) && cn.includes(majorCode);
     });
-    if (kelas) return kelas.id;
+    if (partial) return partial.id;
   }
 
   return undefined;
