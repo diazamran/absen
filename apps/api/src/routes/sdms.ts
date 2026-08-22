@@ -260,7 +260,7 @@ export async function sdmsRoutes(app: FastifyInstance) {
           break;
       }
 
-      const webhookData = { lastWebhook: new Date().toISOString(), event };
+      const webhookData = JSON.parse(JSON.stringify({ lastWebhook: new Date().toISOString(), event }));
       await prisma.schoolSetting.upsert({
         where: { key: 'sdms_last_sync' },
         update: { value: webhookData },
@@ -310,15 +310,16 @@ export async function sdmsRoutes(app: FastifyInstance) {
       sdmsPassword: body.sdmsPassword === '••••••••' ? (current.sdmsPassword as string) : body.sdmsPassword,
     };
 
+    const settingsJson = JSON.parse(JSON.stringify(toSave));
     await prisma.schoolSetting.upsert({
       where: { key: 'sdms' },
       update: {
-        value: toSave as object,
+        value: settingsJson,
         updatedById: request.user!.id,
       },
       create: {
         key: 'sdms',
-        value: toSave as object,
+        value: settingsJson,
         updatedById: request.user!.id,
       },
     });
@@ -466,10 +467,11 @@ export async function sdmsRoutes(app: FastifyInstance) {
       }
 
       const syncData = { lastPull: new Date().toISOString(), results };
+      const syncJson = JSON.parse(JSON.stringify(syncData));
       await prisma.schoolSetting.upsert({
         where: { key: 'sdms_last_sync' },
-        update: { value: syncData },
-        create: { key: 'sdms_last_sync', value: syncData },
+        update: { value: syncJson },
+        create: { key: 'sdms_last_sync', value: syncJson },
       });
 
       await audit({
