@@ -116,32 +116,60 @@ function normalizeClassName(name: string): string {
     .replace(/^-|-$/g, '');    // hapus strip awal/akhir
 }
 
-// Helper: find class by fuzzy name match
+// Class cache — loaded once per sync,避免 repeated queries
+type ClassInfo = { id: string; name: string; normalizedName: string; grade: string; majorName: string; number: string };
+let classCache: ClassInfo[] | null = null;
+
+async function getClassCache(): Promise<ClassInfo[]> {
+  if (classCache) return classCache;
+  const all = await prisma.class.findMany({ select: { id: true, name: true } });
+  classCache = all.map((c) => {
+    const n = normalizeClassName(c.name);
+    // Extract: "X-KULINER-1" → grade=X, majorName=KULINER, number=1
+    const parts = n.split('-');
+    return {
+      id: c.id,
+      name: c.name,
+      normalizedName: n,
+      grade: parts[0] || '',
+      majorName: parts[1] || '',
+      number: parts[2] || '',
+    };
+  });
+  return classCache;
+}
+
+function clearClassCache() { classCache = null; }
+
+// Helper: find class by fuzzy name match (uses cache)
 async function findClassByName(sdmaName: string): Promise<string | undefined> {
   if (!sdmaName) return undefined;
   const normalized = normalizeClassName(sdmaName);
+  const cache = await getClassCache();
 
   // 1. Exact match
-  const exact = await prisma.class.findFirst({ where: { name: sdmaName } });
+  const exact = cache.find((c) => c.name === sdmaName);
   if (exact) return exact.id;
 
-  // 2. Normalized match (compare all classes)
-  const allClasses = await prisma.class.findMany({ select: { id: true, name: true } });
-  for (const c of allClasses) {
-    if (normalizeClassName(c.name) === normalized) return c.id;
-  }
+  // 2. Normalized match
+  const normMatch = cache.find((c) => c.normalizedName === normalized);
+  if (normMatch) return normMatch.id;
 
-  // 3. Partial match: "X-KULINER-1" matches "X KULINER 1"
-  const parts = normalized.split('-');
-  if (parts.length >= 2) {
-    const grade = parts[0]; // X, XI, XII
-    const majorCode = parts[1]; // KULINER, TKJ, TKR
-    const partial = allClasses.find((c) => {
-      const cn = normalizeClassName(c.name);
-      return cn.includes(grade) && cn.includes(majorCode);
-    });
-    if (partial) return partial.id;
-  }
+  // 3. Parse SDMS name: "X KULINER 1" → grade=X, major=KULINER, num=1
+  const sdmsParts = normalized.split('-');
+  const sdmsGrade = sdmsParts[0] || '';
+  const sdmsMajor = sdmsParts[1] || '';
+  const sdmsNum = sdmsParts[2] || '';
+
+  // Find class with SAME grade + major + number
+  const partial = cache.find((c) => {
+    return c.grade === sdmsGrade && c.majorName === sdmsMajor && c.number === sdmsNum;
+  });
+  if (partial) return partial.id;
+
+  // 4. Last resort: same grade + major (any number) — only if exact number not found
+  // This prevents wrong matching (e.g. "X KULINER 1" → "X KULINER 2")
+  // Skip this to avoid false positives
 
   return undefined;
 }
@@ -515,33 +543,13 @@ export async function sdmsRoutes(app: FastifyInstance) {
     const headers = { 'Authorization': `Bearer ${token}` };
     const results: Record<string, unknown> = { students: 0, teachers: 0, classes: 0, errors: [] as string[] };
 
+    // Clear class cache agar sync selalu pakai data terbaru
+    clearClassCache();
+
     try {
-      // Sync siswa (paginated)
+      // 1. Sync GURU dulu (agar wali kelas bisa di-resolve)
       let page = 1;
       let hasMore = true;
-      while (hasMore) {
-        const siswaRes = await fetch(`${baseUrl}/siswa?limit=500&page=${page}`, { headers });
-        if (siswaRes.ok) {
-          const json = await siswaRes.json() as { data: Array<Record<string, unknown>>; meta: { totalPages: number } };
-          const data = json.data || [];
-          for (const s of data) {
-            try {
-              await upsertSiswa(s);
-              (results.students as number)++;
-            } catch (e) {
-              (results.errors as string[]).push(`Siswa ${s.nisn}: ${e}`);
-            }
-          }
-          hasMore = page < (json.meta?.totalPages || 1);
-          page++;
-        } else {
-          hasMore = false;
-        }
-      }
-
-      // Sync guru
-      page = 1;
-      hasMore = true;
       while (hasMore) {
         const guruRes = await fetch(`${baseUrl}/guru?limit=500&page=${page}`, { headers });
         if (guruRes.ok) {
@@ -562,7 +570,7 @@ export async function sdmsRoutes(app: FastifyInstance) {
         }
       }
 
-      // Sync kelas
+      // 2. Sync KELAS (agar siswa bisa di-link ke kelas yang benar)
       const kelasRes = await fetch(`${baseUrl}/kelas?limit=500`, { headers });
       if (kelasRes.ok) {
         const json = await kelasRes.json() as { data: Array<Record<string, unknown>> };
@@ -573,6 +581,32 @@ export async function sdmsRoutes(app: FastifyInstance) {
           } catch (e) {
             (results.errors as string[]).push(`Kelas ${(k as Record<string, unknown>).nama}: ${e}`);
           }
+        }
+      }
+
+      // Clear cache lagi setelah kelas sync (agar siswa sync pakai data terbaru)
+      clearClassCache();
+
+      // 3. Sync SISWA (setelah kelas & guru ada)
+      page = 1;
+      hasMore = true;
+      while (hasMore) {
+        const siswaRes = await fetch(`${baseUrl}/siswa?limit=500&page=${page}`, { headers });
+        if (siswaRes.ok) {
+          const json = await siswaRes.json() as { data: Array<Record<string, unknown>>; meta: { totalPages: number } };
+          const data = json.data || [];
+          for (const s of data) {
+            try {
+              await upsertSiswa(s);
+              (results.students as number)++;
+            } catch (e) {
+              (results.errors as string[]).push(`Siswa ${s.nisn}: ${e}`);
+            }
+          }
+          hasMore = page < (json.meta?.totalPages || 1);
+          page++;
+        } else {
+          hasMore = false;
         }
       }
 
