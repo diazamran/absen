@@ -205,10 +205,11 @@ export async function sdmsRoutes(app: FastifyInstance) {
       }
 
       // Log sync
+      const webhookData = { lastWebhook: new Date().toISOString(), event };
       await prisma.schoolSetting.upsert({
         where: { key: 'sdms_last_sync' },
-        update: { value: { lastWebhook: new Date().toISOString(), event } },
-        create: { key: 'sdms_last_sync', value: { lastWebhook: new Date().toISOString(), event } },
+        update: { value: webhookData },
+        create: { key: 'sdms_last_sync', value: webhookData },
       });
 
       return reply.send({ status: 'ok' });
@@ -332,10 +333,11 @@ export async function sdmsRoutes(app: FastifyInstance) {
       }
 
       // Update last sync
+      const syncData = { lastPull: new Date().toISOString(), results: results as unknown as object };
       await prisma.schoolSetting.upsert({
         where: { key: 'sdms_last_sync' },
-        update: { value: { lastPull: new Date().toISOString(), results } },
-        create: { key: 'sdms_last_sync', value: { lastPull: new Date().toISOString(), results } },
+        update: { value: syncData },
+        create: { key: 'sdms_last_sync', value: syncData },
       });
 
       await audit({
