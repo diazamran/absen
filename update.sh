@@ -38,6 +38,10 @@ echo "➜ Membersihkan data absensi hari ini..."
 WEB_PORT="$WEB_PORT" docker compose $COMPOSE_FILES exec -T postgres psql -U postgres -d presensiku -c "DELETE FROM \"Attendance\" WHERE DATE(\"clockIn\") = CURRENT_DATE OR DATE(\"createdAt\") = CURRENT_DATE;" 2>/dev/null || true
 WEB_PORT="$WEB_PORT" docker compose $COMPOSE_FILES exec -T postgres psql -U postgres -d presensiku -c "DELETE FROM \"Notification\" WHERE DATE(\"createdAt\") = CURRENT_DATE;" 2>/dev/null || true
 
+# Reset hasil sinkronisasi SDMS
+echo "➜ Reset hasil sinkronisasi SDMS..."
+WEB_PORT="$WEB_PORT" docker compose $COMPOSE_FILES exec -T postgres psql -U postgres -d presensiku -c "DELETE FROM \"SchoolSetting\" WHERE key = 'sdms_last_sync';" 2>/dev/null || true
+
 echo ""
 echo "✅ Update selesai (data absensi hari ini dikosongkan)."
 docker compose $COMPOSE_FILES ps
