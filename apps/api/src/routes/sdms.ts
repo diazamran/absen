@@ -371,7 +371,7 @@ export async function sdmsRoutes(app: FastifyInstance) {
     const baseUrl = (settings.apiBaseUrl as string) || 'https://sdms.sekolah.id/api/v1/master';
     
     // Try multiple auth methods
-    const authMethods = [
+    const authMethods: Array<{ headers: Record<string, string> }> = [
       // Method 1: API Key as Bearer token
       { headers: { 'Authorization': `Bearer ${apiKey}`, 'X-API-Key': apiKey } },
       // Method 2: API Secret as Bearer token (original)
