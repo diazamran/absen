@@ -457,8 +457,9 @@ export async function sdmsRoutes(app: FastifyInstance) {
     try {
       const res = await fetch(`${baseUrl}/siswa?limit=1`, { headers });
       if (res.ok) {
-        const data = await res.json();
-        const count = Array.isArray(data?.data) ? data.data.length : (Array.isArray(data) ? data.length : 0);
+        const data = await res.json() as Record<string, unknown>;
+        const dataArr = data.data as unknown[] | undefined;
+        const count = Array.isArray(dataArr) ? dataArr.length : (Array.isArray(data) ? (data as unknown[]).length : 0);
         return reply.send({
           success: true,
           message: `Koneksi ke SDMS berhasil! Login OK, data siswa ditemukan (${count} record).`,
