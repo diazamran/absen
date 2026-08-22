@@ -370,52 +370,35 @@ export async function sdmsRoutes(app: FastifyInstance) {
     // Try to fetch a small amount of data to verify connection
     const baseUrl = (settings.apiBaseUrl as string) || 'https://sdms.sekolah.id/api/v1/master';
     
-    // Step 1: Try to get access token from SDMS login endpoint
-    let accessToken = '';
-    const loginUrls = [
-      `${baseUrl.replace('/api/v1/master', '')}/api/v1/auth/login`,
-      `${baseUrl.replace('/api/v1/master', '')}/api/auth/login`,
-      `${baseUrl.replace('/api/v1/master', '')}/auth/login`,
+    // Try multiple auth methods - try ALL combinations
+    const authMethods: Array<{ name: string; headers: Record<string, string> }> = [
+      // Basic Auth with API Key + Secret
+      { name: 'Basic', headers: { 'Authorization': `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')}` } },
+      // Bearer apiKey + X-API-Key apiKey
+      { name: 'BearerApiKey', headers: { 'Authorization': `Bearer ${apiKey}`, 'X-API-Key': apiKey } },
+      // Bearer apiSecret + X-API-Key apiKey
+      { name: 'BearerSecret', headers: { 'Authorization': `Bearer ${apiSecret}`, 'X-API-Key': apiKey } },
+      // X-API-Key + X-API-Secret
+      { name: 'DualKey', headers: { 'X-API-Key': apiKey, 'X-API-Secret': apiSecret } },
+      // X-API-Key only
+      { name: 'ApiKeyOnly', headers: { 'X-API-Key': apiKey } },
+      // api_key query-style header
+      { name: 'ApiKeyValue', headers: { 'api_key': apiKey, 'api_secret': apiSecret } },
     ];
 
-    for (const loginUrl of loginUrls) {
-      try {
-        const loginRes = await fetch(loginUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ api_key: apiKey, api_secret: apiSecret }),
-        });
-        if (loginRes.ok) {
-          const loginData = await loginRes.json() as Record<string, unknown>;
-          accessToken = (loginData.access_token || loginData.token || loginData.data?.toString() || '') as string;
-          if (accessToken) break;
-        }
-      } catch { /* ignore */ }
-    }
-
-    // Step 2: Try fetching data with token or direct API key
-    const authMethods: Array<{ headers: Record<string, string> }> = [];
-    
-    if (accessToken) {
-      authMethods.push({ headers: { 'Authorization': `Bearer ${accessToken}`, 'X-API-Key': apiKey } });
-    }
-    authMethods.push({ headers: { 'Authorization': `Bearer ${apiKey}`, 'X-API-Key': apiKey } });
-    authMethods.push({ headers: { 'Authorization': `Bearer ${apiSecret}`, 'X-API-Key': apiKey } });
-    authMethods.push({ headers: { 'X-API-Key': apiKey } });
-
-    let lastError = accessToken ? `login ok (token: ${accessToken.slice(0,20)}...)` : 'login gagal';
+    const errors: string[] = [];
     for (const auth of authMethods) {
       try {
-        const res = await fetch(`${baseUrl}/siswa?limit=1`, auth);
+        const res = await fetch(`${baseUrl}/siswa?limit=1`, { headers: auth.headers });
         if (res.ok) {
-          return reply.send({ success: true, message: 'Koneksi ke SDMS berhasil.' });
+          return reply.send({ success: true, message: `Koneksi ke SDMS berhasil (${auth.name}).` });
         }
         const text = await res.text().catch(() => '');
-        lastError = `${res.status}: ${text.slice(0, 150)}`;
+        errors.push(`${auth.name}: ${res.status} ${text.slice(0, 80)}`);
       } catch (error: unknown) {
-        lastError = error instanceof Error ? error.message : String(error);
+        errors.push(`${auth.name}: ${error instanceof Error ? error.message : 'network error'}`);
       }
     }
-    return reply.status(400).send({ success: false, message: `SDMS: ${lastError}` });
+    return reply.status(400).send({ success: false, message: `Semua metode gagal:\n${errors.join('\n')}` });
   });
 }
