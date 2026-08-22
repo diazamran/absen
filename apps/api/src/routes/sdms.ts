@@ -106,6 +106,46 @@ async function findMajorFromSDMS(jurusan: Record<string, unknown> | undefined): 
   return major.id;
 }
 
+// Helper: normalize class name for fuzzy matching
+// "X KULINER 1" → "X-KULINER-1", "XI TKR 1" → "XI-TKR-1"
+function normalizeClassName(name: string): string {
+  return name
+    .toUpperCase()
+    .replace(/\s+/g, '-')     // spasi → strip
+    .replace(/-+/g, '-')      // double strip → single
+    .replace(/^-|-$/g, '');    // hapus strip awal/akhir
+}
+
+// Helper: find class by fuzzy name match
+async function findClassByName(sdmaName: string): Promise<string | undefined> {
+  if (!sdmaName) return undefined;
+  const normalized = normalizeClassName(sdmaName);
+
+  // 1. Exact match
+  let kelas = await prisma.class.findFirst({ where: { name: sdmaName } });
+  if (kelas) return kelas.id;
+
+  // 2. Normalized match (compare all classes)
+  const allClasses = await prisma.class.findMany({ select: { id: true, name: true } });
+  for (const c of allClasses) {
+    if (normalizeClassName(c.name) === normalized) return c.id;
+  }
+
+  // 3. Partial match: "X-KULINER-1" matches "X KULINER 1"
+  const parts = normalized.split('-');
+  if (parts.length >= 2) {
+    const grade = parts[0]; // X, XI, XII
+    const majorCode = parts[1]; // KULINER, TKJ, TKR
+    kelas = allClasses.find((c) => {
+      const cn = normalizeClassName(c.name);
+      return cn.includes(grade) && cn.includes(majorCode);
+    });
+    if (kelas) return kelas.id;
+  }
+
+  return undefined;
+}
+
 // Helper: find teacher by SDMS waliKelas name
 async function findTeacherByName(nama: string): Promise<string | undefined> {
   if (!nama) return undefined;
@@ -135,16 +175,10 @@ async function upsertSiswa(payload: Record<string, unknown>) {
   // Resolve major from nested jurusan object
   const majorId = await findMajorFromSDMS(jurusan);
 
-  // Resolve class by NAME (SDMS UUID != presensiku UUID)
+  // Resolve class by fuzzy name match
   let classId: string | undefined;
   if (kelasData?.nama) {
-    const kelas = await prisma.class.findFirst({ where: { name: kelasData.nama as string } });
-    if (kelas) classId = kelas.id;
-  }
-  // Fallback: try by SDMS kelas_id (unlikely to match but worth trying)
-  if (!classId && payload.kelas_id) {
-    const kelas = await prisma.class.findFirst({ where: { id: payload.kelas_id as string } });
-    if (kelas) classId = kelas.id;
+    classId = await findClassByName(kelasData.nama as string);
   }
 
   if (existing) {
@@ -244,7 +278,9 @@ async function upsertKelas(payload: Record<string, unknown>) {
     homeroomTeacherId = await findTeacherByName(waliKelas.nama as string);
   }
 
-  const existing = await prisma.class.findFirst({ where: { name: nama } });
+  // Find existing class by fuzzy name match
+  const existingId = await findClassByName(nama);
+  const existing = existingId ? await prisma.class.findUnique({ where: { id: existingId } }) : null;
   if (existing) {
     // Update existing class with new major/wali kelas/room data
     const updateData: Record<string, unknown> = {};
