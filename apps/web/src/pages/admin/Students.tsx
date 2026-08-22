@@ -91,9 +91,7 @@ export default function Students() {
 
   const bulkDelete = useMutation({
     mutationFn: async () => {
-      for (const id of selected) {
-        await api(`/students/${id}`, { method: 'DELETE' });
-      }
+      await api('/students/bulk-delete', { method: 'POST', body: { ids: Array.from(selected) } });
     },
     onSuccess: () => {
       toast('success', `${selected.size} siswa dihapus permanen.`);

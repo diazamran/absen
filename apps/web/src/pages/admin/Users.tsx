@@ -75,9 +75,7 @@ export default function Users() {
 
   const bulkDelete = useMutation({
     mutationFn: async () => {
-      for (const id of selected) {
-        await api(`/users/${id}`, { method: 'DELETE' });
-      }
+      await api('/users/bulk-delete', { method: 'POST', body: { ids: Array.from(selected) } });
     },
     onSuccess: () => {
       toast('success', `${selected.size} akun dihapus permanen.`);

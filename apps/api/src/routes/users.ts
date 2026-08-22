@@ -243,6 +243,76 @@ export async function userRoutes(app: FastifyInstance) {
     return reply.send({ success: true, message: 'Akun diperbarui.' });
   });
 
+  // Bulk delete — hapus banyak akun sekaligus (satu transaksi, sangat cepat)
+  app.post('/users/bulk-delete', { preHandler: app.requirePermission(PERMISSION_KEYS.usersDelete) }, async (request, reply) => {
+    const { ids } = request.body as { ids: string[] };
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      throw ApiError.badRequest('VALIDATION_ERROR', 'Array ids wajib diisi.');
+    }
+    if (ids.length > 500) {
+      throw ApiError.badRequest('VALIDATION_ERROR', 'Maksimal 500 akun per sekali hapus.');
+    }
+    // Prevent self-delete
+    if (ids.includes(request.user!.id)) {
+      throw ApiError.badRequest('CANNOT_DELETE_SELF', 'Tidak bisa menghapus akun sendiri.');
+    }
+
+    const users = await prisma.user.findMany({
+      where: { id: { in: ids } },
+      include: { role: true, teacher: true, staff: true, student: true, parent: true },
+    });
+
+    // Block non-SUPER_ADMIN from deleting SUPER_ADMIN accounts
+    if (request.user?.roleKey !== 'SUPER_ADMIN') {
+      const superAdminTargets = users.filter((u) => u.role?.key === 'SUPER_ADMIN');
+      if (superAdminTargets.length > 0) {
+        throw ApiError.forbidden('FORBIDDEN', 'Hanya Super Admin yang bisa menghapus akun Super Admin.');
+      }
+    }
+
+    const userIds = users.map((u) => u.id);
+    const teacherIds = users.filter((u) => u.teacher).map((u) => u.teacher!.id);
+    const staffIds = users.filter((u) => u.staff).map((u) => u.staff!.id);
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Batched deleteMany per table (sangat cepat)
+      await tx.attendance.deleteMany({ where: { OR: [
+        { userId: { in: userIds } },
+        { teacherId: { in: teacherIds } },
+        { staffId: { in: staffIds } },
+        { createdById: { in: userIds } },
+      ] } });
+      await tx.faceEmbedding.deleteMany({ where: { userId: { in: userIds } } });
+      await tx.faceProfile.deleteMany({ where: { userId: { in: userIds } } });
+      await tx.qrCredential.deleteMany({ where: { userId: { in: userIds } } });
+      await tx.cardCredential.deleteMany({ where: { userId: { in: userIds } } });
+      await tx.leaveApproval.deleteMany({ where: { approverId: { in: userIds } } });
+      await tx.leaveRequest.deleteMany({ where: { userId: { in: userIds } } });
+      await tx.notification.deleteMany({ where: { userId: { in: userIds } } });
+      await tx.session.deleteMany({ where: { userId: { in: userIds } } });
+      await tx.refreshToken.deleteMany({ where: { userId: { in: userIds } } });
+      await tx.device.deleteMany({ where: { userId: { in: userIds } } });
+      await tx.schedule.deleteMany({ where: { teacherId: { in: teacherIds } } });
+      await tx.teachingJournal.deleteMany({ where: { teacherId: { in: teacherIds } } });
+      // Profiles
+      if (teacherIds.length > 0) await tx.teacher.deleteMany({ where: { userId: { in: userIds } } });
+      if (staffIds.length > 0) await tx.staff.deleteMany({ where: { userId: { in: userIds } } });
+      await tx.student.deleteMany({ where: { userId: { in: userIds } } });
+      await tx.parent.deleteMany({ where: { userId: { in: userIds } } });
+      await tx.user.deleteMany({ where: { id: { in: userIds } } });
+    });
+
+    await audit({
+      userId: request.user!.id,
+      action: 'USERS_BULK_DELETED',
+      entity: 'User',
+      newValue: { count: ids.length },
+      request,
+    });
+
+    return reply.send({ success: true, message: `${ids.length} akun dihapus permanen.` });
+  });
+
   app.delete('/users/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.usersDelete) }, async (request, reply) => {
     const { id } = request.params as { id: string };
     if (id === request.user!.id) {

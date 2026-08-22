@@ -325,6 +325,78 @@ export async function studentRoutes(app: FastifyInstance) {
     return reply.send({ success: true, message: 'Data siswa diperbarui.' });
   });
 
+  // Bulk delete — hapus banyak siswa sekaligus (satu transaksi, sangat cepat)
+  app.post('/students/bulk-delete', { preHandler: app.requirePermission(PERMISSION_KEYS.studentsDelete) }, async (request, reply) => {
+    const { ids } = request.body as { ids: string[] };
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      throw ApiError.badRequest('VALIDATION_ERROR', 'Array ids wajib diisi.');
+    }
+    if (ids.length > 500) {
+      throw ApiError.badRequest('VALIDATION_ERROR', 'Maksimal 500 siswa per sekali hapus.');
+    }
+
+    // Find all students with their users and parent links
+    const students = await prisma.student.findMany({
+      where: { id: { in: ids } },
+      include: { user: true, parentLinks: { include: { parent: true } } },
+    });
+
+    const userIds = students.map((s) => s.userId);
+    const allUserIds = [...new Set(userIds)];
+    const parentIds = [...new Set(students.flatMap((s) => s.parentLinks.map((l) => l.parentId)))];
+
+    // Collect parent user IDs
+    const parents = parentIds.length > 0 ? await prisma.parent.findMany({
+      where: { id: { in: parentIds } },
+    }) : [];
+    const parentUserIds = parents.map((p) => p.userId);
+
+    // Single transaction — batched deleteMany is MUCH faster
+    await prisma.$transaction(async (tx) => {
+      // 1. Hapus semua data terkait siswa (batched by table)
+      if (allUserIds.length > 0) {
+        await tx.attendance.deleteMany({ where: { userId: { in: allUserIds } } });
+        await tx.leaveRequest.deleteMany({ where: { userId: { in: allUserIds } } });
+        await tx.faceEmbedding.deleteMany({ where: { userId: { in: allUserIds } } });
+        await tx.faceProfile.deleteMany({ where: { userId: { in: allUserIds } } });
+        await tx.qrCredential.deleteMany({ where: { userId: { in: allUserIds } } });
+        await tx.cardCredential.deleteMany({ where: { userId: { in: allUserIds } } });
+        await tx.notification.deleteMany({ where: { userId: { in: allUserIds } } });
+        await tx.session.deleteMany({ where: { userId: { in: allUserIds } } });
+        await tx.refreshToken.deleteMany({ where: { userId: { in: allUserIds } } });
+        await tx.device.deleteMany({ where: { userId: { in: allUserIds } } });
+      }
+
+      // 2. Hapus student + user
+      await tx.student.deleteMany({ where: { id: { in: ids } } });
+      await tx.user.deleteMany({ where: { id: { in: allUserIds } } });
+
+      // 3. Hapus parent yang tidak punya anak tersisa
+      for (const parentId of parentIds) {
+        const links = await tx.studentParent.count({ where: { parentId } });
+        if (links > 0) continue;
+        const parent = parents.find((p) => p.id === parentId);
+        if (!parent) continue;
+        await tx.notification.deleteMany({ where: { userId: parent.userId } });
+        await tx.session.deleteMany({ where: { userId: parent.userId } });
+        await tx.refreshToken.deleteMany({ where: { userId: parent.userId } });
+        await tx.device.deleteMany({ where: { userId: parent.userId } });
+        await tx.parent.delete({ where: { id: parentId } });
+        await tx.user.delete({ where: { id: parent.userId } });
+      }
+    });
+
+    await audit({
+      userId: request.user!.id,
+      action: 'STUDENTS_BULK_DELETED',
+      entity: 'Student',
+      newValue: { count: ids.length },
+      request,
+    });
+
+    return reply.send({ success: true, message: `${ids.length} siswa dihapus permanen.` });
+  });
+
   app.delete('/students/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.studentsDelete) }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const existing = await prisma.student.findUnique({
