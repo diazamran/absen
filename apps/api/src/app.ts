@@ -64,14 +64,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     enableDraftSpec: true,
     // Kunci per USER (bukan per IP): ratusan siswa di belakang 1 IP NAT sekolah
     // tetap mendapat jatah masing-masing saat jam ramai.
-    keyGenerator: (request) => {
-      const user = (request as { user?: { id: string } }).user;
-      return user?.id ?? request.ip;
-    },
-    // Skip rate limit untuk webhook & sync endpoints (server-to-server)
-    skip: (request) => {
+    // Webhook & SDMS sync pakai key tetap agar tidak terkena limit per-user.
+    keyGenerator: (request: { user?: { id: string }; url?: string; ip?: string }) => {
       const url = request.url ?? '';
-      return url.startsWith('/api/webhooks/') || url.startsWith('/api/sdms/');
+      if (url.startsWith('/api/webhooks/') || url.startsWith('/api/sdms/')) {
+        return '__internal__';
+      }
+      return request.user?.id ?? request.ip ?? 'unknown';
     },
   });
   await app.register(multipart, { limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
