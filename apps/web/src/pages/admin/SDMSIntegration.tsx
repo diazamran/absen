@@ -17,6 +17,7 @@ export default function SDMSIntegration() {
 
   const [apiKey, setApiKey] = useState('');
   const [apiSecret, setApiSecret] = useState('');
+  const [apiBaseUrl, setApiBaseUrl] = useState('');
   const [webhookUrl, setWebhookUrl] = useState('');
   const [syncEnabled, setSyncEnabled] = useState(true);
   const [initialized, setInitialized] = useState(false);
@@ -25,6 +26,7 @@ export default function SDMSIntegration() {
   if (settings && !initialized) {
     setApiKey(String(settings.apiKey || ''));
     setApiSecret(String(settings.apiSecret || ''));
+    setApiBaseUrl(String(settings.apiBaseUrl || 'https://sdms.sekolah.id/api/v1/master'));
     setWebhookUrl(String(settings.webhookUrl || 'https://absen.smkn1kras.sch.id/'));
     setSyncEnabled(Boolean(settings.syncEnabled ?? true));
     setInitialized(true);
@@ -33,7 +35,7 @@ export default function SDMSIntegration() {
   const saveMutation = useMutation({
     mutationFn: () => api('/sdms/settings', {
       method: 'PUT',
-      body: { apiKey, apiSecret, webhookUrl, syncEnabled },
+      body: { apiKey, apiSecret, apiBaseUrl, webhookUrl, syncEnabled },
     }),
     onSuccess: () => {
       toast('success', 'Pengaturan SDMS disimpan.');
@@ -53,8 +55,15 @@ export default function SDMSIntegration() {
 
   const testMutation = useMutation({
     mutationFn: () => api('/sdms/test', { method: 'POST' }),
-    onSuccess: () => toast('success', 'Koneksi ke SDMS berhasil.'),
-    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal koneksi.'),
+    onSuccess: () => toast('success', 'Koneksi ke SDMS berhasil!'),
+    onError: (e) => {
+      const msg = e instanceof ApiError ? e.message : String(e);
+      if (msg.includes('CONNECTION_FAILED') || msg.includes('fetch failed')) {
+        toast('error', 'Gagal koneksi. Pastikan Base URL SDMS benar dan server SDMS bisa diakses dari internet.');
+      } else {
+        toast('error', msg);
+      }
+    },
   });
 
   if (isLoading) {
@@ -123,6 +132,15 @@ export default function SDMSIntegration() {
               value={apiSecret}
               onChange={(e) => setApiSecret(e.target.value)}
               placeholder="Masukkan API Secret"
+            />
+          </Field>
+
+          <Field label="Base URL API SDMS" hint="URL server SDMS Anda (contoh: https://sdms.sekolah.id/api/v1/master)">
+            <Input
+              id="apiBaseUrl"
+              value={apiBaseUrl}
+              onChange={(e) => setApiBaseUrl(e.target.value)}
+              placeholder="https://sdms.sekolah.id/api/v1/master"
             />
           </Field>
 

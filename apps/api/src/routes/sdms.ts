@@ -228,6 +228,7 @@ export async function sdmsRoutes(app: FastifyInstance) {
       data: {
         apiKey: settings.apiKey || '',
         apiSecret: settings.apiSecret || '',
+        apiBaseUrl: settings.apiBaseUrl || 'https://sdms.sekolah.id/api/v1/master',
         webhookUrl: settings.webhookUrl || '',
         syncEnabled: settings.syncEnabled ?? true,
         lastSync: lastSync?.value || null,
@@ -241,6 +242,7 @@ export async function sdmsRoutes(app: FastifyInstance) {
       z.object({
         apiKey: z.string().min(1),
         apiSecret: z.string().min(1),
+        apiBaseUrl: z.string().url().optional().or(z.literal('')),
         webhookUrl: z.string().url().optional().or(z.literal('')),
         syncEnabled: z.boolean(),
       }),
@@ -281,7 +283,7 @@ export async function sdmsRoutes(app: FastifyInstance) {
       throw ApiError.badRequest('SDMS_NOT_CONFIGURED', 'Konfigurasi SDMS belum lengkap.');
     }
 
-    const baseUrl = 'https://sdms.sekolah.id/api/v1/master';
+    const baseUrl = (settings.apiBaseUrl as string) || 'https://sdms.sekolah.id/api/v1/master';
     const headers = {
       'Authorization': `Bearer ${apiSecret}`,
       'X-API-Key': apiKey,
@@ -365,8 +367,9 @@ export async function sdmsRoutes(app: FastifyInstance) {
     }
 
     // Try to fetch a small amount of data to verify connection
+    const baseUrl = (settings.apiBaseUrl as string) || 'https://sdms.sekolah.id/api/v1/master';
     try {
-      const res = await fetch('https://sdms.sekolah.id/api/v1/master/siswa?limit=1', {
+      const res = await fetch(`${baseUrl}/siswa?limit=1`, {
         headers: {
           'Authorization': `Bearer ${apiSecret}`,
           'X-API-Key': apiKey,
@@ -376,10 +379,12 @@ export async function sdmsRoutes(app: FastifyInstance) {
       if (res.ok) {
         return reply.send({ success: true, message: 'Koneksi ke SDMS berhasil.' });
       } else {
-        return reply.status(400).send({ success: false, message: `SDMS mengembalikan error: ${res.status}` });
+        const text = await res.text().catch(() => '');
+        return reply.status(400).send({ success: false, message: `SDMS mengembalikan error ${res.status}: ${text.slice(0, 200)}` });
       }
-    } catch (error) {
-      throw ApiError.badRequest('CONNECTION_FAILED', `Gagal koneksi ke SDMS: ${error}`);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      throw ApiError.badRequest('CONNECTION_FAILED', `Gagal koneksi ke SDMS (${baseUrl}): ${errMsg}`);
     }
   });
 }
