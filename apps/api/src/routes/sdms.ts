@@ -152,8 +152,8 @@ async function upsertSiswa(payload: Record<string, unknown>) {
       isActive: status === 'Aktif',
       user: { update: { fullName: nama } },
     };
-    if (classId) updateData.classId = classId;
-    if (majorId) updateData.majorId = majorId;
+    if (classId) updateData.class = { connect: { id: classId } };
+    if (majorId) updateData.major = { connect: { id: majorId } };
     await prisma.student.update({ where: { id: existing.id }, data: updateData as any });
     return { action: 'updated', id: existing.id };
   }
@@ -248,8 +248,8 @@ async function upsertKelas(payload: Record<string, unknown>) {
   if (existing) {
     // Update existing class with new major/wali kelas/room data
     const updateData: Record<string, unknown> = {};
-    if (majorId && !existing.majorId) updateData.majorId = majorId;
-    if (homeroomTeacherId && !existing.homeroomTeacherId) updateData.homeroomTeacherId = homeroomTeacherId;
+    if (majorId && !existing.majorId) updateData.major = { connect: { id: majorId } };
+    if (homeroomTeacherId && !existing.homeroomTeacherId) updateData.homeroomTeacher = { connect: { id: homeroomTeacherId } };
     if (ruangan && !existing.room) updateData.room = ruangan;
     if (grade && grade !== existing.grade) updateData.grade = grade;
 
