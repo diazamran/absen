@@ -370,17 +370,40 @@ export async function sdmsRoutes(app: FastifyInstance) {
     // Try to fetch a small amount of data to verify connection
     const baseUrl = (settings.apiBaseUrl as string) || 'https://sdms.sekolah.id/api/v1/master';
     
-    // Try multiple auth methods
-    const authMethods: Array<{ headers: Record<string, string> }> = [
-      // Method 1: API Key as Bearer token
-      { headers: { 'Authorization': `Bearer ${apiKey}`, 'X-API-Key': apiKey } },
-      // Method 2: API Secret as Bearer token (original)
-      { headers: { 'Authorization': `Bearer ${apiSecret}`, 'X-API-Key': apiKey } },
-      // Method 3: Only X-API-Key header
-      { headers: { 'X-API-Key': apiKey } },
+    // Step 1: Try to get access token from SDMS login endpoint
+    let accessToken = '';
+    const loginUrls = [
+      `${baseUrl.replace('/api/v1/master', '')}/api/v1/auth/login`,
+      `${baseUrl.replace('/api/v1/master', '')}/api/auth/login`,
+      `${baseUrl.replace('/api/v1/master', '')}/auth/login`,
     ];
 
-    let lastError = '';
+    for (const loginUrl of loginUrls) {
+      try {
+        const loginRes = await fetch(loginUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ api_key: apiKey, api_secret: apiSecret }),
+        });
+        if (loginRes.ok) {
+          const loginData = await loginRes.json() as Record<string, unknown>;
+          accessToken = (loginData.access_token || loginData.token || loginData.data?.toString() || '') as string;
+          if (accessToken) break;
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Step 2: Try fetching data with token or direct API key
+    const authMethods: Array<{ headers: Record<string, string> }> = [];
+    
+    if (accessToken) {
+      authMethods.push({ headers: { 'Authorization': `Bearer ${accessToken}`, 'X-API-Key': apiKey } });
+    }
+    authMethods.push({ headers: { 'Authorization': `Bearer ${apiKey}`, 'X-API-Key': apiKey } });
+    authMethods.push({ headers: { 'Authorization': `Bearer ${apiSecret}`, 'X-API-Key': apiKey } });
+    authMethods.push({ headers: { 'X-API-Key': apiKey } });
+
+    let lastError = accessToken ? `login ok (token: ${accessToken.slice(0,20)}...)` : 'login gagal';
     for (const auth of authMethods) {
       try {
         const res = await fetch(`${baseUrl}/siswa?limit=1`, auth);
@@ -393,6 +416,6 @@ export async function sdmsRoutes(app: FastifyInstance) {
         lastError = error instanceof Error ? error.message : String(error);
       }
     }
-    return reply.status(400).send({ success: false, message: `SDMS mengembalikan error: ${lastError}` });
+    return reply.status(400).send({ success: false, message: `SDMS: ${lastError}` });
   });
 }
