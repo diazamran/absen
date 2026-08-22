@@ -74,37 +74,88 @@ function verifySignature(payload: unknown, signature: string, secret: string): b
   return signature === expected;
 }
 
+// Helper: find or create major by SDMS jurusan data
+async function findMajorFromSDMS(jurusan: Record<string, unknown> | undefined): Promise<string | undefined> {
+  if (!jurusan) return undefined;
+  const jurusanName = jurusan.nama as string;
+  const jurusanKode = jurusan.kode as string;
+  if (!jurusanName) return undefined;
+
+  // Try to find existing major by name (case-insensitive)
+  let major = await prisma.major.findFirst({
+    where: { name: { contains: jurusanName, mode: 'insensitive' } },
+  });
+  // Also try by code
+  if (!major && jurusanKode) {
+    major = await prisma.major.findFirst({
+      where: { code: jurusanKode },
+    });
+  }
+  // If not found, try partial match (e.g. 'TKJ' matches 'Teknik Komputer dan Jaringan')
+  if (!major && jurusanKode) {
+    major = await prisma.major.findFirst({
+      where: { name: { contains: jurusanKode, mode: 'insensitive' } },
+    });
+  }
+  if (!major) {
+    // Create new major
+    major = await prisma.major.create({
+      data: { name: jurusanName, code: jurusanKode || jurusanName.toUpperCase().slice(0, 5) },
+    });
+  }
+  return major.id;
+}
+
+// Helper: find teacher by SDMS waliKelas name
+async function findTeacherByName(nama: string): Promise<string | undefined> {
+  if (!nama) return undefined;
+  // Find user with matching full name and TEACHER role
+  const user = await prisma.user.findFirst({
+    where: {
+      fullName: { contains: nama, mode: 'insensitive' },
+      role: { key: 'TEACHER' },
+    },
+    include: { teacher: true },
+  });
+  return user?.teacher?.id;
+}
+
 // Upsert siswa from SDMS payload
 async function upsertSiswa(payload: Record<string, unknown>) {
   const nisn = payload.nisn as string;
   const nama = payload.nama as string;
-  const kelasId = payload.kelas_id as string | undefined;
-  const jurusanId = payload.jurusan_id as string | undefined;
   const status = payload.status as string;
+
+  // SDMS sends nested objects with names, not just IDs
+  const jurusan = payload.jurusan as Record<string, unknown> | undefined;
+  const kelasData = payload.kelas as Record<string, unknown> | undefined;
 
   const existing = await prisma.student.findFirst({ where: { nis: nisn } });
   
-  if (existing) {
-    await prisma.student.update({
-      where: { id: existing.id },
-      data: {
-        isActive: status === 'Aktif',
-        user: { update: { fullName: nama } }
-      }
-    });
-    return { action: 'updated', id: existing.id };
-  }
+  // Resolve major from nested jurusan object
+  const majorId = await findMajorFromSDMS(jurusan);
 
+  // Resolve class by NAME (SDMS UUID != presensiku UUID)
   let classId: string | undefined;
-  if (kelasId) {
-    const kelas = await prisma.class.findFirst({ where: { id: kelasId } });
+  if (kelasData?.nama) {
+    const kelas = await prisma.class.findFirst({ where: { name: kelasData.nama as string } });
+    if (kelas) classId = kelas.id;
+  }
+  // Fallback: try by SDMS kelas_id (unlikely to match but worth trying)
+  if (!classId && payload.kelas_id) {
+    const kelas = await prisma.class.findFirst({ where: { id: payload.kelas_id as string } });
     if (kelas) classId = kelas.id;
   }
 
-  let majorId: string | undefined;
-  if (jurusanId) {
-    const jurusan = await prisma.major.findFirst({ where: { id: jurusanId } });
-    if (jurusan) majorId = jurusan.id;
+  if (existing) {
+    const updateData: Record<string, unknown> = {
+      isActive: status === 'Aktif',
+      user: { update: { fullName: nama } },
+    };
+    if (classId) updateData.classId = classId;
+    if (majorId) updateData.majorId = majorId;
+    await prisma.student.update({ where: { id: existing.id }, data: updateData as any });
+    return { action: 'updated', id: existing.id };
   }
 
   const userId = crypto.randomUUID();
@@ -179,12 +230,33 @@ async function upsertGuru(payload: Record<string, unknown>) {
 // Upsert kelas from SDMS payload
 async function upsertKelas(payload: Record<string, unknown>) {
   const nama = payload.nama as string;
-  const majorId = payload.major_id as string | undefined;
-  const grade = payload.grade as string | undefined;
+  const grade = payload.tingkat as string || payload.grade as string || 'X';
+  const ruangan = payload.ruangan as string | undefined;
+  const jurusan = payload.jurusan as Record<string, unknown> | undefined;
+  const waliKelas = payload.waliKelas as Record<string, unknown> | undefined;
+
+  // Resolve major from jurusan object
+  const majorId = await findMajorFromSDMS(jurusan);
+
+  // Resolve homeroom teacher from waliKelas name
+  let homeroomTeacherId: string | undefined;
+  if (waliKelas?.nama) {
+    homeroomTeacherId = await findTeacherByName(waliKelas.nama as string);
+  }
 
   const existing = await prisma.class.findFirst({ where: { name: nama } });
   if (existing) {
-    return { action: 'exists', id: existing.id };
+    // Update existing class with new major/wali kelas/room data
+    const updateData: Record<string, unknown> = {};
+    if (majorId && !existing.majorId) updateData.majorId = majorId;
+    if (homeroomTeacherId && !existing.homeroomTeacherId) updateData.homeroomTeacherId = homeroomTeacherId;
+    if (ruangan && !existing.room) updateData.room = ruangan;
+    if (grade && grade !== existing.grade) updateData.grade = grade;
+
+    if (Object.keys(updateData).length > 0) {
+      await prisma.class.update({ where: { id: existing.id }, data: updateData as any });
+    }
+    return { action: 'updated', id: existing.id };
   }
 
   const id = crypto.randomUUID();
@@ -194,6 +266,8 @@ async function upsertKelas(payload: Record<string, unknown>) {
       name: nama,
       grade: grade || 'X',
       majorId: majorId || undefined,
+      homeroomTeacherId: homeroomTeacherId || undefined,
+      room: ruangan || undefined,
     },
   });
 
