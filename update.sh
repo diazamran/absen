@@ -32,8 +32,8 @@ fi
 echo "➜ Build & restart container (port web: $WEB_PORT)..."
 WEB_PORT="$WEB_PORT" docker compose $COMPOSE_FILES up -d --build
 
-echo "➜ Pastikan data awal tersedia (aman diulang)..."
-WEB_PORT="$WEB_PORT" docker compose $COMPOSE_FILES exec -T backend npm run db:seed || true
+# Seed sudah tidak dijalankan otomatis saat update.
+# Untuk seed manual: docker compose exec backend npm run db:seed
 
 echo ""
 echo "✅ Update selesai."
