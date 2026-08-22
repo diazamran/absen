@@ -44,7 +44,7 @@ const updateSchema = z.object({
 });
 
 export async function attendanceRoutes(app: FastifyInstance) {
-  app.post('/attendance/check-in', { preHandler: app.authenticate, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
+  app.post('/attendance/check-in', { preHandler: app.authenticate, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = validate(checkSchema, request.body);
     const result = await recordAttendance({
       actor: { id: request.user!.id, roleKey: request.user!.roleKey, request },
@@ -75,7 +75,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post('/attendance/check-out', { preHandler: app.authenticate, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
+  app.post('/attendance/check-out', { preHandler: app.authenticate, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = validate(checkSchema, request.body);
     const result = await recordAttendance({
       actor: { id: request.user!.id, roleKey: request.user!.roleKey, request },
@@ -102,7 +102,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
   });
 
   // ===== Alias metode spesifik (spesifikasi API) =====
-  app.post('/attendance/face', { preHandler: app.authenticate, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
+  app.post('/attendance/face', { preHandler: app.authenticate, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = validate(
       z.object({
         type: z.enum(['CHECK_IN', 'CHECK_OUT']).default('CHECK_IN'),
@@ -144,7 +144,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post('/attendance/qr', { preHandler: app.authenticate, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
+  app.post('/attendance/qr', { preHandler: app.authenticate, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = validate(
       z.object({
         type: z.enum(['CHECK_IN', 'CHECK_OUT']).default('CHECK_IN'),
@@ -183,7 +183,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post('/attendance/card', { preHandler: app.authenticate, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
+  app.post('/attendance/card', { preHandler: app.authenticate, config: { rateLimit: { max: 500, timeWindow: '1 minute' } } }, async (request, reply) => {
     // Endpoint untuk RFID reader eksternal / device gate (petugas login sebagai aktor)
     const body = validate(
       z.object({
@@ -216,7 +216,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post('/attendance/gate', { preHandler: app.authenticate, config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (request, reply) => {
+  app.post('/attendance/gate', { preHandler: app.authenticate, config: { rateLimit: { max: 500, timeWindow: '1 minute' } } }, async (request, reply) => {
     // Mode gerbang: identitas dari bukti (wajah/QR/kartu) — petugas gerbang cukup membuka kamera
     const body = validate(checkSchema, request.body);
     const result = await recordAttendance({

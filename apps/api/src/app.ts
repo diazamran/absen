@@ -59,7 +59,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(rbacPlugin);
 
   await app.register(rateLimit, {
-    max: 300,
+    max: 2000,
     timeWindow: '1 minute',
     enableDraftSpec: true,
     // Kunci per USER (bukan per IP): ratusan siswa di belakang 1 IP NAT sekolah
@@ -67,6 +67,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     keyGenerator: (request) => {
       const user = (request as { user?: { id: string } }).user;
       return user?.id ?? request.ip;
+    },
+    // Skip rate limit untuk webhook & sync endpoints (server-to-server)
+    skip: (request) => {
+      const url = request.url ?? '';
+      return url.startsWith('/api/webhooks/') || url.startsWith('/api/sdms/');
     },
   });
   await app.register(multipart, { limits: { fileSize: 5 * 1024 * 1024, files: 1 } });

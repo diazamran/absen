@@ -14,7 +14,7 @@ export async function faceRoutes(app: FastifyInstance) {
   // Registrasi wajah:
   //  - oleh siswa (diri sendiri) / guru untuk siswa → status PENDING, menunggu persetujuan admin
   //  - oleh admin/super admin → langsung REGISTERED (aktif)
-  app.post('/face/register', { preHandler: app.requirePermission(PERMISSION_KEYS.faceRegister), config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
+  app.post('/face/register', { preHandler: app.requirePermission(PERMISSION_KEYS.faceRegister), config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = validate(
       z.object({
         userId: z.string().optional(),
