@@ -29,7 +29,10 @@ export default function SDMSIntegration() {
 
   const { data: settings, isLoading } = useQuery<SDMSSettings>({
     queryKey: ['sdms-settings'],
-    queryFn: () => api('/sdms/settings').then((r: { data: SDMSSettings }) => r.data),
+    queryFn: async () => {
+      const r = await api('/sdms/settings') as { data: SDMSSettings };
+      return r.data;
+    },
   });
 
   const [username, setUsername] = useState('');
