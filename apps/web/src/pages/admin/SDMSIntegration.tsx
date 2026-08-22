@@ -5,30 +5,14 @@ import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Card, Button, Input, Field } from '../../lib/ui';
 
-interface SDMSSettings {
-  apiKey: string;
-  apiSecret: string;
-  webhookUrl: string;
-  syncEnabled: boolean;
-  lastSync: {
-    lastPull?: string;
-    lastWebhook?: string;
-    results?: {
-      students?: number;
-      teachers?: number;
-      classes?: number;
-      errors?: string[];
-    };
-  } | null;
-}
-
 export default function SDMSIntegration() {
   const { toast } = useToast();
   const qc = useQueryClient();
   
-  const { data: settings, isLoading } = useQuery({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: settings, isLoading } = useQuery<any>({
     queryKey: ['sdms-settings'],
-    queryFn: () => api<{ success: boolean; data: SDMSSettings }>('/sdms/settings').then((r) => r.data),
+    queryFn: () => api('/sdms/settings').then((r: any) => r.data),
   });
 
   const [apiKey, setApiKey] = useState('');
@@ -39,10 +23,10 @@ export default function SDMSIntegration() {
 
   // Initialize form when data loads
   if (settings && !initialized) {
-    setApiKey(settings.apiKey || '');
-    setApiSecret(settings.apiSecret || '');
-    setWebhookUrl(settings.webhookUrl || 'https://absen.smkn1kras.sch.id/');
-    setSyncEnabled(settings.syncEnabled ?? true);
+    setApiKey(String(settings.apiKey || ''));
+    setApiSecret(String(settings.apiSecret || ''));
+    setWebhookUrl(String(settings.webhookUrl || 'https://absen.smkn1kras.sch.id/'));
+    setSyncEnabled(Boolean(settings.syncEnabled ?? true));
     setInitialized(true);
   }
 
@@ -59,17 +43,17 @@ export default function SDMSIntegration() {
   });
 
   const syncMutation = useMutation({
-    mutationFn: () => api<{ success: boolean; message: string; data: Record<string, unknown> }>('/sdms/sync', { method: 'POST' }),
-    onSuccess: (res) => {
-      toast('success', `Sinkronisasi berhasil! ${res.message}`);
+    mutationFn: () => api('/sdms/sync', { method: 'POST' }),
+    onSuccess: () => {
+      toast('success', 'Sinkronisasi berhasil!');
       qc.invalidateQueries({ queryKey: ['sdms-settings'] });
     },
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal sinkronisasi.'),
   });
 
   const testMutation = useMutation({
-    mutationFn: () => api<{ success: boolean; message: string }>('/sdms/test', { method: 'POST' }),
-    onSuccess: (res) => toast('success', res.message),
+    mutationFn: () => api('/sdms/test', { method: 'POST' }),
+    onSuccess: () => toast('success', 'Koneksi ke SDMS berhasil.'),
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal koneksi.'),
   });
 
@@ -84,8 +68,10 @@ export default function SDMSIntegration() {
     );
   }
 
-  const lastSync = settings?.lastSync;
-  const syncResults = lastSync?.results;
+  // Safe access with explicit type assertions
+  const lastSyncData = (settings?.lastSync ?? null) as Record<string, any> | null;
+  const syncResults = lastSyncData?.results as Record<string, any> | null;
+  const lastPullStr = lastSyncData?.lastPull as string | undefined;
 
   return (
     <div className="space-y-6">
@@ -106,9 +92,9 @@ export default function SDMSIntegration() {
                 <div className={`h-3 w-3 rounded-full ${syncEnabled ? 'bg-green-500' : 'bg-gray-400'}`} />
                 <span className="text-sm font-medium">{syncEnabled ? 'Sinkronisasi Aktif' : 'Sinkronisasi Nonaktif'}</span>
               </div>
-              {lastSync?.lastPull && (
+              {lastPullStr && (
                 <span className="text-xs text-muted">
-                  Terakhir sync: {new Date(lastSync.lastPull).toLocaleString('id-ID')}
+                  Terakhir sync: {new Date(lastPullStr).toLocaleString('id-ID')}
                 </span>
               )}
             </div>
@@ -198,28 +184,30 @@ export default function SDMSIntegration() {
           <h4 className="text-sm font-bold text-ink mb-4">Hasil Sinkronisasi Terakhir</h4>
           <div className="grid grid-cols-3 gap-4">
             <div className="text-center p-3 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">{syncResults.students ?? 0}</div>
+              <div className="text-2xl font-bold text-green-600">{Number(syncResults.students) || 0}</div>
               <div className="text-xs text-green-700">Siswa</div>
             </div>
             <div className="text-center p-3 bg-blue-50 rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">{syncResults.teachers ?? 0}</div>
+              <div className="text-2xl font-bold text-blue-600">{Number(syncResults.teachers) || 0}</div>
               <div className="text-xs text-blue-700">Guru</div>
             </div>
             <div className="text-center p-3 bg-purple-50 rounded-lg">
-              <div className="text-2xl font-bold text-purple-600">{syncResults.classes ?? 0}</div>
+              <div className="text-2xl font-bold text-purple-600">{Number(syncResults.classes) || 0}</div>
               <div className="text-xs text-purple-700">Kelas</div>
             </div>
           </div>
           
-          {syncResults.errors && syncResults.errors.length > 0 && (
+          {Array.isArray(syncResults.errors) && syncResults.errors.length > 0 && (
             <div className="mt-4 p-3 bg-red-50 rounded-lg">
               <div className="flex items-center gap-2 text-red-700 text-sm font-medium mb-2">
                 <AlertCircle className="h-4 w-4" />
-                Error ({syncResults.errors.length})
+                {'Error ('}
+                {syncResults.errors.length}
+                {')'}
               </div>
               <ul className="text-xs text-red-600 space-y-1">
-                {syncResults.errors.slice(0, 5).map((err, i) => (
-                  <li key={i}>• {err}</li>
+                {syncResults.errors.slice(0, 5).map((err: string, i: number) => (
+                  <li key={i}>{'• '}{err}</li>
                 ))}
               </ul>
             </div>
