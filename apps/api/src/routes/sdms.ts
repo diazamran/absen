@@ -273,6 +273,36 @@ export async function sdmsRoutes(app: FastifyInstance) {
     return reply.send({ success: true, message: 'Pengaturan SDMS disimpan.' });
   });
 
+  // Helper: login to SDMS and return access token
+  async function sdmsLogin(baseUrl: string, apiKey: string, apiSecret: string): Promise<string> {
+    const baseClean = baseUrl.replace(/\/api\/v1\/master.*$/, '');
+    const loginAttempts = [
+      { url: `${baseClean}/api/v1/master/login`, body: { api_key: apiKey, api_secret: apiSecret } },
+      { url: `${baseClean}/api/v1/auth/login`, body: { api_key: apiKey, api_secret: apiSecret } },
+      { url: `${baseClean}/api/login`, body: { api_key: apiKey, api_secret: apiSecret } },
+      { url: `${baseClean}/login`, body: { api_key: apiKey, api_secret: apiSecret } },
+      { url: `${baseClean}/api/v1/master/login`, body: { email: apiKey, password: apiSecret } },
+    ];
+
+    for (const attempt of loginAttempts) {
+      try {
+        const res = await fetch(attempt.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(attempt.body),
+        });
+        if (res.ok) {
+          const json = await res.json() as Record<string, unknown>;
+          const token = (json.access_token as string) || (json.token as string) ||
+            ((json.data as Record<string, unknown>)?.access_token as string) ||
+            ((json.data as Record<string, unknown>)?.token as string) || '';
+          if (token) return token;
+        }
+      } catch { /* skip */ }
+    }
+    throw new Error('Gagal login ke SDMS — semua endpoint login gagal');
+  }
+
   // Manual sync - pull data from SDMS
   app.post('/sdms/sync', { preHandler: app.requirePermission(PERMISSION_KEYS.settingsManage) }, async (request, reply) => {
     const settings = await getSDMSSettings();
@@ -284,11 +314,17 @@ export async function sdmsRoutes(app: FastifyInstance) {
     }
 
     const baseUrl = (settings.apiBaseUrl as string) || 'https://sdms.sekolah.id/api/v1/master';
-    // Try API Key as Bearer first, then API Secret
-    const headers = {
-      'Authorization': `Bearer ${apiKey}`,
-      'X-API-Key': apiKey,
-    };
+
+    // Login first to get access token
+    let accessToken: string;
+    try {
+      accessToken = await sdmsLogin(baseUrl, apiKey, apiSecret);
+    } catch (err: unknown) {
+      throw ApiError.badRequest('SDMS_LOGIN_FAILED', `Gagal login ke SDMS: ${err instanceof Error ? err.message : 'unknown error'}`);
+    }
+
+    const headers = { 'Authorization': `Bearer ${accessToken}` };
+
 
     const results: Record<string, unknown> = { students: 0, teachers: 0, classes: 0, errors: [] };
 
@@ -357,7 +393,7 @@ export async function sdmsRoutes(app: FastifyInstance) {
     }
   });
 
-  // Test webhook connection
+  // Test webhook connection — SDMS requires login first to get access token
   app.post('/sdms/test', { preHandler: app.requirePermission(PERMISSION_KEYS.settingsManage) }, async (request, reply) => {
     const settings = await getSDMSSettings();
     const apiKey = settings.apiKey as string;
@@ -367,38 +403,78 @@ export async function sdmsRoutes(app: FastifyInstance) {
       throw ApiError.badRequest('SDMS_NOT_CONFIGURED', 'Konfigurasi SDMS belum lengkap.');
     }
 
-    // Try to fetch a small amount of data to verify connection
     const baseUrl = (settings.apiBaseUrl as string) || 'https://sdms.sekolah.id/api/v1/master';
-    
-    // Try multiple auth methods - try ALL combinations
-    const authMethods: Array<{ name: string; headers: Record<string, string> }> = [
-      // Basic Auth with API Key + Secret
-      { name: 'Basic', headers: { 'Authorization': `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')}` } },
-      // Bearer apiKey + X-API-Key apiKey
-      { name: 'BearerApiKey', headers: { 'Authorization': `Bearer ${apiKey}`, 'X-API-Key': apiKey } },
-      // Bearer apiSecret + X-API-Key apiKey
-      { name: 'BearerSecret', headers: { 'Authorization': `Bearer ${apiSecret}`, 'X-API-Key': apiKey } },
-      // X-API-Key + X-API-Secret
-      { name: 'DualKey', headers: { 'X-API-Key': apiKey, 'X-API-Secret': apiSecret } },
-      // X-API-Key only
-      { name: 'ApiKeyOnly', headers: { 'X-API-Key': apiKey } },
-      // api_key query-style header
-      { name: 'ApiKeyValue', headers: { 'api_key': apiKey, 'api_secret': apiSecret } },
+    const baseClean = baseUrl.replace(/\/api\/v1\/master.*$/, '');
+
+    // Step 1: Login to SDMS to get access token
+    const loginPayload = { api_key: apiKey, api_secret: apiSecret };
+    const loginErrors: string[] = [];
+    let accessToken = '';
+
+    // Try different login endpoints and body formats
+    const loginAttempts = [
+      { url: `${baseClean}/api/v1/master/login`, body: loginPayload },
+      { url: `${baseClean}/api/v1/auth/login`, body: loginPayload },
+      { url: `${baseClean}/api/login`, body: loginPayload },
+      { url: `${baseClean}/login`, body: loginPayload },
+      { url: `${baseClean}/api/v1/master/login`, body: { email: apiKey, password: apiSecret } },
     ];
 
-    const errors: string[] = [];
-    for (const auth of authMethods) {
+    for (const attempt of loginAttempts) {
       try {
-        const res = await fetch(`${baseUrl}/siswa?limit=1`, { headers: auth.headers });
-        if (res.ok) {
-          return reply.send({ success: true, message: `Koneksi ke SDMS berhasil (${auth.name}).` });
-        }
+        const res = await fetch(attempt.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(attempt.body),
+        });
         const text = await res.text().catch(() => '');
-        errors.push(`${auth.name}: ${res.status} ${text.slice(0, 80)}`);
-      } catch (error: unknown) {
-        errors.push(`${auth.name}: ${error instanceof Error ? error.message : 'network error'}`);
+        if (res.ok) {
+          try {
+            const json = JSON.parse(text);
+            accessToken = json.access_token || json.token || json.data?.access_token || json.data?.token || '';
+            if (accessToken) break;
+            loginErrors.push(`Login OK (${attempt.url}) tapi token tidak ada di response: ${text.slice(0, 100)}`);
+          } catch {
+            loginErrors.push(`Login OK (${attempt.url}) tapi response bukan JSON: ${text.slice(0, 100)}`);
+          }
+        } else {
+          loginErrors.push(`Login ${res.status} (${attempt.url}): ${text.slice(0, 100)}`);
+        }
+      } catch (err: unknown) {
+        loginErrors.push(`Login error (${attempt.url}): ${err instanceof Error ? err.message : 'network error'}`);
       }
     }
-    return reply.status(400).send({ success: false, message: `Semua metode gagal:\n${errors.join('\n')}` });
+
+    if (!accessToken) {
+      return reply.status(400).send({
+        success: false,
+        message: `Gagal login ke SDMS.\n\nCoba login:\n${loginErrors.join('\n')}`,
+      });
+    }
+
+    // Step 2: Use access token to fetch data
+    const headers = { 'Authorization': `Bearer ${accessToken}` };
+    try {
+      const res = await fetch(`${baseUrl}/siswa?limit=1`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        const count = Array.isArray(data?.data) ? data.data.length : (Array.isArray(data) ? data.length : 0);
+        return reply.send({
+          success: true,
+          message: `Koneksi ke SDMS berhasil! Login OK, data siswa ditemukan (${count} record).`,
+          data: { tokenLength: accessToken.length, records: count },
+        });
+      }
+      const text = await res.text().catch(() => '');
+      return reply.status(400).send({
+        success: false,
+        message: `Login berhasil, tapi gagal ambil data: ${res.status} ${text.slice(0, 200)}`,
+      });
+    } catch (err: unknown) {
+      return reply.status(400).send({
+        success: false,
+        message: `Login berhasil, tapi error ambil data: ${err instanceof Error ? err.message : 'network error'}`,
+      });
+    }
   });
 }
