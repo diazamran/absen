@@ -18,8 +18,7 @@ async function getSDMSSettings() {
 }
 
 // Login to SDMS and get access token
-async function sdmsLogin(baseUrl: string, username: string, password: string): Promise<{ token: string; expiresIn: number }> {
-  // Try multiple login paths
+async function sdmsLogin(baseUrl: string, username: string, password: string): Promise<string> {
   const baseClean = baseUrl.replace(/\/api\/v1\/master.*$/, '').replace(/\/api\/v1\/.*$/, '').replace(/\/api\/.*$/, '').replace(/\/$/, '');
   const loginPaths = [
     '/api/v1/auth/login',
@@ -38,12 +37,7 @@ async function sdmsLogin(baseUrl: string, username: string, password: string): P
         const json = await res.json() as Record<string, unknown>;
         const data = json.data as Record<string, unknown> | undefined;
         const token = (data?.access_token as string) || (json.access_token as string) || '';
-        const expiresIn = (data?.expires_in as string) || '8h';
-        if (token) {
-          // Parse expiresIn hours
-          const hours = parseInt(expiresIn.replace(/[^0-9]/g, '') || '8', 10);
-          return { token, expiresIn: hours * 3600 * 1000 };
-        }
+        if (token) return token;
       }
     } catch { /* try next */ }
   }
@@ -52,7 +46,6 @@ async function sdmsLogin(baseUrl: string, username: string, password: string): P
 
 // Get valid SDMS token (auto-login & refresh)
 async function getSDMSToken(): Promise<string> {
-  // Return cached token if still valid (with 5min buffer)
   if (cachedToken && Date.now() < tokenExpiresAt - 300000) {
     return cachedToken;
   }
@@ -66,9 +59,9 @@ async function getSDMSToken(): Promise<string> {
     throw new Error('Konfigurasi SDMS belum lengkap (username/password)');
   }
 
-  const { token, expiresIn } = await sdmsLogin(baseUrl, username, password);
+  const token = await sdmsLogin(baseUrl, username, password);
   cachedToken = token;
-  tokenExpiresAt = Date.now() + expiresIn;
+  tokenExpiresAt = Date.now() + 28800000; // 8 hours
   return token;
 }
 
@@ -85,43 +78,35 @@ function verifySignature(payload: unknown, signature: string, secret: string): b
 async function upsertSiswa(payload: Record<string, unknown>) {
   const nisn = payload.nisn as string;
   const nama = payload.nama as string;
-  const nis = payload.nis as string | undefined;
   const kelasId = payload.kelas_id as string | undefined;
   const jurusanId = payload.jurusan_id as string | undefined;
   const status = payload.status as string;
 
-  // Find or create student by NISN
   const existing = await prisma.student.findFirst({ where: { nis: nisn } });
   
   if (existing) {
-    // Update existing student
     await prisma.student.update({
       where: { id: existing.id },
       data: {
         isActive: status === 'Aktif',
-        user: {
-          update: { fullName: nama }
-        }
+        user: { update: { fullName: nama } }
       }
     });
     return { action: 'updated', id: existing.id };
   }
 
-  // Find or create class from kelas_id
   let classId: string | undefined;
   if (kelasId) {
     const kelas = await prisma.class.findFirst({ where: { id: kelasId } });
     if (kelas) classId = kelas.id;
   }
 
-  // Find or create major from jurusan_id
   let majorId: string | undefined;
   if (jurusanId) {
     const jurusan = await prisma.major.findFirst({ where: { id: jurusanId } });
     if (jurusan) majorId = jurusan.id;
   }
 
-  // Create user + student
   const userId = crypto.randomUUID();
   const studentId = crypto.randomUUID();
 
@@ -131,7 +116,7 @@ async function upsertSiswa(payload: Record<string, unknown>) {
       username: nisn,
       fullName: nama,
       role: { connect: { key: 'STUDENT' } },
-      password: '$2b$10$placeholder', // will be set on first login
+      passwordHash: '$2b$10$placeholder',
     },
   });
 
@@ -175,7 +160,7 @@ async function upsertGuru(payload: Record<string, unknown>) {
       username: nip,
       fullName: nama,
       role: { connect: { key: 'TEACHER' } },
-      password: '$2b$10$placeholder',
+      passwordHash: '$2b$10$placeholder',
     },
   });
 
@@ -195,6 +180,7 @@ async function upsertGuru(payload: Record<string, unknown>) {
 async function upsertKelas(payload: Record<string, unknown>) {
   const nama = payload.nama as string;
   const majorId = payload.major_id as string | undefined;
+  const grade = payload.grade as string | undefined;
 
   const existing = await prisma.class.findFirst({ where: { name: nama } });
   if (existing) {
@@ -206,6 +192,7 @@ async function upsertKelas(payload: Record<string, unknown>) {
     data: {
       id,
       name: nama,
+      grade: grade || 'X',
       majorId: majorId || undefined,
     },
   });
@@ -222,7 +209,6 @@ export async function sdmsRoutes(app: FastifyInstance) {
       const event = body.event as string;
       const payload = body.payload as Record<string, unknown>;
 
-      // Verify signature if secret is set
       const secret = settings.webhookSecret as string | undefined;
       if (secret) {
         const signature = (request.headers['x-signature'] as string) || '';
@@ -231,7 +217,6 @@ export async function sdmsRoutes(app: FastifyInstance) {
         }
       }
 
-      // Process event
       switch (event) {
         case 'siswa.created':
         case 'siswa.updated':
@@ -312,14 +297,13 @@ export async function sdmsRoutes(app: FastifyInstance) {
       z.object({
         sdmsUsername: z.string().min(1),
         sdmsPassword: z.string().min(1),
-        sdmsBaseUrl: z.string().url().optional().or(z.literal('')),
-        webhookUrl: z.string().url().optional().or(z.literal('')),
+        sdmsBaseUrl: z.string().optional().or(z.literal('')),
+        webhookUrl: z.string().optional().or(z.literal('')),
         syncEnabled: z.boolean(),
       }),
       request.body,
     );
 
-    // Get current settings to preserve password if not changed
     const current = await getSDMSSettings();
     const toSave: Record<string, unknown> = {
       ...body,
@@ -339,7 +323,6 @@ export async function sdmsRoutes(app: FastifyInstance) {
       },
     });
 
-    // Clear cached token
     cachedToken = null;
     tokenExpiresAt = 0;
 
@@ -355,7 +338,7 @@ export async function sdmsRoutes(app: FastifyInstance) {
   });
 
   // Test connection — login to SDMS and fetch sample data
-  app.post('/sdms/test', { preHandler: app.requirePermission(PERMISSION_KEYS.settingsManage) }, async (request, reply) => {
+  app.post('/sdms/test', { preHandler: app.requirePermission(PERMISSION_KEYS.settingsManage) }, async (_request, reply) => {
     const settings = await getSDMSSettings();
     const username = settings.sdmsUsername as string;
     const password = (settings.sdmsPassword === '••••••••' ? null : settings.sdmsPassword) as string | null;
@@ -368,10 +351,8 @@ export async function sdmsRoutes(app: FastifyInstance) {
     const baseUrl = (settings.sdmsBaseUrl as string) || 'https://sdms.smkn1kras.sch.id/api/v1/master';
 
     try {
-      // Step 1: Login
-      const { token } = await sdmsLogin(baseUrl, username, actualPassword);
+      const token = await sdmsLogin(baseUrl, username, actualPassword);
 
-      // Step 2: Fetch sample data
       const res = await fetch(`${baseUrl}/siswa?limit=1`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
@@ -484,7 +465,7 @@ export async function sdmsRoutes(app: FastifyInstance) {
         }
       }
 
-      const syncData = { lastPull: new Date().toISOString(), results: results as unknown as object };
+      const syncData = { lastPull: new Date().toISOString(), results };
       await prisma.schoolSetting.upsert({
         where: { key: 'sdms_last_sync' },
         update: { value: syncData },
