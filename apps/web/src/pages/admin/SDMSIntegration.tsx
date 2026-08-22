@@ -5,29 +5,46 @@ import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Card, Button, Input, Field } from '../../lib/ui';
 
+interface SDMSSettings {
+  sdmsUsername: string;
+  sdmsPassword: string;
+  sdmsBaseUrl: string;
+  webhookUrl: string;
+  syncEnabled: boolean;
+  lastSync: {
+    lastPull?: string;
+    lastWebhook?: string;
+    results?: {
+      students: number;
+      teachers: number;
+      classes: number;
+      errors: string[];
+    };
+  } | null;
+}
+
 export default function SDMSIntegration() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: settings, isLoading } = useQuery<any>({
+
+  const { data: settings, isLoading } = useQuery<SDMSSettings>({
     queryKey: ['sdms-settings'],
-    queryFn: () => api('/sdms/settings').then((r: any) => r.data),
+    queryFn: () => api('/sdms/settings').then((r: { data: SDMSSettings }) => r.data),
   });
 
-  const [apiKey, setApiKey] = useState('');
-  const [apiSecret, setApiSecret] = useState('');
-  const [apiBaseUrl, setApiBaseUrl] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [baseUrl, setBaseUrl] = useState('');
   const [webhookUrl, setWebhookUrl] = useState('');
   const [syncEnabled, setSyncEnabled] = useState(true);
   const [initialized, setInitialized] = useState(false);
 
   // Initialize form when data loads
   if (settings && !initialized) {
-    setApiKey(String(settings.apiKey || ''));
-    setApiSecret(String(settings.apiSecret || ''));
-    setApiBaseUrl(String(settings.apiBaseUrl || 'https://sdms.sekolah.id/api/v1/master'));
-    setWebhookUrl(String(settings.webhookUrl || 'https://absen.smkn1kras.sch.id/'));
+    setUsername(String(settings.sdmsUsername || ''));
+    setPassword(String(settings.sdmsPassword || ''));
+    setBaseUrl(String(settings.sdmsBaseUrl || 'https://sdms.smkn1kras.sch.id/api/v1/master'));
+    setWebhookUrl(String(settings.webhookUrl || 'https://absen.smkn1kras.sch.id/api/webhooks/sdms'));
     setSyncEnabled(Boolean(settings.syncEnabled ?? true));
     setInitialized(true);
   }
@@ -35,7 +52,7 @@ export default function SDMSIntegration() {
   const saveMutation = useMutation({
     mutationFn: () => api('/sdms/settings', {
       method: 'PUT',
-      body: { apiKey, apiSecret, apiBaseUrl, webhookUrl, syncEnabled },
+      body: { sdmsUsername: username, sdmsPassword: password, sdmsBaseUrl: baseUrl, webhookUrl, syncEnabled },
     }),
     onSuccess: () => {
       toast('success', 'Pengaturan SDMS disimpan.');
@@ -58,11 +75,7 @@ export default function SDMSIntegration() {
     onSuccess: () => toast('success', 'Koneksi ke SDMS berhasil!'),
     onError: (e) => {
       const msg = e instanceof ApiError ? e.message : String(e);
-      if (msg.includes('CONNECTION_FAILED') || msg.includes('fetch failed')) {
-        toast('error', 'Gagal koneksi. Pastikan Base URL SDMS benar dan server SDMS bisa diakses dari internet.');
-      } else {
-        toast('error', msg);
-      }
+      toast('error', msg);
     },
   });
 
@@ -77,10 +90,9 @@ export default function SDMSIntegration() {
     );
   }
 
-  // Safe access with explicit type assertions
-  const lastSyncData = (settings?.lastSync ?? null) as Record<string, any> | null;
-  const syncResults = lastSyncData?.results as Record<string, any> | null;
-  const lastPullStr = lastSyncData?.lastPull as string | undefined;
+  const lastSyncData = settings?.lastSync ?? null;
+  const syncResults = lastSyncData?.results ?? null;
+  const lastPullStr = lastSyncData?.lastPull;
 
   return (
     <div className="space-y-6">
@@ -116,31 +128,31 @@ export default function SDMSIntegration() {
         <h4 className="text-sm font-bold text-ink mb-4">Konfigurasi Koneksi</h4>
         
         <div className="space-y-4">
-          <Field label="API Key SDMS">
+          <Field label="Username SDMS">
             <Input
-              id="apiKey"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sdms_xxxxxxxxxxxx"
+              id="sdmsUsername"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Masukkan username akun SDMS"
             />
           </Field>
 
-          <Field label="API Secret SDMS">
+          <Field label="Password SDMS">
             <Input
-              id="apiSecret"
+              id="sdmsPassword"
               type="password"
-              value={apiSecret}
-              onChange={(e) => setApiSecret(e.target.value)}
-              placeholder="Masukkan API Secret"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Masukkan password akun SDMS"
             />
           </Field>
 
-          <Field label="Base URL API SDMS" hint="URL server SDMS Anda (contoh: https://sdms.sekolah.id/api/v1/master)">
+          <Field label="Base URL API SDMS" hint="URL server SDMS (contoh: https://sdms.smkn1kras.sch.id/api/v1/master)">
             <Input
-              id="apiBaseUrl"
-              value={apiBaseUrl}
-              onChange={(e) => setApiBaseUrl(e.target.value)}
-              placeholder="https://sdms.sekolah.id/api/v1/master"
+              id="sdmsBaseUrl"
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              placeholder="https://sdms.smkn1kras.sch.id/api/v1/master"
             />
           </Field>
 
@@ -179,7 +191,7 @@ export default function SDMSIntegration() {
           <Button
             variant="secondary"
             onClick={() => testMutation.mutate()}
-            disabled={testMutation.isPending || !apiKey || !apiSecret}
+            disabled={testMutation.isPending || !username || !password}
           >
             {testMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Server className="h-4 w-4" />}
             Test Koneksi
@@ -188,7 +200,7 @@ export default function SDMSIntegration() {
           <Button
             variant="secondary"
             onClick={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending || !apiKey || !apiSecret}
+            disabled={syncMutation.isPending || !username || !password}
           >
             {syncMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
             Sinkronisasi Sekarang
@@ -219,13 +231,11 @@ export default function SDMSIntegration() {
             <div className="mt-4 p-3 bg-red-50 rounded-lg">
               <div className="flex items-center gap-2 text-red-700 text-sm font-medium mb-2">
                 <AlertCircle className="h-4 w-4" />
-                {'Error ('}
-                {syncResults.errors.length}
-                {')'}
+                Error ({syncResults.errors.length})
               </div>
               <ul className="text-xs text-red-600 space-y-1">
                 {syncResults.errors.slice(0, 5).map((err: string, i: number) => (
-                  <li key={i}>{'• '}{err}</li>
+                  <li key={i}>• {err}</li>
                 ))}
               </ul>
             </div>
@@ -237,7 +247,8 @@ export default function SDMSIntegration() {
       <Card className="p-6 bg-amber-50 border-amber-200">
         <h4 className="text-sm font-bold text-amber-800 mb-2">Cara Menghubungkan ke SDMS</h4>
         <ol className="text-sm text-amber-700 space-y-2 list-decimal list-inside">
-          <li>Masukkan <strong>API Key</strong> dan <strong>API Secret</strong> dari SDMS ke kolom di atas.</li>
+          <li>Masukkan <strong>Username</strong> dan <strong>Password</strong> akun SDMS ke kolom di atas.</li>
+          <li>Masukkan <strong>Base URL</strong> server SDMS Anda.</li>
           <li>Klik <strong>Simpan Pengaturan</strong>.</li>
           <li>Klik <strong>Test Koneksi</strong> untuk memastikan koneksi berhasil.</li>
           <li>Salin <strong>Webhook URL</strong> dan masukkan ke pengaturan SDMS.</li>
