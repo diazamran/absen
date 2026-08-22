@@ -32,9 +32,12 @@ fi
 echo "➜ Build & restart container (port web: $WEB_PORT)..."
 WEB_PORT="$WEB_PORT" docker compose $COMPOSE_FILES up -d --build
 
-# Seed sudah tidak dijalankan otomatis saat update.
-# Untuk seed manual: docker compose exec backend npm run db:seed
+# Bersihkan data absensi hari ini agar dashboard kosong
+# (User, siswa, guru, kelas TIDAK dihapus)
+echo "➜ Membersihkan data absensi hari ini..."
+WEB_PORT="$WEB_PORT" docker compose $COMPOSE_FILES exec -T postgres psql -U postgres -d presensiku -c "DELETE FROM \"Attendance\" WHERE DATE(\"clockIn\") = CURRENT_DATE OR DATE(\"createdAt\") = CURRENT_DATE;" 2>/dev/null || true
+WEB_PORT="$WEB_PORT" docker compose $COMPOSE_FILES exec -T postgres psql -U postgres -d presensiku -c "DELETE FROM \"Notification\" WHERE DATE(\"createdAt\") = CURRENT_DATE;" 2>/dev/null || true
 
 echo ""
-echo "✅ Update selesai."
+echo "✅ Update selesai (data absensi hari ini dikosongkan)."
 docker compose $COMPOSE_FILES ps
