@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Palette, Building2, Clock3, Bell, Save, Check, Upload, Loader2, X } from 'lucide-react';
+import { Palette, Building2, Clock3, Bell, Save, Check, Upload, Loader2, X, Link2 } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { prepareLogoFile } from '../../lib/image';
 import { useTheme } from '../../lib/theme';
@@ -8,6 +8,7 @@ import { useToast } from '../../lib/toast';
 import { Card, Button, Input, Field } from '../../lib/ui';
 import TimeInput from '../../components/TimeInput';
 import { PageHeader } from '../../components/AppShell';
+import SDMSIntegration from './SDMSIntegration';
 
 const PRESETS = ['#0d9488', '#2563eb', '#16a34a', '#7c3aed', '#ea580c'];
 
@@ -268,6 +269,11 @@ export default function Settings() {
             <p className="text-xs text-muted">Provider WhatsApp/SMTP dikonfigurasi melalui environment variable (WHATSAPP_API_KEY, SMTP_*).</p>
           </div>
         </Card>
+
+        {/* SDMS Integration */}
+        <div className="lg:col-span-2">
+          <SDMSIntegration />
+        </div>
       </div>
 
       <div className="mt-4 flex justify-end">
