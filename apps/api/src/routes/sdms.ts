@@ -520,6 +520,104 @@ export async function sdmsRoutes(app: FastifyInstance) {
     }
   });
 
+  // ===== MONITORING =====
+
+  // SDMS connection monitor — live status check + sync stats
+  app.get('/sdms/monitor', { preHandler: app.requirePermission(PERMISSION_KEYS.settingsManage) }, async (_request, reply) => {
+    const settings = await getSDMSSettings();
+    const baseUrl = (settings.sdmsBaseUrl as string) || '';
+    const username = settings.sdmsUsername as string;
+    const password = settings.sdmsPassword as string;
+    const lastSyncRow = await prisma.schoolSetting.findUnique({ where: { key: 'sdms_last_sync' } });
+    const lastSync = (lastSyncRow?.value as Record<string, unknown>) || {};
+
+    // Live connection check
+    let connectionStatus: 'online' | 'offline' | 'not_configured' = 'not_configured';
+    let latencyMs: number | null = null;
+    let sdmsStudentsCount: number | null = null;
+    let errorMessage: string | null = null;
+
+    if (username && password && baseUrl) {
+      try {
+        const start = Date.now();
+        const token = await sdmsLogin(
+          baseUrl,
+          username,
+          password === '••••••••' ? password : password
+        );
+        const loginMs = Date.now() - start;
+
+        const res = await fetch(`${baseUrl}/siswa?limit=1`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (res.ok) {
+          const json = await res.json() as Record<string, unknown>;
+          const meta = json.meta as Record<string, unknown> | undefined;
+          sdmsStudentsCount = (meta?.total as number) || 0;
+          latencyMs = Date.now() - start;
+          connectionStatus = 'online';
+        } else {
+          connectionStatus = 'offline';
+          errorMessage = `HTTP ${res.status}`;
+        }
+      } catch (err: unknown) {
+        connectionStatus = 'offline';
+        errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      }
+    }
+
+    // Local stats
+    const localStudents = await prisma.student.count({ where: { isActive: true } });
+    const localTeachers = await prisma.teacher.count({ where: { isActive: true } });
+    const localClasses = await prisma.class.count({ where: { isActive: true } });
+
+    // Recent webhook events (last 20)
+    const recentWebhooks = await prisma.auditLog.findMany({
+      where: { action: { in: ['SDMS_MANUAL_SYNC', 'SDMS_SETTINGS_UPDATED'] } },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true,
+        action: true,
+        newValue: true,
+        createdAt: true,
+        user: { select: { fullName: true } },
+      },
+    });
+
+    return reply.send({
+      success: true,
+      data: {
+        connection: {
+          status: connectionStatus,
+          latencyMs,
+          sdmsStudentsCount,
+          errorMessage,
+          configured: !!(username && password && baseUrl),
+        },
+        lastSync: {
+          time: lastSync.lastPull || lastSync.lastWebhook || null,
+          results: lastSync.results || null,
+          webhookTime: lastSync.lastWebhook || null,
+          webhookEvent: lastSync.event || null,
+        },
+        local: {
+          students: localStudents,
+          teachers: localTeachers,
+          classes: localClasses,
+        },
+        recentEvents: recentWebhooks.map((w) => ({
+          id: w.id,
+          action: w.action,
+          user: w.user?.fullName ?? 'System',
+          details: w.newValue,
+          time: w.createdAt,
+        })),
+      },
+    });
+  });
+
   // Manual sync — pull all data from SDMS
   app.post('/sdms/sync', { preHandler: app.requirePermission(PERMISSION_KEYS.settingsManage) }, async (request, reply) => {
     const settings = await getSDMSSettings();

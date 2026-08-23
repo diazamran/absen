@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Home, ScanLine, Users, FileText, LayoutDashboard, GraduationCap, CalendarDays, BookOpen,
   ClipboardList, Smartphone, BarChart3, Bell, ScrollText, Settings, LogOut, Menu, X, ShieldCheck,
-  ClipboardCheck, History, FilePlus2, UserRound, Baby, ScanFace, QrCode, MapPin, Building2,
+  ClipboardCheck, History, FilePlus2, UserRound, Baby, ScanFace, QrCode, MapPin, Building2, Activity,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useTheme } from '../lib/theme';
@@ -33,6 +33,7 @@ const ADMIN_MENU: NavItem[] = [
   { to: '/app/notifications', label: 'Notifikasi', icon: <Bell className="h-5 w-5" /> },
   { to: '/app/devices', label: 'Perangkat', icon: <Smartphone className="h-5 w-5" /> },
   { to: '/app/audit', label: 'Audit Log', icon: <ScrollText className="h-5 w-5" /> },
+  { to: '/app/sdms-monitor', label: 'Monitor SDMS', icon: <Activity className="h-5 w-5" /> },
   { to: '/app/settings', label: 'Pengaturan', icon: <Settings className="h-5 w-5" /> },
 ];
 

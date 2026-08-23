@@ -25,6 +25,7 @@ const ImportStudents = lazy(() => import('./pages/admin/ImportStudents'));
 const QrCards = lazy(() => import('./pages/admin/QrCards'));
 const PklManagement = lazy(() => import('./pages/admin/PklManagement'));
 const PklReports = lazy(() => import('./pages/admin/PklReports'));
+const SDMSMonitor = lazy(() => import('./pages/admin/SDMSMonitor'));
 
 // Guru / Staff / Siswa
 const TeacherHome = lazy(() => import('./pages/teacher/TeacherHome'));
@@ -100,6 +101,7 @@ export default function App() {
         <Route path="qr-cards" element={<Page><QrCards /></Page>} />
         <Route path="pkl" element={<Page><PklManagement /></Page>} />
         <Route path="pkl-reports" element={<Page><PklReports /></Page>} />
+        <Route path="sdms-monitor" element={<Page><SDMSMonitor /></Page>} />
 
         {/* Guru / Orang tua */}
         <Route path="home" element={<HomeSwitch />} />
