@@ -158,6 +158,9 @@ export async function pklRoutes(app: FastifyInstance) {
         created++;
       }
     }
+    if (created > 0) {
+      await audit({ userId: request.user!.id, action: 'PKL_BULK_ASSIGNMENT', entity: 'PklAssignment', entityId: body.pklLocationId, request });
+    }
     return reply.send({ success: true, message: `${created} siswa ditugaskan ke lokasi PKL.` });
   });
 

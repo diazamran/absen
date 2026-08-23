@@ -47,6 +47,7 @@ interface StudentOption {
 interface TeacherOption {
   id: string;
   userId: string;
+  teacherId: string | null;
   fullName: string;
   nip: string | null;
   isPiket: boolean;
@@ -195,8 +196,8 @@ function AssignmentForm({ locationId, onClose }: { locationId: string; onClose: 
           className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink dark:border-slate-600 dark:bg-slate-800"
         >
           <option value="">— Pilih Guru —</option>
-          {teachers?.map((t) => (
-            <option key={t.id} value={t.id}>{t.fullName}{t.nip ? ` (${t.nip})` : ''}</option>
+          {teachers?.filter((t) => t.teacherId).map((t) => (
+            <option key={t.id} value={t.teacherId!}>{t.fullName}{t.nip ? ` (${t.nip})` : ''}</option>
           ))}
         </select>
       </div>

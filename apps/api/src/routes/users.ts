@@ -72,6 +72,7 @@ export async function userRoutes(app: FastifyInstance) {
         fullName: u.fullName,
         roleKey: u.role.key,
         roleName: ROLE_LABELS[u.role.key] || u.role.name,
+        teacherId: u.teacher?.id ?? null,
         nip: u.teacher?.nip ?? u.staff?.nip ?? autoCreated.get(u.id)?.nip ?? null,
         position: u.teacher?.position ?? u.staff?.position ?? autoCreated.get(u.id)?.position ?? null,
         isPiket: u.teacher?.isPiket ?? false,
