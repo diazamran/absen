@@ -300,7 +300,7 @@ export default function SDMSMonitor() {
                         <td className="py-2.5 text-xs text-muted">
                           {ev.action === 'SDMS_MANUAL_SYNC' && ev.details && typeof ev.details === 'object' && 'students' in (ev.details as Record<string, unknown>) ? (
                             <span>
-                              {(ev.details as Record<string, unknown>).students} siswa · {(ev.details as Record<string, unknown>).teachers} guru · {(ev.details as Record<string, unknown>).classes} kelas
+                              {String((ev.details as Record<string, unknown>).students ?? 0)} siswa · {String((ev.details as Record<string, unknown>).teachers ?? 0)} guru · {String((ev.details as Record<string, unknown>).classes ?? 0)} kelas
                               {Array.isArray((ev.details as Record<string, unknown>).errors) && ((ev.details as Record<string, unknown>).errors as string[]).length > 0 && (
                                 <span className="ml-2 text-red-500">⚠ {((ev.details as Record<string, unknown>).errors as string[]).length} error</span>
                               )}
