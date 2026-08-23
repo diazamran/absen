@@ -51,14 +51,13 @@ export async function authRoutes(app: FastifyInstance) {
       where: { username: body.username.trim() },
       include: { role: true, student: true, teacher: true, staff: true },
     });
-    // Combine primary role + additional roles into a single array
-    const userRoles = [user.role.key, ...((user.additionalRoles as string[]) || [])];
     if (!user || !user.isActive) {
       throw ApiError.unauthorized('INVALID_CREDENTIALS', 'Username atau password salah.');
     }
     if (user.role.key === 'STUDENT') {
       throw ApiError.unauthorized('STUDENT_LOGIN_METHOD', 'Siswa login menggunakan NISN dan password.');
     }
+    const userRoles = [user.role.key, ...((user.additionalRoles as string[]) || [])];
     const ok = await verifyPassword(body.password, user.passwordHash);
     if (!ok) {
       throw ApiError.unauthorized('INVALID_CREDENTIALS', 'Username atau password salah.');
