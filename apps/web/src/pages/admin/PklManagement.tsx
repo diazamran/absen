@@ -250,10 +250,7 @@ export default function PklManagement() {
     queryFn: () => api<{ success: boolean; data: PklLocation[] }>(`/pkl/locations?search=${encodeURIComponent(search)}`).then((r) => r.data),
   });
 
-  const { data: allStudents } = useQuery({
-    queryKey: ['pkl-students'],
-    queryFn: () => api<{ success: boolean; data: PklStudent[] }>('/pkl/students').then((r) => r.data),
-  });
+
 
   const deleteLocation = useMutation({
     mutationFn: (id: string) => api(`/pkl/locations/${id}`, { method: 'DELETE' }),
@@ -325,7 +322,7 @@ export default function PklManagement() {
           onChange={(v) => setTab(v as 'locations' | 'assignments')}
           options={[
             { value: 'locations', label: `Lokasi (${locations?.length ?? 0})` },
-            { value: 'assignments', label: `Penugasan (${allStudents?.length ?? 0})` },
+            { value: 'assignments', label: `Penugasan (${locations?.reduce((sum, l) => sum + l.students.length, 0) ?? 0})` },
           ]}
         />
         {tab === 'locations' && (
@@ -461,7 +458,7 @@ export default function PklManagement() {
           {isLoading && <Skeleton className="h-32 w-full" />}
           {!isLoading && (
             <div className="space-y-3">
-              {allStudents && allStudents.length === 0 && (
+              {locations?.filter((l) => l.students.length > 0).length === 0 && (
                 <EmptyState icon={GraduationCap} title="Belum ada siswa PKL" description="Tugaskan siswa ke lokasi PKL dari tab Lokasi." />
               )}
               {/* Group by location */}
