@@ -17,7 +17,7 @@ const DAY_LABELS: Record<string, string> = {
 
 export default function Classes() {
   const { user } = useAuth();
-  const isAdmin = user?.roleKey === 'ADMIN' || user?.roleKey === 'SUPER_ADMIN';
+  const isAdmin = user?.roles?.includes('ADMIN') || user?.roles?.includes('SUPER_ADMIN') || user?.roleKey === 'ADMIN' || user?.roleKey === 'SUPER_ADMIN';
   const [tab, setTab] = useState<Tab>(isAdmin ? 'classes' : 'schedules');
 
   return (

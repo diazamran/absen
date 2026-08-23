@@ -150,10 +150,19 @@ export default function Users() {
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-muted">@{u.username}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-muted">{u.nip || '-'}</td>
                   <td className="px-3 py-2.5">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-semibold text-primary-dark">
-                      {u.roleKey === 'PIKET' && <ShieldCheck className="h-3 w-3" />}
-                      {u.roleName}
-                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-semibold text-primary-dark">
+                        {u.roleKey === 'PIKET' && <ShieldCheck className="h-3 w-3" />}
+                        {u.roleName}
+                      </span>
+                      {(u as Record<string, unknown>).additionalRoles && Array.isArray((u as Record<string, unknown>).additionalRoles) && ((u as Record<string, unknown>).additionalRoles as string[]).length > 0 && (
+                        ((u as Record<string, unknown>).additionalRoles as string[]).map((ar: string) => (
+                          <span key={ar} className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+                            +{ar === 'PIKET' ? 'Piket' : ar === 'HOMEROOM_TEACHER' ? 'Wali' : ar === 'HEADMASTER' ? 'Kepsek' : ar === 'TEACHER' ? 'Guru' : ar === 'STAFF' ? 'Staff' : ar}
+                          </span>
+                        ))
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 py-2.5"><Badge status={u.isActive ? 'APPROVED' : 'BLOCKED'} label={u.isActive ? 'Aktif' : 'Nonaktif'} /></td>
                   <td className="px-3 py-2.5">
@@ -220,7 +229,7 @@ function UserForm({ onClose, subjects, initial }: { onClose: () => void; subject
   const { toast } = useToast();
   const qc = useQueryClient();
   const { user } = useAuth();
-  const isSuperAdmin = user?.roleKey === 'SUPER_ADMIN';
+  const isSuperAdmin = user?.roles?.includes('SUPER_ADMIN') || user?.roleKey === 'SUPER_ADMIN';
   const [form, setForm] = useState(() => ({
     username: initial?.username || '',
     password: '',
@@ -231,17 +240,18 @@ function UserForm({ onClose, subjects, initial }: { onClose: () => void; subject
     phone: initial?.phone || '',
     subjectId: initial?.subjectName ? subjects.find((s) => s.name === initial.subjectName)?.id || '' : '',
   }));
+  const [additionalRoles, setAdditionalRoles] = useState<string[]>(initial?.additionalRoles || []);
 
   const mutation = useMutation({
     mutationFn: () => {
       if (initial) {
         // Edit: jangan kirim password jika kosong
         const { password, ...rest } = form;
-        const body: Record<string, unknown> = { ...rest };
+        const body: Record<string, unknown> = { ...rest, additionalRoles };
         if (password) body.password = password;
         return api(`/users/${initial.id}`, { method: 'PUT', body });
       }
-      return api('/users', { method: 'POST', body: { ...form, password: form.password || 'guru123' } });
+      return api('/users', { method: 'POST', body: { ...form, password: form.password || 'guru123', additionalRoles } });
     },
     onSuccess: () => {
       toast('success', initial ? 'Akun diperbarui.' : 'Akun berhasil dibuat.');
@@ -278,6 +288,28 @@ function UserForm({ onClose, subjects, initial }: { onClose: () => void; subject
         </Field>
         <Field label="No HP"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
       </div>
+      {/* Tambahan Role (Multi-Role) */}
+      {initial && (
+        <div className="mt-4 rounded-xl border border-line/60 bg-slate-50 p-4 dark:bg-slate-800/50">
+          <p className="mb-2 text-sm font-semibold text-ink">Tambahan Role</p>
+          <p className="mb-3 text-xs text-muted">Pilih role tambahan selain role utama. Contoh: Guru yang juga Petugas Piket dan Wali Kelas.</p>
+          <div className="flex flex-wrap gap-3">
+            {['PIKET', 'HOMEROOM_TEACHER', 'HEADMASTER', 'TEACHER', 'STAFF', 'ADMIN'].map((r) => (
+              <label key={r} className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  className="rounded border-slate-300 text-primary focus:ring-primary"
+                  checked={additionalRoles.includes(r)}
+                  onChange={(e) => {
+                    setAdditionalRoles(e.target.checked ? [...additionalRoles, r] : additionalRoles.filter((x) => x !== r));
+                  }}
+                />
+                {r === 'PIKET' ? 'Petugas Piket' : r === 'HOMEROOM_TEACHER' ? 'Wali Kelas' : r === 'HEADMASTER' ? 'Kepala Sekolah' : r === 'TEACHER' ? 'Guru' : r === 'STAFF' ? 'Staff' : 'Admin'}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="outline" onClick={onClose}>Batal</Button>
         <Button onClick={() => mutation.mutate()} disabled={!form.fullName || !form.username || mutation.isPending}>Simpan</Button>

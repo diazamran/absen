@@ -21,7 +21,7 @@ export default function QrScan() {
   const streamRef = useRef<MediaStream | null>(null);
   const busyRef = useRef(false);
 
-  const isStudent = user?.roleKey === 'STUDENT';
+  const isStudent = user?.roles?.includes('STUDENT') || user?.roleKey === 'STUDENT';
   const [type, setType] = useState<Type>('CHECK_IN');
   // Siswa hanya melihat QR miliknya sendiri (bukan memindai QR)
   const [mode, setMode] = useState<Mode>(isStudent ? 'show' : 'scan');

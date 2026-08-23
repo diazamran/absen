@@ -6,7 +6,7 @@ import {
   ClipboardList, Smartphone, BarChart3, Bell, ScrollText, Settings, LogOut, Menu, X, ShieldCheck,
   ClipboardCheck, History, FilePlus2, UserRound, Baby, ScanFace, QrCode, MapPin, Building2, Activity,
 } from 'lucide-react';
-import { useAuth } from '../lib/auth';
+import { useAuth, hasRole, type MeData } from '../lib/auth';
 import { useTheme } from '../lib/theme';
 import { api } from '../lib/api';
 import { cn, greeting } from '../lib/format';
@@ -37,40 +37,54 @@ const ADMIN_MENU: NavItem[] = [
   { to: '/app/settings', label: 'Pengaturan', icon: <Settings className="h-5 w-5" /> },
 ];
 
-/** Menu untuk role non-admin — sama untuk sidebar desktop & drawer mobile. */
-function roleMenu(role?: string): NavItem[] {
+/** Menu untuk role non-admin — gabungan semua role user. */
+function roleMenu(user: MeData | null): NavItem[] {
+  const roles = user?.roles || (user?.roleKey ? [user.roleKey] : []);
+  const has = (r: string) => roles.includes(r);
+
   const items: NavItem[] = [{ to: '/app/home', label: 'Beranda', icon: <Home className="h-5 w-5" /> }];
-  if (role === 'STUDENT') {
+
+  // Student-specific
+  if (has('STUDENT')) {
     items.push({ to: '/app/pkl-absent', label: 'Absen PKL', icon: <MapPin className="h-5 w-5" /> });
     items.push({ to: '/app/face-me', label: 'Registrasi Wajah', icon: <ScanFace className="h-5 w-5" /> });
   }
+
+  // Riwayat — semua role non-admin
   items.push({ to: '/app/history', label: 'Riwayat', icon: <History className="h-5 w-5" /> });
-  if (role === 'PIKET') {
-    // Petugas Piket: menu izin hanya untuk persetujuan, bukan pengajuan
-    items.push({ to: '/app/gate', label: 'Scan Gerbang', icon: <ScanLine className="h-5 w-5" /> });
-    items.push({ to: '/app/attendance', label: 'Absensi Manual', icon: <ClipboardCheck className="h-5 w-5" /> });
-    items.push({ to: '/app/qr-cards', label: 'Kartu QR', icon: <QrCode className="h-5 w-5" /> });
-    items.push({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
-    items.push({ to: '/app/reports', label: 'Laporan & Cetak', icon: <BarChart3 className="h-5 w-5" /> });
-  } else if (role === 'HOMEROOM_TEACHER') {
-    // Wali kelas: persetujuan izin, laporan (kelasnya sendiri), tanpa Absen
-    items.push({ to: '/app/qr-cards', label: 'Kartu QR', icon: <QrCode className="h-5 w-5" /> });
-    items.push({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
-    items.push({ to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-5 w-5" /> });
-  } else if (role === 'TEACHER') {
-    // Guru: monitor PKL
-    items.push({ to: '/app/pkl-monitor', label: 'Monitor PKL', icon: <MapPin className="h-5 w-5" /> });
-  } else {
-    // Guru lain / Staff: tanpa menu Ajukan Izin & Absen
-    if (role !== 'PARENT' && role !== 'TEACHER') {
-      items.push({ to: '/app/leave/mine', label: 'Ajukan Izin', icon: <FilePlus2 className="h-5 w-5" /> });
-    }
-    if (role !== 'TEACHER') {
-      items.push({ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-5 w-5" /> });
-    }
+
+  // Merge menus dari semua role (deduplicate by 'to')
+  const seen = new Set(items.map((i) => i.to));
+  const add = (item: NavItem) => { if (!seen.has(item.to)) { seen.add(item.to); items.push(item); } };
+
+  if (has('PIKET')) {
+    add({ to: '/app/gate', label: 'Scan Gerbang', icon: <ScanLine className="h-5 w-5" /> });
+    add({ to: '/app/attendance', label: 'Absensi Manual', icon: <ClipboardCheck className="h-5 w-5" /> });
+    add({ to: '/app/qr-cards', label: 'Kartu QR', icon: <QrCode className="h-5 w-5" /> });
+    add({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
+    add({ to: '/app/reports', label: 'Laporan & Cetak', icon: <BarChart3 className="h-5 w-5" /> });
   }
-  items.push({ to: '/app/notifications', label: 'Notifikasi', icon: <Bell className="h-5 w-5" /> });
-  items.push({ to: '/app/profile', label: 'Profil', icon: <UserRound className="h-5 w-5" /> });
+
+  if (has('HOMEROOM_TEACHER')) {
+    add({ to: '/app/qr-cards', label: 'Kartu QR', icon: <QrCode className="h-5 w-5" /> });
+    add({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
+    add({ to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-5 w-5" /> });
+  }
+
+  if (has('TEACHER')) {
+    add({ to: '/app/pkl-monitor', label: 'Monitor PKL', icon: <MapPin className="h-5 w-5" /> });
+  }
+
+  // Staff / other: Absen & Izin sendiri
+  if (!has('STUDENT') && !has('PARENT') && !has('TEACHER')) {
+    add({ to: '/app/leave/mine', label: 'Ajukan Izin', icon: <FilePlus2 className="h-5 w-5" /> });
+    add({ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-5 w-5" /> });
+  }
+
+  // Notifikasi & Profil
+  add({ to: '/app/notifications', label: 'Notifikasi', icon: <Bell className="h-5 w-5" /> });
+  add({ to: '/app/profile', label: 'Profil', icon: <UserRound className="h-5 w-5" /> });
+
   return items;
 }
 
@@ -176,8 +190,8 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
   const { user, logout } = useAuth();
   const { branding } = useTheme();
   const navigate = useNavigate();
-  const isAdmin = user?.roleKey === 'ADMIN' || user?.roleKey === 'SUPER_ADMIN' || user?.roleKey === 'HEADMASTER';
-  const menu = isAdmin ? ADMIN_MENU : roleMenu(user?.roleKey);
+  const isAdmin = hasRole(user, 'ADMIN') || hasRole(user, 'SUPER_ADMIN') || hasRole(user, 'HEADMASTER');
+  const menu = isAdmin ? ADMIN_MENU : roleMenu(user);
 
   const doLogout = async () => {
     onClose?.();
@@ -248,7 +262,7 @@ export function AppShell() {
   const { branding } = useTheme();
   const navigate = useNavigate();
   const [mobileMenu, setMobileMenu] = useState(false);
-  const isAdmin = user?.roleKey === 'ADMIN' || user?.roleKey === 'SUPER_ADMIN' || user?.roleKey === 'HEADMASTER';
+  const isAdmin = hasRole(user, 'ADMIN') || hasRole(user, 'SUPER_ADMIN') || hasRole(user, 'HEADMASTER');
   const bottomNav = BOTTOM_NAV[user?.roleKey || ''] || BOTTOM_NAV.STUDENT;
 
   // Badge notifikasi belum dibaca (sinkron dengan halaman Notifikasi via query key yang sama)

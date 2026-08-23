@@ -18,6 +18,7 @@ const userCreateSchema = z.object({
   email: z.string().optional(),
   subjectId: z.string().optional(),
   isPiket: z.boolean().optional(),
+  additionalRoles: z.array(z.enum(['SUPER_ADMIN', 'ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF', 'PIKET'])).optional(),
 });
 
 export async function userRoutes(app: FastifyInstance) {
@@ -81,6 +82,7 @@ export async function userRoutes(app: FastifyInstance) {
         phone: u.phone,
         email: u.email,
         isActive: u.isActive,
+        additionalRoles: (u as { additionalRoles?: string[] }).additionalRoles || [],
         lastLoginAt: u.lastLoginAt,
       })),
       meta: { total, page, pageSize, pages: Math.ceil(total / pageSize) },
@@ -115,6 +117,7 @@ export async function userRoutes(app: FastifyInstance) {
           phone: body.phone,
           email: body.email,
           roleId: role.id,
+          additionalRoles: body.additionalRoles || [],
         },
       });
       if (body.roleKey === 'TEACHER' || body.roleKey === 'HOMEROOM_TEACHER' || body.roleKey === 'HEADMASTER') {
@@ -159,6 +162,7 @@ export async function userRoutes(app: FastifyInstance) {
         isPiket: z.boolean().optional(),
         password: z.string().min(6).optional(),
         roleKey: z.enum(['SUPER_ADMIN', 'ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF', 'PIKET']).optional(),
+        additionalRoles: z.array(z.enum(['SUPER_ADMIN', 'ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF', 'PIKET'])).optional(),
       }),
       request.body,
     );
@@ -184,6 +188,9 @@ export async function userRoutes(app: FastifyInstance) {
     if (body.roleKey) {
       const role = await prisma.role.findUnique({ where: { key: body.roleKey } });
       if (role) data.roleId = role.id;
+    }
+    if (body.additionalRoles !== undefined) {
+      data.additionalRoles = body.additionalRoles;
     }
 
     await prisma.user.update({ where: { id }, data });

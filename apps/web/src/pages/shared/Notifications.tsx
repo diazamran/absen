@@ -65,7 +65,7 @@ export default function Notifications() {
           <EmptyState
             icon={Bell}
             title="Belum ada notifikasi"
-            description={user?.roleKey === 'STUDENT' ? 'Notifikasi absensi murid akan muncul di sini.' : 'Notifikasi absensi anak/guru akan muncul di sini.'}
+            description={(user?.roles?.includes('STUDENT') || user?.roleKey === 'STUDENT') ? 'Notifikasi absensi murid akan muncul di sini.' : 'Notifikasi absensi anak/guru akan muncul di sini.'}
           />
         )}
       </div>

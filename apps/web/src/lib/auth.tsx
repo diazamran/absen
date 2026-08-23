@@ -11,6 +11,7 @@ export interface MeData {
   avatarUrl?: string | null;
   roleKey: string;
   roleName: string;
+  roles?: string[]; // primary + additional roles
   preferences?: Record<string, unknown> | null;
   student?: { id: string; nis: string; className?: string | null; grade?: string | null; major?: string | null } | null;
   teacher?: { id: string; nip?: string | null; position?: string | null; isPiket?: boolean } | null;
@@ -35,6 +36,13 @@ interface AuthCtx {
 
 const Ctx = createContext<AuthCtx>(null as never);
 export const useAuth = () => useContext(Ctx);
+
+/** Cek apakah user punya role tertentu (primary atau additional). */
+export function hasRole(user: MeData | null, role: string): boolean {
+  if (!user) return false;
+  if (user.roles) return user.roles.includes(role);
+  return user.roleKey === role;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<MeData | null>(null);

@@ -1,6 +1,6 @@
 import { lazy, Suspense, type ReactNode } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { useAuth } from './lib/auth';
+import { useAuth, hasRole } from './lib/auth';
 import { AppShell } from './components/AppShell';
 import ApkDownloadBanner from './components/ApkDownloadBanner';
 import { LoadingCard } from './lib/ui';
@@ -139,7 +139,7 @@ export default function App() {
 
 function HomeSwitch() {
   const { user } = useAuth();
-  if (user?.roleKey === 'PARENT') {
+  if (hasRole(user, 'PARENT')) {
     return (
       <Page>
         <ParentHome />
@@ -157,8 +157,8 @@ function RootRedirect() {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
-  const role = user.roleKey;
-  if (role === 'ADMIN' || role === 'SUPER_ADMIN') return <Navigate to="/app/dashboard" replace />;
-  if (role === 'PARENT') return <Navigate to="/app/home" replace />;
+  const roles = user.roles || [user.roleKey];
+  if (roles.includes('ADMIN') || roles.includes('SUPER_ADMIN')) return <Navigate to="/app/dashboard" replace />;
+  if (roles.includes('PARENT')) return <Navigate to="/app/home" replace />;
   return <Navigate to="/app/home" replace />;
 }

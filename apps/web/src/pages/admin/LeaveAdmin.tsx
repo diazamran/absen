@@ -17,7 +17,7 @@ export default function LeaveAdmin() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { user } = useAuth();
-  const isSuperAdmin = user?.roleKey === 'SUPER_ADMIN';
+  const isSuperAdmin = user?.roles?.includes('SUPER_ADMIN') || user?.roleKey === 'SUPER_ADMIN';
   const [tab, setTab] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'>('PENDING');
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [detailLeave, setDetailLeave] = useState<LeaveRow | null>(null);

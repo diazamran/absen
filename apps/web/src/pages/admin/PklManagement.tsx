@@ -156,7 +156,7 @@ function AssignmentForm({ locationId, onClose }: { locationId: string; onClose: 
 
   const { data: teachers } = useQuery({
     queryKey: ['teachers-for-pkl'],
-    queryFn: () => api<{ success: boolean; data: TeacherOption[] }>('/users?pageSize=200').then((r) => (r.data ?? []).filter((u: TeacherOption & { roleKey?: string }) => (u as TeacherOption & { roleKey?: string }).roleKey === 'TEACHER' || (u as TeacherOption & { roleKey?: string }).roleKey === 'HOMEROOM_TEACHER' || (u as TeacherOption & { roleKey?: string }).roleKey === 'SUPER_ADMIN')),
+    queryFn: () => api<{ success: boolean; data: TeacherOption[] }>('/users?pageSize=200').then((r) => (r.data ?? []).filter((u: TeacherOption & { roleKey?: string; additionalRoles?: string[] }) => { const roles = [u.roleKey, ...((u as TeacherOption & { additionalRoles?: string[] }).additionalRoles || [])]; return roles.includes('TEACHER') || roles.includes('HOMEROOM_TEACHER') || roles.includes('SUPER_ADMIN'); })),
   });
 
   const assign = useMutation({

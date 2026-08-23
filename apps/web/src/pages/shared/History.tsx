@@ -25,7 +25,7 @@ export default function History() {
   const [month, setMonth] = useState(currentMonthKey());
 
   // Hanya Super Admin bisa menghapus bersih catatan absensi siswa
-  const canDelete = user?.roleKey === 'SUPER_ADMIN';
+  const canDelete = user?.roles?.includes('SUPER_ADMIN') || user?.roleKey === 'SUPER_ADMIN';
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api(`/attendance/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
@@ -36,7 +36,7 @@ export default function History() {
   });
 
   // Orang tua melihat riwayat anak
-  const isParent = user?.roleKey === 'PARENT';
+  const isParent = user?.roles?.includes('PARENT') || user?.roleKey === 'PARENT';
   const { data: children } = useQuery({
     queryKey: ['dashboard-parent'],
     queryFn: () => api<{ success: boolean; data: { children: { studentId: string; name: string }[] } }>('/dashboard').then((r) => r.data),
@@ -45,7 +45,7 @@ export default function History() {
   const [childId, setChildId] = useState('');
 
   // Filter kelas: wali kelas / piket / admin bisa melihat semua kelas atau per kelas
-  const canFilterClass = !isParent && ['ADMIN', 'SUPER_ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'PIKET'].includes(user?.roleKey || '');
+  const canFilterClass = !isParent && (user?.roles || [user?.roleKey || '']).some((r) => ['ADMIN', 'SUPER_ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'PIKET'].includes(r));
   const { data: classes } = useQuery({
     queryKey: ['classes'],
     queryFn: () => api<{ success: boolean; data: { id: string; name: string }[] }>('/classes').then((r) => r.data),

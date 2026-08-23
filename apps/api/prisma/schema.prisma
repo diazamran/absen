@@ -134,9 +134,10 @@ model User {
   email          String?
   phone          String?
   avatarUrl      String?
-  roleId         String
-  isActive       Boolean   @default(true)
-  preferences    Json? // { theme, primaryColor, ... }
+  roleId             String
+  additionalRoles    Json?     // ["PIKET", "HOMEROOM_TEACHER", ...] — multi-role support
+  isActive           Boolean   @default(true)
+  preferences        Json? // { theme, primaryColor, ... }
   lastLoginAt    DateTime?
   lastLoginIp    String?
   createdAt      DateTime  @default(now())

@@ -4,7 +4,7 @@ import {
   FilePlus2, FileText, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, LogOut, XCircle, CalendarDays, MapPin, ShieldCheck, ScanFace, BarChart3, ClipboardCheck,
 } from 'lucide-react';
 import { api } from '../../lib/api';
-import { useAuth } from '../../lib/auth';
+import { useAuth, hasRole } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
 import { Card, Button, Badge } from '../../lib/ui';
 import { greeting, STATUS_LABELS } from '../../lib/format';
@@ -33,11 +33,11 @@ export default function TeacherHome() {
     queryFn: () => api<{ success: boolean; data: HomeData }>('/dashboard').then((r) => r.data),
   });
 
-  const isStudent = user?.roleKey === 'STUDENT';
-  const isParent = user?.roleKey === 'PARENT';
-  const isPiket = user?.roleKey === 'PIKET';
-  const isTeacher = user?.roleKey === 'TEACHER';
-  const isHomeroom = user?.roleKey === 'HOMEROOM_TEACHER';
+  const isStudent = hasRole(user, 'STUDENT');
+  const isParent = hasRole(user, 'PARENT');
+  const isPiket = hasRole(user, 'PIKET');
+  const isTeacher = hasRole(user, 'TEACHER');
+  const isHomeroom = hasRole(user, 'HOMEROOM_TEACHER');
 
   const menu = isStudent
     ? [

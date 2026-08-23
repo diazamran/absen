@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, XCircle, Wifi, WifiOff, ArrowLeft, Users, ShieldCheck, Nfc } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
-import { useAuth } from '../../lib/auth';
+import { useAuth, hasRole } from '../../lib/auth';
 import { useTheme } from '../../lib/theme';
 import { useToast } from '../../lib/toast';
 import { Button } from '../../lib/ui';
@@ -205,7 +205,7 @@ export default function Gate() {
   const s = stats?.stats;
 
   // Hanya petugas piket / admin yang boleh scan absen siswa di gerbang
-  const canOperateGate = ['PIKET', 'ADMIN', 'SUPER_ADMIN'].includes(user?.roleKey || '');
+  const canOperateGate = hasRole(user, 'PIKET') || hasRole(user, 'ADMIN') || hasRole(user, 'SUPER_ADMIN');
   if (!canOperateGate) {
     return (
       <div className="flex min-h-[70dvh] items-center justify-center px-4">

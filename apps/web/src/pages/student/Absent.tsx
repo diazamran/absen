@@ -16,7 +16,7 @@ export default function Absent() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isStaff = user?.roleKey !== 'STUDENT' && user?.roleKey !== 'PARENT';
-  const isStudent = user?.roleKey === 'STUDENT';
+  const isStudent = user?.roles?.includes('STUDENT') || user?.roleKey === 'STUDENT';
 
   // Siswa: tanpa Kartu/NFC, dan QR hanya untuk ditunjukkan ke gerbang (bukan memindai)
   const methods = isStudent
@@ -29,7 +29,7 @@ export default function Absent() {
   const { data: faceStatus } = useQuery({
     queryKey: ['face-status', user?.id],
     queryFn: () => api<{ success: boolean; data: { registered: boolean; pending: boolean } }>(`/face/status/${user!.id}`).then((r) => r.data),
-    enabled: user?.roleKey === 'STUDENT',
+    enabled: isStudent,
   });
 
   return (
@@ -39,7 +39,7 @@ export default function Absent() {
         <p className="text-sm text-muted">Pilih metode absensi yang tersedia.</p>
       </div>
 
-      {user?.roleKey === 'STUDENT' && faceStatus && !faceStatus.registered && !faceStatus.pending && (
+      {isStudent && faceStatus && !faceStatus.registered && !faceStatus.pending && (
         <Card className="border-primary/30 bg-primary-soft/40">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-white">
@@ -54,7 +54,7 @@ export default function Absent() {
         </Card>
       )}
 
-      {user?.roleKey === 'STUDENT' && faceStatus?.registered && (
+      {isStudent && faceStatus?.registered && (
         <Card className="border-amber-200 bg-amber-50/60 dark:bg-amber-500/10">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
@@ -69,7 +69,7 @@ export default function Absent() {
         </Card>
       )}
 
-      {user?.roleKey === 'STUDENT' && faceStatus?.pending && (
+      {isStudent && faceStatus?.pending && (
         <Card className="border-amber-200 bg-amber-50/60 dark:bg-amber-500/10">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">

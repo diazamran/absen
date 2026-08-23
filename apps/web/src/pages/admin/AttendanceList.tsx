@@ -17,7 +17,7 @@ export default function AttendanceList() {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
-  const canDelete = user?.roleKey === 'SUPER_ADMIN';
+  const canDelete = user?.roles?.includes('SUPER_ADMIN') || user?.roleKey === 'SUPER_ADMIN';
   const [classId, setClassId] = useState('');
   const [status, setStatus] = useState('');
   const [q, setQ] = useState('');

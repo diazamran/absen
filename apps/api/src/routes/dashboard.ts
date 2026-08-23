@@ -143,10 +143,11 @@ export async function dashboardRoutes(app: FastifyInstance) {
     const rules = await getAttendanceRules();
     const branding = await getBranding();
 
-    switch (user.role.key) {
-      case 'ADMIN':
-      case 'SUPER_ADMIN':
-      case 'HEADMASTER': {
+    const userRoles = [user.role.key, ...((user.additionalRoles as string[]) || [])];
+    const hasRole = (r: string) => userRoles.includes(r);
+
+    switch (true) {
+      case hasRole('ADMIN') || hasRole('SUPER_ADMIN') || hasRole('HEADMASTER'): {
         const dash = await schoolStats(dayStart, dayEnd);
         return reply.send({
           success: true,
@@ -159,7 +160,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
         });
       }
 
-      case 'HOMEROOM_TEACHER': {
+      case hasRole('HOMEROOM_TEACHER') && !hasRole('ADMIN') && !hasRole('SUPER_ADMIN'): {
         const teacher = await prisma.teacher.findUnique({ where: { userId } });
         const myClass = teacher ? await prisma.class.findFirst({
           where: { homeroomTeacherId: teacher.id, isActive: true, academicYear: { isActive: true } },
@@ -211,9 +212,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
         });
       }
 
-      case 'TEACHER':
-      case 'STAFF':
-      case 'PIKET': {
+      case hasRole('TEACHER') || hasRole('STAFF') || hasRole('PIKET'): {
         const myAtt = await prisma.attendance.findUnique({
           where: { userId_date_type: { userId, date: dayStart, type: 'CHECK_IN' } },
         });
@@ -230,7 +229,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
           : [];
 
         // Petugas piket: dashboard penuh ala admin (statistik seluruh sekolah)
-        const dash = user.role.key === 'PIKET' ? await schoolStats(dayStart, dayEnd) : null;
+        const dash = hasRole('PIKET') ? await schoolStats(dayStart, dayEnd) : null;
 
         return reply.send({
           success: true,
@@ -257,7 +256,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
         });
       }
 
-      case 'STUDENT': {
+      case hasRole('STUDENT'): {
         const student = user.student;
         const todayAtt = await prisma.attendance.findMany({
           where: { userId, date: { gte: dayStart, lt: dayEnd } },
@@ -322,7 +321,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
         });
       }
 
-      case 'PARENT': {
+      case hasRole('PARENT'): {
         const childLinks = user.parent?.childLinks ?? [];
         const children = [];
         for (const link of childLinks) {

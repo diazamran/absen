@@ -79,7 +79,8 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   let qrVerified = false;
   let cardVerified = false;
 
-  const isGateOperator = GATE_ROLES.has(user.role.key);
+  const userRoles = [user.role.key, ...((user.additionalRoles as string[]) || [])];
+  const isGateOperator = userRoles.some((r) => GATE_ROLES.has(r));
 
   const proof = input.proof || {};
 
@@ -448,7 +449,9 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
  */
 async function assertCanManageAttendance(request: FastifyRequest, studentClassId: string | null): Promise<void> {
   const actor = await prisma.user.findUnique({ where: { id: request.user!.id }, include: { role: true, teacher: true } });
-  if (actor?.role.key !== 'HOMEROOM_TEACHER') return;
+  if (!actor) return;
+  const actorRoles = [actor.role.key, ...((actor.additionalRoles as string[]) || [])];
+  if (!actorRoles.includes('HOMEROOM_TEACHER')) return;
   const myClass = actor.teacher
     ? await prisma.class.findFirst({
         where: { homeroomTeacherId: actor.teacher.id, isActive: true, academicYear: { isActive: true } },

@@ -51,6 +51,8 @@ export async function authRoutes(app: FastifyInstance) {
       where: { username: body.username.trim() },
       include: { role: true, student: true, teacher: true, staff: true },
     });
+    // Combine primary role + additional roles into a single array
+    const userRoles = [user.role.key, ...((user.additionalRoles as string[]) || [])];
     if (!user || !user.isActive) {
       throw ApiError.unauthorized('INVALID_CREDENTIALS', 'Username atau password salah.');
     }
@@ -81,6 +83,7 @@ export async function authRoutes(app: FastifyInstance) {
           fullName: user.fullName,
           roleKey: user.role.key,
           roleName: ROLE_LABELS[user.role.key] || user.role.name,
+          roles: userRoles,
           avatarUrl: user.avatarUrl,
           student: user.student ? { id: user.student.id, nis: user.student.nis, className: user.student.classId } : null,
           teacher: user.teacher ? { id: user.teacher.id, nip: user.teacher.nip, isPiket: user.teacher.isPiket } : null,
@@ -124,6 +127,7 @@ export async function authRoutes(app: FastifyInstance) {
           fullName: student.user.fullName,
           roleKey: student.user.role.key,
           roleName: ROLE_LABELS[student.user.role.key] || student.user.role.name,
+          roles: [student.user.role.key, ...((student.user.additionalRoles as string[]) || [])],
           avatarUrl: student.user.avatarUrl,
           student: { id: student.id, nis: student.nis, className: student.classId },
         },
@@ -211,6 +215,7 @@ export async function authRoutes(app: FastifyInstance) {
           fullName: parent.user.fullName,
           roleKey: parent.user.role.key,
           roleName: 'Orang Tua',
+          roles: [parent.user.role.key, ...((parent.user.additionalRoles as string[]) || [])],
           parent: { id: parent.id, phone: parent.phone, name: parent.name },
         },
       },
@@ -256,6 +261,7 @@ export async function authRoutes(app: FastifyInstance) {
         avatarUrl: user.avatarUrl,
         roleKey: user.role.key,
         roleName: ROLE_LABELS[user.role.key] || user.role.name,
+        roles: [user.role.key, ...((user.additionalRoles as string[]) || [])],
         preferences: user.preferences,
         student: user.student
           ? {
