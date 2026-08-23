@@ -10,6 +10,7 @@ import { useAuth } from '../../lib/auth';
 interface UserRow {
   id: string; username: string; fullName: string; roleKey: string; roleName: string; nip?: string | null;
   position?: string | null; subjectName?: string | null; phone?: string | null; isActive: boolean; isPiket: boolean;
+  additionalRoles?: string[];
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -155,8 +156,8 @@ export default function Users() {
                         {u.roleKey === 'PIKET' && <ShieldCheck className="h-3 w-3" />}
                         {u.roleName}
                       </span>
-                      {(u as Record<string, unknown>).additionalRoles && Array.isArray((u as Record<string, unknown>).additionalRoles) && ((u as Record<string, unknown>).additionalRoles as string[]).length > 0 && (
-                        ((u as Record<string, unknown>).additionalRoles as string[]).map((ar: string) => (
+                      {u.additionalRoles && u.additionalRoles.length > 0 && (
+                        u.additionalRoles.map((ar) => (
                           <span key={ar} className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
                             +{ar === 'PIKET' ? 'Piket' : ar === 'HOMEROOM_TEACHER' ? 'Wali' : ar === 'HEADMASTER' ? 'Kepsek' : ar === 'TEACHER' ? 'Guru' : ar === 'STAFF' ? 'Staff' : ar}
                           </span>

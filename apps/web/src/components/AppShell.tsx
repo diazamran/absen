@@ -366,7 +366,7 @@ export function AppShell() {
                   </NavLink>
                 ))
               ) : (
-                roleMenu(user?.roleKey).map((item) => (
+                roleMenu(user).map((item) => (
                   <NavLink
                     key={item.to}
                     to={item.to}
