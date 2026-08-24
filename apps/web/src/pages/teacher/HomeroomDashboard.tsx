@@ -91,7 +91,7 @@ export default function HomeroomDashboard() {
       {myClasses.isLoading ? (
         <LoadingCard />
       ) : !firstClass ? (
-        <EmptyState icon={<GraduationCap />} title="Tidak ada kelas bimbingan" description="Anda belum ditugaskan sebagai wali kelas" />
+        <EmptyState icon={GraduationCap} title="Tidak ada kelas bimbingan" description="Anda belum ditugaskan sebagai wali kelas" />
       ) : (
         <>
           {/* Stats Cards */}
@@ -136,7 +136,7 @@ export default function HomeroomDashboard() {
               </div>
               <div className="max-h-[400px] overflow-y-auto">
                 {firstClass.students.length === 0 ? (
-                  <EmptyState icon={<GraduationCap />} title="Belum ada siswa" />
+                  <EmptyState icon={GraduationCap} title="Belum ada siswa" />
                 ) : (
                   <div className="space-y-1">
                     {firstClass.students.map((s, i) => (
@@ -172,7 +172,7 @@ export default function HomeroomDashboard() {
                 <h3 className="font-semibold text-sm">Siswa dengan Pelanggaran Terbanyak</h3>
               </div>
               {(violationTop.data ?? []).length === 0 ? (
-                <EmptyState icon={<CheckCircle />} title="Tidak ada pelanggaran" description="Semua siswa berkelakuan baik" />
+                <EmptyState icon={CheckCircle} title="Tidak ada pelanggaran" description="Semua siswa berkelakuan baik" />
               ) : (
                 <div className="space-y-2 max-h-[400px] overflow-y-auto">
                   {(violationTop.data ?? []).slice(0, 10).map((v, i) => (

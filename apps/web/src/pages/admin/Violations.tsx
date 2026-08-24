@@ -152,8 +152,8 @@ export default function Violations() {
 
   const bulkAdd = useMutation({
     mutationFn: (data: { studentIds: string[]; violationTypeId: string; date: string; notes?: string }) =>
-      api('/violations/bulk', { method: 'POST', body: JSON.stringify(data) }),
-    onSuccess: (r: { success: boolean; data: { count: number } }) => {
+      api<{ success: boolean; data: { count: number } }>('/violations/bulk', { method: 'POST', body: JSON.stringify(data) }),
+    onSuccess: (r) => {
       toast('success', `${r.data.count} pelanggaran dicatat`);
       qc.invalidateQueries({ queryKey: ['violations'] });
       qc.invalidateQueries({ queryKey: ['violations-top'] });
@@ -257,11 +257,11 @@ export default function Violations() {
         <Card>
           {violations.isLoading ? (
             <LoadingCard />
-          ) : (violations.data?.data ?? []).length === 0 ? (
-            <EmptyState icon={<AlertTriangle />} title="Belum ada pelanggaran" description="Mulai catat pelanggaran siswa" />
+          ) : (violations.data ?? []).length === 0 ? (
+            <EmptyState icon={AlertTriangle} title="Belum ada pelanggaran" description="Mulai catat pelanggaran siswa" />
           ) : (
             <div className="space-y-2">
-              {(violations.data?.data ?? []).map((v) => (
+              {(violations.data ?? []).map((v: StudentViolation) => (
                 <div key={v.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -312,7 +312,7 @@ export default function Violations() {
           {types.isLoading ? (
             <LoadingCard />
           ) : (types.data ?? []).length === 0 ? (
-            <EmptyState icon={<AlertTriangle />} title="Belum ada jenis pelanggaran" description="Tambahkan jenis pelanggaran terlebih dahulu" />
+            <EmptyState icon={AlertTriangle} title="Belum ada jenis pelanggaran" description="Tambahkan jenis pelanggaran terlebih dahulu" />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {(types.data ?? []).map((t) => (
@@ -379,7 +379,7 @@ export default function Violations() {
           {topStudents.isLoading ? (
             <LoadingCard />
           ) : (topStudents.data ?? []).length === 0 ? (
-            <EmptyState icon={<Award />} title="Belum ada pelanggaran" />
+            <EmptyState icon={Award} title="Belum ada pelanggaran" />
           ) : (
             <Card>
               <div className="overflow-x-auto">
