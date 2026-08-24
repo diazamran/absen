@@ -37,122 +37,130 @@ const ADMIN_MENU: NavItem[] = [
   { to: '/app/settings', label: 'Pengaturan', icon: <Settings className="h-5 w-5" /> },
 ];
 
-/** Menu untuk role non-admin — gabungan semua role user. */
+/** Menu untuk role non-admin — compact, deduplicate by 'to', consistent labels. */
 function roleMenu(user: MeData | null, pklRole?: { isSupervisor: boolean; isPklAdmin: boolean } | null): NavItem[] {
   const roles = user?.roles || (user?.roleKey ? [user.roleKey] : []);
   const has = (r: string) => roles.includes(r);
 
-  const items: NavItem[] = [{ to: '/app/home', label: 'Beranda', icon: <Home className="h-5 w-5" /> }];
-
-  // Student-specific
-  if (has('STUDENT')) {
-    items.push({ to: '/app/pkl-absent', label: 'Absen PKL', icon: <MapPin className="h-5 w-5" /> });
-    items.push({ to: '/app/face-me', label: 'Registrasi Wajah', icon: <ScanFace className="h-5 w-5" /> });
-  }
-
-  // Riwayat — semua role non-admin
-  items.push({ to: '/app/history', label: 'Riwayat', icon: <History className="h-5 w-5" /> });
-
-  // Merge menus dari semua role (deduplicate by 'to')
-  const seen = new Set(items.map((i) => i.to));
+  // Build menu in logical order: home → operations → reports → personal
+  const items: NavItem[] = [];
+  const seen = new Set<string>();
   const add = (item: NavItem) => { if (!seen.has(item.to)) { seen.add(item.to); items.push(item); } };
 
+  // 1. Beranda
+  add({ to: '/app/home', label: 'Beranda', icon: <Home className="h-5 w-5" /> });
+
+  // 2. Student-specific
+  if (has('STUDENT')) {
+    add({ to: '/app/pkl-absent', label: 'Absen PKL', icon: <MapPin className="h-5 w-5" /> });
+    add({ to: '/app/face-me', label: 'Registrasi Wajah', icon: <ScanFace className="h-5 w-5" /> });
+    add({ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-5 w-5" /> });
+    add({ to: '/app/leave/mine', label: 'Ajukan Izin', icon: <FilePlus2 className="h-5 w-5" /> });
+  }
+
+  // 3. Guru / Wali Kelas: Kelas
+  if (has('TEACHER') || has('HOMEROOM_TEACHER')) {
+    add({ to: '/app/classes', label: 'Kelas', icon: <ClipboardList className="h-5 w-5" /> });
+  }
+
+  // 4. Operasional (Piket & Wali Kelas)
   if (has('PIKET')) {
     add({ to: '/app/gate', label: 'Scan Gerbang', icon: <ScanLine className="h-5 w-5" /> });
     add({ to: '/app/attendance', label: 'Absensi Manual', icon: <ClipboardCheck className="h-5 w-5" /> });
     add({ to: '/app/qr-cards', label: 'Kartu QR', icon: <QrCode className="h-5 w-5" /> });
     add({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
-    add({ to: '/app/reports', label: 'Laporan & Cetak', icon: <BarChart3 className="h-5 w-5" /> });
   }
-
   if (has('HOMEROOM_TEACHER')) {
     add({ to: '/app/qr-cards', label: 'Kartu QR', icon: <QrCode className="h-5 w-5" /> });
     add({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
-    add({ to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-5 w-5" /> });
   }
 
-  // PKL: only for supervisors or PKL admins
+  // 5. PKL — only for supervisors
   if (has('TEACHER') && pklRole?.isSupervisor) {
     add({ to: '/app/pkl-monitor', label: 'Monitor PKL', icon: <MapPin className="h-5 w-5" /> });
   }
 
-  // Staff / other: Absen & Izin sendiri
-  if (!has('STUDENT') && !has('PARENT') && !has('TEACHER')) {
+  // 6. Laporan — consolidated (Piket + Wali Kelas + Guru)
+  if (has('PIKET') || has('HOMEROOM_TEACHER')) {
+    add({ to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-5 w-5" /> });
+  }
+
+  // 7. Staff / other: Absen & Izin sendiri
+  if (!has('STUDENT') && !has('PARENT') && !has('TEACHER') && !has('HOMEROOM_TEACHER') && !has('PIKET')) {
     add({ to: '/app/leave/mine', label: 'Ajukan Izin', icon: <FilePlus2 className="h-5 w-5" /> });
     add({ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-5 w-5" /> });
   }
 
-  // Notifikasi & Profil
+  // 8. Personal
   add({ to: '/app/notifications', label: 'Notifikasi', icon: <Bell className="h-5 w-5" /> });
   add({ to: '/app/profile', label: 'Profil', icon: <UserRound className="h-5 w-5" /> });
 
   return items;
 }
 
-const BOTTOM_NAV: Record<string, NavItem[]> = {
-  ADMIN: [
-    { to: '/app/dashboard', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
-    { to: '/app/gate', label: 'Gerbang', icon: <ScanLine className="h-6 w-6" /> },
-    { to: '/app/attendance', label: 'Absensi', icon: <ScanLine className="h-6 w-6" /> },
-    { to: '/app/students', label: 'Data', icon: <Users className="h-6 w-6" /> },
-    { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
-    { to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-6 w-6" /> },
-    { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
-  ],
-  SUPER_ADMIN: [
-    { to: '/app/dashboard', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
-    { to: '/app/gate', label: 'Gerbang', icon: <ScanLine className="h-6 w-6" /> },
-    { to: '/app/attendance', label: 'Absensi', icon: <ScanLine className="h-6 w-6" /> },
-    { to: '/app/students', label: 'Data', icon: <Users className="h-6 w-6" /> },
-    { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
-    { to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-6 w-6" /> },
-    { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
-  ],
-  TEACHER: [
-    { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
-    { to: '/app/classes', label: 'Kelas', icon: <GraduationCap className="h-6 w-6" /> },
-    { to: '/app/pkl-monitor', label: 'PKL', icon: <MapPin className="h-6 w-6" /> },
-    { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
-    { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
-  ],
-  HOMEROOM_TEACHER: [
-    { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
-    { to: '/app/classes', label: 'Kelas', icon: <GraduationCap className="h-6 w-6" /> },
-    { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
-    { to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-6 w-6" /> },
-    { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
-  ],
-  STAFF: [
-    { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
-    { to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> },
-    { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
-    { to: '/app/leave/mine', label: 'Izin', icon: <FilePlus2 className="h-6 w-6" /> },
-    { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
-  ],
-  PIKET: [
-    { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
-    { to: '/app/gate', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> },
-    { to: '/app/pkl-monitor', label: 'PKL', icon: <MapPin className="h-6 w-6" /> },
-    { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
-    { to: '/app/leave', label: 'Persetujuan', icon: <FilePlus2 className="h-6 w-6" /> },
-    { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
-  ],
-  STUDENT: [
-    { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
-    { to: '/app/pkl-absent', label: 'PKL', icon: <MapPin className="h-6 w-6" /> },
-    { to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> },
-    { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
-    { to: '/app/leave/mine', label: 'Izin', icon: <FilePlus2 className="h-6 w-6" /> },
-    { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
-  ],
-  PARENT: [
-    { to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> },
-    { to: '/app/children', label: 'Anak', icon: <Baby className="h-6 w-6" /> },
-    { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
-    { to: '/app/notifications', label: 'Notif', icon: <Bell className="h-6 w-6" /> },
-    { to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> },
-  ],
-};
+/** Build bottom nav dynamically for multi-role users. Max 5 items for mobile. */
+function buildBottomNav(user: MeData | null, pklRole?: { isSupervisor: boolean; isPklAdmin: boolean } | null): NavItem[] {
+  const roles = user?.roles || [user?.roleKey || 'STUDENT'];
+  const has = (r: string) => roles.includes(r);
+  const isAdmin = has('ADMIN') || has('SUPER_ADMIN') || has('HEADMASTER');
+
+  const items: NavItem[] = [];
+  const seen = new Set<string>();
+  const add = (item: NavItem) => { if (!seen.has(item.to)) { seen.add(item.to); items.push(item); } };
+
+  if (isAdmin) {
+    add({ to: '/app/dashboard', label: 'Beranda', icon: <Home className="h-6 w-6" /> });
+    add({ to: '/app/gate', label: 'Gerbang', icon: <ScanLine className="h-6 w-6" /> });
+    add({ to: '/app/attendance', label: 'Absensi', icon: <ScanLine className="h-6 w-6" /> });
+    add({ to: '/app/students', label: 'Data', icon: <Users className="h-6 w-6" /> });
+    add({ to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> });
+    add({ to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-6 w-6" /> });
+  } else if (has('STUDENT')) {
+    add({ to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> });
+    add({ to: '/app/pkl-absent', label: 'PKL', icon: <MapPin className="h-6 w-6" /> });
+    add({ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> });
+    add({ to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> });
+    add({ to: '/app/leave/mine', label: 'Izin', icon: <FilePlus2 className="h-6 w-6" /> });
+  } else if (has('PARENT')) {
+    add({ to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> });
+    add({ to: '/app/children', label: 'Anak', icon: <Baby className="h-6 w-6" /> });
+    add({ to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> });
+    add({ to: '/app/notifications', label: 'Notif', icon: <Bell className="h-6 w-6" /> });
+  } else {
+    // Guru / Staff / Piket / Wali Kelas — dynamic merge
+    add({ to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> });
+
+    if (has('PIKET')) {
+      add({ to: '/app/gate', label: 'Gerbang', icon: <ScanLine className="h-6 w-6" /> });
+    } else {
+      add({ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> });
+    }
+    if (has('TEACHER') || has('HOMEROOM_TEACHER')) {
+      add({ to: '/app/classes', label: 'Kelas', icon: <GraduationCap className="h-6 w-6" /> });
+    }
+    if (has('TEACHER') && pklRole?.isSupervisor) {
+      add({ to: '/app/pkl-monitor', label: 'PKL', icon: <MapPin className="h-6 w-6" /> });
+    }
+    if (has('PIKET') || has('HOMEROOM_TEACHER')) {
+      add({ to: '/app/leave', label: 'Izin', icon: <FilePlus2 className="h-6 w-6" /> });
+    } else if (has('STAFF') || has('TEACHER')) {
+      add({ to: '/app/leave/mine', label: 'Izin', icon: <FilePlus2 className="h-6 w-6" /> });
+    }
+    add({ to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> });
+  }
+
+  // Profil always last
+  add({ to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> });
+
+  // Mobile: max 5 items (hide Laporan/Notif if too many)
+  if (items.length > 5) {
+    const pinned = items.filter((i) => ['/app/home', '/app/gate', '/app/absent', '/app/pkl-absent', '/app/classes', '/app/students', '/app/profile'].includes(i.to));
+    const rest = items.filter((i) => !['/app/home', '/app/gate', '/app/absent', '/app/pkl-absent', '/app/classes', '/app/students', '/app/profile'].includes(i.to));
+    const merged = [...pinned, ...rest];
+    return merged.slice(0, 5);
+  }
+  return items;
+}
 
 export function useClock() {
   const [now, setNow] = useState(new Date());
@@ -277,18 +285,7 @@ export function AppShell() {
     staleTime: 60_000,
   });
 
-  // Merge bottom nav from all roles (deduplicate by 'to')
-  const bottomNavSeen = new Set<string>();
-  const bottomNav: NavItem[] = [];
-  const addBottom = (items: NavItem[]) => { for (const item of items) { if (!bottomNavSeen.has(item.to)) { bottomNavSeen.add(item.to); bottomNav.push(item); } } };
-  if (isAdmin) {
-    addBottom(BOTTOM_NAV.ADMIN);
-  } else {
-    const roles = user?.roles || [user?.roleKey || 'STUDENT'];
-    for (const r of roles) {
-      if (BOTTOM_NAV[r]) addBottom(BOTTOM_NAV[r]);
-    }
-  }
+  const bottomNav = buildBottomNav(user, pklRole);
 
   // Badge notifikasi belum dibaca (sinkron dengan halaman Notifikasi via query key yang sama)
   const { data: notifData } = useQuery({
