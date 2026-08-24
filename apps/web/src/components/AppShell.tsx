@@ -17,26 +17,66 @@ interface NavItem {
   icon: ReactNode;
 }
 
-const ADMIN_MENU: NavItem[] = [
-  { to: '/app/dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" /> },
-  { to: '/app/gate', label: 'Scan Gerbang', icon: <ScanLine className="h-5 w-5" /> },
-  { to: '/app/attendance', label: 'Absensi', icon: <ScanLine className="h-5 w-5" /> },
-  { to: '/app/history', label: 'Riwayat', icon: <History className="h-5 w-5" /> },
-  { to: '/app/students', label: 'Siswa', icon: <GraduationCap className="h-5 w-5" /> },
-  { to: '/app/face-register', label: 'Registrasi Wajah', icon: <ScanFace className="h-5 w-5" /> },
-  { to: '/app/users', label: 'Guru & Staff', icon: <Users className="h-5 w-5" /> },
-  { to: '/app/classes', label: 'Kelas', icon: <ClipboardList className="h-5 w-5" /> },
-  { to: '/app/leave', label: 'Izin', icon: <FileText className="h-5 w-5" /> },
-  { to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-5 w-5" /> },
-  { to: '/app/pkl', label: 'PKL', icon: <MapPin className="h-5 w-5" /> },
-  { to: '/app/pkl-reports', label: 'Laporan PKL', icon: <BarChart3 className="h-5 w-5" /> },
-  { to: '/app/notifications', label: 'Notifikasi', icon: <Bell className="h-5 w-5" /> },
-  { to: '/app/devices', label: 'Perangkat', icon: <Smartphone className="h-5 w-5" /> },
-  { to: '/app/audit', label: 'Audit Log', icon: <ScrollText className="h-5 w-5" /> },
-  { to: '/app/sdms-monitor', label: 'Monitor SDMS', icon: <Activity className="h-5 w-5" /> },
-  { to: '/app/bk', label: 'Konseling', icon: <ClipboardCheck className="h-5 w-5" /> },
-  { to: '/app/settings', label: 'Pengaturan', icon: <Settings className="h-5 w-5" /> },
+interface MenuGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const ADMIN_GROUPS: MenuGroup[] = [
+  {
+    label: '',
+    items: [
+      { to: '/app/dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" /> },
+    ],
+  },
+  {
+    label: 'Absensi',
+    items: [
+      { to: '/app/gate', label: 'Scan Gerbang', icon: <ScanLine className="h-5 w-5" /> },
+      { to: '/app/attendance', label: 'Absensi', icon: <ScanLine className="h-5 w-5" /> },
+      { to: '/app/history', label: 'Riwayat', icon: <History className="h-5 w-5" /> },
+      { to: '/app/leave', label: 'Izin', icon: <FileText className="h-5 w-5" /> },
+    ],
+  },
+  {
+    label: 'Data Sekolah',
+    items: [
+      { to: '/app/students', label: 'Siswa', icon: <GraduationCap className="h-5 w-5" /> },
+      { to: '/app/users', label: 'Guru & Staff', icon: <Users className="h-5 w-5" /> },
+      { to: '/app/classes', label: 'Kelas', icon: <ClipboardList className="h-5 w-5" /> },
+      { to: '/app/face-register', label: 'Registrasi Wajah', icon: <ScanFace className="h-5 w-5" /> },
+    ],
+  },
+  {
+    label: 'PKL & Konseling',
+    items: [
+      { to: '/app/pkl', label: 'Manajemen PKL', icon: <MapPin className="h-5 w-5" /> },
+      { to: '/app/pkl-reports', label: 'Laporan PKL', icon: <BarChart3 className="h-5 w-5" /> },
+      { to: '/app/bk', label: 'Konseling', icon: <ClipboardCheck className="h-5 w-5" /> },
+    ],
+  },
+  {
+    label: 'Laporan',
+    items: [
+      { to: '/app/reports', label: 'Laporan Absensi', icon: <BarChart3 className="h-5 w-5" /> },
+      { to: '/app/notifications', label: 'Notifikasi', icon: <Bell className="h-5 w-5" /> },
+    ],
+  },
+  {
+    label: 'Sistem',
+    items: [
+      { to: '/app/sdms-monitor', label: 'Monitor SDMS', icon: <Activity className="h-5 w-5" /> },
+      { to: '/app/devices', label: 'Perangkat', icon: <Smartphone className="h-5 w-5" /> },
+      { to: '/app/audit', label: 'Audit Log', icon: <ScrollText className="h-5 w-5" /> },
+      { to: '/app/settings', label: 'Pengaturan', icon: <Settings className="h-5 w-5" /> },
+    ],
+  },
 ];
+
+/** Flatten grouped menu to NavItem[] for backward compat */
+function flattenGroups(groups: MenuGroup[]): NavItem[] {
+  return groups.flatMap((g) => g.items);
+}
 
 /** Menu untuk role non-admin — compact, deduplicate by 'to', consistent labels. */
 function roleMenu(user: MeData | null, pklRole?: { isSupervisor: boolean; isPklAdmin: boolean } | null): NavItem[] {
@@ -210,17 +250,38 @@ function Sidebar({ onClose, pklRole }: { onClose?: () => void; pklRole?: { isSup
   const navigate = useNavigate();
   const isAdmin = hasRole(user, 'ADMIN') || hasRole(user, 'SUPER_ADMIN') || hasRole(user, 'HEADMASTER');
 
-  const menu = isAdmin ? ADMIN_MENU.filter((item) => {
-    // PKL Management only for SUPER_ADMIN, ADMIN, or PKL supervisors
-    if (item.to === '/app/pkl' && pklRole && !pklRole.isSupervisor && !pklRole.isPklAdmin) return false;
-    return true;
-  }) : roleMenu(user, pklRole);
+  const adminGroups = ADMIN_GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter((item) => {
+      if (item.to === '/app/pkl' && pklRole && !pklRole.isSupervisor && !pklRole.isPklAdmin) return false;
+      return true;
+    }),
+  })).filter((g) => g.items.length > 0);
+
+  const menu = isAdmin ? flattenGroups(adminGroups) : roleMenu(user, pklRole);
 
   const doLogout = async () => {
     onClose?.();
     await logout();
     navigate('/login');
   };
+
+  // Helper: render menu item NavLink
+  const renderNavItem = (item: NavItem) => (
+    <NavLink
+      key={item.to}
+      to={item.to}
+      className={({ isActive }) =>
+        cn(
+          'flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors',
+          isActive ? 'bg-primary-soft text-primary-dark' : 'text-muted hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-ink',
+        )
+      }
+    >
+      {item.icon}
+      {item.label}
+    </NavLink>
+  );
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-line bg-surface lg:flex dark:bg-slate-800/50">
@@ -232,21 +293,20 @@ function Sidebar({ onClose, pklRole }: { onClose?: () => void; pklRole?: { isSup
         </div>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
-        {menu.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors',
-                isActive ? 'bg-primary-soft text-primary-dark' : 'text-muted hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-ink',
-              )
-            }
-          >
-            {item.icon}
-            {item.label}
-          </NavLink>
-        )        )}
+        {isAdmin ? (
+          // Grouped menu for admin
+          adminGroups.map((group) => (
+            <div key={group.label} className="mb-2">
+              {group.label && (
+                <p className="mb-1 mt-3 px-3.5 text-[10px] font-bold uppercase tracking-wider text-muted/70">{group.label}</p>
+              )}
+              {group.items.map((item) => renderNavItem(item))}
+            </div>
+          ))
+        ) : (
+          // Flat menu for non-admin
+          menu.map((item) => renderNavItem(item))
+        )}
         {isAdmin && (
           <NavLink
             to="/app/profile"
@@ -383,21 +443,25 @@ export function AppShell() {
             </div>
             <nav className="space-y-1">
               {isAdmin ? (
-                ADMIN_MENU.filter((item) => {
-                    if (item.to === '/app/pkl' && pklRole && !pklRole.isSupervisor && !pklRole.isPklAdmin) return false;
-                    return true;
-                  }).map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    onClick={() => setMobileMenu(false)}
-                    className={({ isActive }) =>
-                      cn('flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium', isActive ? 'bg-primary-soft text-primary-dark' : 'text-muted')
-                    }
-                  >
-                    {item.icon}
-                    {item.label}
-                  </NavLink>
+                adminGroups.map((group) => (
+                  <div key={group.label} className="mb-2">
+                    {group.label && (
+                      <p className="mb-1 mt-3 px-3.5 text-[10px] font-bold uppercase tracking-wider text-muted/70">{group.label}</p>
+                    )}
+                    {group.items.map((item) => (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        onClick={() => setMobileMenu(false)}
+                        className={({ isActive }) =>
+                          cn('flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium', isActive ? 'bg-primary-soft text-primary-dark' : 'text-muted')
+                        }
+                      >
+                        {item.icon}
+                        {item.label}
+                      </NavLink>
+                    ))}
+                  </div>
                 ))
               ) : (
                 roleMenu(user, pklRole).map((item) => (
