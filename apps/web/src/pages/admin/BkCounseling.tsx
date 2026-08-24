@@ -69,7 +69,7 @@ export default function BkCounseling() {
   const { data: students } = useQuery({
     queryKey: ['students-list'],
     queryFn: () =>
-      api<{ success: boolean; data: { id: string; nis: string; user: { fullName: string }; class: { name: string } | null }[] }>(
+      api<{ success: boolean; data: { id: string; nis: string; fullName: string; className: string | null }[] }>(
         '/students?pageSize=500',
       ).then((r) => r.data),
   });
@@ -199,7 +199,7 @@ export default function BkCounseling() {
                 <option value="">Pilih siswa...</option>
                 {students?.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.user?.fullName ?? s.nis} ({s.nis}) - {s.class?.name || '-'}
+                    {s.fullName} ({s.nis}) - {s.className || '-'}
                   </option>
                 ))}
               </Select>
