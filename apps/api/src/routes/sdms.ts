@@ -194,6 +194,11 @@ async function upsertSiswa(payload: Record<string, unknown>) {
   const nama = payload.nama as string;
   const status = payload.status as string;
 
+  // Map gender from SDMS payload
+  const rawGender = (payload.jenisKelamin || payload.gender || payload.sex || payload.jenis_kelamin || '') as string;
+  const genderNorm = rawGender.toLowerCase().trim();
+  const gender = (genderNorm === 'perempuan' || genderNorm === 'p' || genderNorm === 'female' || genderNorm === 'f') ? 'FEMALE' : 'MALE';
+
   // SDMS sends nested objects with names, not just IDs
   const jurusan = payload.jurusan as Record<string, unknown> | undefined;
   const kelasData = payload.kelas as Record<string, unknown> | undefined;
@@ -212,6 +217,7 @@ async function upsertSiswa(payload: Record<string, unknown>) {
   if (existing) {
     const updateData: Record<string, unknown> = {
       isActive: status === 'Aktif',
+      gender,
       user: { update: { fullName: nama } },
     };
     if (classId) updateData.class = { connect: { id: classId } };
@@ -238,6 +244,7 @@ async function upsertSiswa(payload: Record<string, unknown>) {
       id: studentId,
       userId,
       nis: nisn,
+      gender,
       classId,
       majorId,
       isActive: status === 'Aktif',
