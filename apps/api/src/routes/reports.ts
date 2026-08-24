@@ -468,4 +468,71 @@ export async function reportRoutes(app: FastifyInstance) {
     reply.header('Content-Disposition', `attachment; filename="${filename}"`);
     return reply.send(toCsv(rows));
   });
+
+  // ===== Rekap Cuti (Leave Recap) =====
+  app.get('/reports/leave-recap', { preHandler: app.requirePermission(PERMISSION_KEYS.reportsRead) }, async (request, reply) => {
+    const q = request.query as { from?: string; to?: string; classId?: string };
+    const from = q.from ? startOfLocalDay(q.from) : startOfLocalDay(dateKey());
+    const to = q.to ? new Date(new Date(q.to).getTime() + 86400000) : new Date(from.getTime() + 86400000);
+
+    const where: Record<string, unknown> = {
+      status: 'APPROVED',
+      OR: [
+        { startDate: { gte: from, lt: to } },
+        { endDate: { gte: from, lt: to } },
+        { startDate: { lt: from }, endDate: { gte: to } },
+      ],
+    };
+    if (q.classId) {
+      where.student = { classId: q.classId };
+    }
+
+    const leaves = await prisma.leaveRequest.findMany({
+      where,
+      include: {
+        student: { include: { class: true, user: { select: { fullName: true } } } },
+      },
+      orderBy: { startDate: 'asc' },
+    });
+
+    // Group by student and count days
+    const byStudent = new Map<string, { name: string; nis: string | null; className: string | null; totalDays: number; leaves: { type: string; start: string; end: string; reason: string }[] }>();
+    for (const l of leaves) {
+      if (!l.student) continue;
+      const sid = l.student.id;
+      if (!byStudent.has(sid)) {
+        byStudent.set(sid, {
+          name: l.student.user?.fullName ?? '-',
+          nis: l.student.nis,
+          className: l.student.class?.name ?? null,
+          totalDays: 0,
+          leaves: [],
+        });
+      }
+      const entry = byStudent.get(sid)!;
+      // Calculate business days (approximate)
+      const startMs = new Date(l.startDate).getTime();
+      const endMs = new Date(l.endDate).getTime();
+      const days = Math.max(1, Math.ceil((endMs - startMs) / 86400000) + 1);
+      entry.totalDays += days;
+      entry.leaves.push({
+        type: l.type,
+        start: localDateKeyOfStoredDate(l.startDate),
+        end: localDateKeyOfStoredDate(l.endDate),
+        reason: l.reason,
+      });
+    }
+
+    const rows = Array.from(byStudent.values()).sort((a, b) => b.totalDays - a.totalDays);
+    const totalLeaves = rows.reduce((sum, r) => sum + r.totalDays, 0);
+
+    return reply.send({
+      success: true,
+      data: {
+        rows,
+        summary: { totalStudents: rows.length, totalDays: totalLeaves },
+        period: { from: localDateKeyOfStoredDate(from), to: localDateKeyOfStoredDate(new Date(to.getTime() - 86400000)) },
+      },
+    });
+  });
 }

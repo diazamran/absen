@@ -14,6 +14,60 @@ import { exportRecapExcel } from '../../lib/recapExport';
 import { exportRecapPdf } from '../../lib/recapPdfExport';
 import RecapTable from '../../components/RecapTable';
 
+// ===== Leave Recap Exports =====
+function exportLeaveRecapPdf(data: any, schoolName: string) {
+  import('jspdf').then(({ jsPDF }) => {
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(`REKAP CUTI SISWA`, 14, 15);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${schoolName}  |  Periode: ${data.period?.from || '-'} s/d ${data.period?.to || '-'}`, 14, 22);
+    doc.text(`Total: ${data.summary?.totalStudents || 0} siswa, ${data.summary?.totalDays || 0} hari cuti`, 14, 28);
+
+    let y = 36;
+    const headers = ['No', 'Nama Siswa', 'NISN', 'Kelas', 'Total Hari Cuti', 'Detail Cuti'];
+    const colW = [10, 55, 30, 35, 25, 135];
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    let x = 14;
+    headers.forEach((h, i) => { doc.text(h, x, y); x += colW[i]; });
+    y += 5;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+
+    (data.rows || []).forEach((r: any, i: number) => {
+      if (y > 185) { doc.addPage(); y = 15; }
+      const detail = (r.leaves || []).map((l: any) => `${l.type} ${l.start}-${l.end}`).join('; ');
+      x = 14;
+      doc.text(String(i + 1), x, y); x += colW[0];
+      doc.text(r.name || '-', x, y); x += colW[1];
+      doc.text(r.nis || '-', x, y); x += colW[2];
+      doc.text(r.className || '-', x, y); x += colW[3];
+      doc.text(String(r.totalDays), x, y); x += colW[4];
+      doc.text(detail.slice(0, 120), x, y);
+      y += 5;
+    });
+
+    doc.save(`rekap_cuti_${dateKey()}.pdf`);
+  });
+}
+
+function exportLeaveRecapExcel(data: any) {
+  const headers = ['No', 'Nama Siswa', 'NISN', 'Kelas', 'Total Hari Cuti', 'Detail Cuti'];
+  const rows = (data.rows || []).map((r: any, i: number) => {
+    const detail = (r.leaves || []).map((l: any) => `${l.type} ${l.start}-${l.end}: ${l.reason}`).join('; ');
+    return [i + 1, r.name || '', r.nis || '', r.className || '', r.totalDays, detail];
+  });
+  const csv = [headers.join(','), ...rows.map((r: any[]) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `rekap_cuti_${dateKey()}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
 interface Summary { PRESENT: number; LATE: number; EXCUSED: number; SICK: number; OFFICIAL_DUTY: number; DISPENSATION: number; ABSENT: number; }
 interface ClassSummaryRow { className: string; total: number; present: number; late: number; excused: number; absent: number; }
 interface ReportData {
@@ -36,7 +90,7 @@ export default function Reports() {
   const { toast } = useToast();
   const { user } = useAuth();
   const { branding } = useTheme();
-  const [tab, setTab] = useState<'daily' | 'monthly' | 'recap'>('daily');
+  const [tab, setTab] = useState<'daily' | 'monthly' | 'recap' | 'leave'>('daily');
   const [date, setDate] = useState(todayJakartaKey());
   const [month, setMonth] = useState(currentMonthKey());
   const [classId, setClassId] = useState('');
@@ -55,6 +109,8 @@ export default function Reports() {
     queryFn: () =>
       tab === 'recap'
         ? api<{ success: boolean; data: any }>(`/reports/recap?from=${recapFrom}&to=${recapTo}`).then((r) => r.data)
+        : tab === 'leave'
+        ? api<{ success: boolean; data: any }>(`/reports/leave-recap?from=${recapFrom}&to=${recapTo}&classId=${classId}`).then((r) => r.data)
         : api<{ success: boolean; data: ReportData }>(
             tab === 'daily'
               ? `/reports/daily?date=${date}&classId=${classId}`
@@ -146,6 +202,21 @@ export default function Reports() {
                   } else toast('info', 'Belum ada data rekap.');
                 }}><FileSpreadsheet className="h-4 w-4" /> Export Excel</Button>
               </>
+            ) : tab === 'leave' ? (
+              <>
+                <Button variant="outline" onClick={() => {
+                  if (report?.rows?.length) {
+                    exportLeaveRecapPdf(report, branding?.schoolName || 'Sekolah');
+                    toast('success', 'Rekap Cuti PDF diunduh.');
+                  } else toast('info', 'Belum ada data rekap cuti.');
+                }}><FileText className="h-4 w-4" /> Export PDF</Button>
+                <Button variant="outline" onClick={() => {
+                  if (report?.rows?.length) {
+                    exportLeaveRecapExcel(report);
+                    toast('success', 'Rekap Cuti Excel diunduh.');
+                  } else toast('info', 'Belum ada data rekap cuti.');
+                }}><FileSpreadsheet className="h-4 w-4" /> Export Excel</Button>
+              </>
             ) : (
               <>
                 <Button variant="outline" onClick={() => doExport('pdf')}><FileText className="h-4 w-4" /> Export PDF</Button>
@@ -163,6 +234,7 @@ export default function Reports() {
             { value: 'daily', label: 'Harian' },
             { value: 'monthly', label: 'Bulanan' },
             { value: 'recap', label: 'Rekap Absensi' },
+            { value: 'leave', label: 'Rekap Cuti' },
           ]}
         />
         {tab === 'recap' ? (
@@ -227,7 +299,63 @@ export default function Reports() {
         />
       ) : null}
 
-      {tab !== 'recap' && classId === '' && report?.classSummary?.length ? (
+      {tab === 'leave' && report ? (
+        <Card className="mt-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-ink">Rekap Cuti Siswa</h3>
+              <p className="text-xs text-muted">Periode: {report.period?.from || '-'} s/d {report.period?.to || '-'}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-extrabold text-primary">{report.summary?.totalDays || 0}</p>
+              <p className="text-xs text-muted">hari cuti total</p>
+            </div>
+          </div>
+          {report.rows?.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs uppercase text-muted">
+                  <tr>
+                    <th className="px-3 py-2">No</th>
+                    <th className="px-3 py-2">Nama Siswa</th>
+                    <th className="px-3 py-2">NISN</th>
+                    <th className="px-3 py-2">Kelas</th>
+                    <th className="px-3 py-2">Total Hari</th>
+                    <th className="px-3 py-2">Detail Cuti</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {report.rows.map((r: any, i: number) => (
+                    <tr key={i} className="hover:bg-primary-soft/30">
+                      <td className="px-3 py-2 text-muted">{i + 1}</td>
+                      <td className="px-3 py-2 font-semibold text-ink">{r.name}</td>
+                      <td className="px-3 py-2 text-muted">{r.nis || '-'}</td>
+                      <td className="px-3 py-2 text-muted">{r.className || '-'}</td>
+                      <td className="px-3 py-2">
+                        <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-bold text-red-600 dark:bg-red-500/10">
+                          {r.totalDays} hari
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-xs text-muted">
+                        {(r.leaves || []).map((l: any, j: number) => (
+                          <div key={j} className="mb-0.5">
+                            <span className="font-medium text-ink">{l.type}</span>: {l.start} s/d {l.end}
+                            {l.reason && <span className="ml-1">— {l.reason.slice(0, 50)}</span>}
+                          </div>
+                        ))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState icon={BarChart3} title="Belum ada data cuti" description="Data cuti siswa akan muncul di sini setelah ada pengajuan izin yang disetujui." />
+          )}
+        </Card>
+      ) : null}
+
+      {tab !== 'recap' && tab !== 'leave' && classId === '' && report?.classSummary?.length ? (
         <Card className="mt-4">
           <h3 className="mb-3 font-bold text-ink">Rekap per Kelas — Semua Kelas</h3>
           <p className="mb-3 text-xs text-muted">Klik nama kelas untuk melihat detail siswa</p>
@@ -269,7 +397,7 @@ export default function Reports() {
         />
       )}
 
-      {tab !== 'recap' && (
+      {tab !== 'recap' && tab !== 'leave' && (
         <Card className="mt-4">
           <h3 className="mb-3 font-bold text-ink">Rincian</h3>
           {report?.rows?.length ? (
