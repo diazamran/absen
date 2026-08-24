@@ -244,21 +244,14 @@ function LogoTile({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   );
 }
 
-function Sidebar({ onClose, pklRole }: { onClose?: () => void; pklRole?: { isSupervisor: boolean; isPklAdmin: boolean } | null }) {
+function Sidebar({ onClose, pklRole, adminGroups }: { onClose?: () => void; pklRole?: { isSupervisor: boolean; isPklAdmin: boolean } | null; adminGroups?: MenuGroup[] }) {
   const { user, logout } = useAuth();
   const { branding } = useTheme();
   const navigate = useNavigate();
   const isAdmin = hasRole(user, 'ADMIN') || hasRole(user, 'SUPER_ADMIN') || hasRole(user, 'HEADMASTER');
 
-  const adminGroups = ADMIN_GROUPS.map((g) => ({
-    ...g,
-    items: g.items.filter((item) => {
-      if (item.to === '/app/pkl' && pklRole && !pklRole.isSupervisor && !pklRole.isPklAdmin) return false;
-      return true;
-    }),
-  })).filter((g) => g.items.length > 0);
-
-  const menu = isAdmin ? flattenGroups(adminGroups) : roleMenu(user, pklRole);
+  const groups = adminGroups || ADMIN_GROUPS;
+  const menu = isAdmin ? flattenGroups(groups) : roleMenu(user, pklRole);
 
   const doLogout = async () => {
     onClose?.();
@@ -295,7 +288,7 @@ function Sidebar({ onClose, pklRole }: { onClose?: () => void; pklRole?: { isSup
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
         {isAdmin ? (
           // Grouped menu for admin
-          adminGroups.map((group) => (
+          groups.map((group) => (
             <div key={group.label} className="mb-2">
               {group.label && (
                 <p className="mb-1 mt-3 px-3.5 text-[10px] font-bold uppercase tracking-wider text-muted/70">{group.label}</p>
@@ -354,6 +347,15 @@ export function AppShell() {
     staleTime: 60_000,
   });
 
+  // Compute admin groups (filtered by pklRole) — shared by sidebar & mobile menu
+  const adminGroups = ADMIN_GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter((item) => {
+      if (item.to === '/app/pkl' && pklRole && !pklRole.isSupervisor && !pklRole.isPklAdmin) return false;
+      return true;
+    }),
+  })).filter((g) => g.items.length > 0);
+
   const bottomNav = buildBottomNav(user, pklRole);
 
   // Badge notifikasi belum dibaca (sinkron dengan halaman Notifikasi via query key yang sama)
@@ -372,7 +374,7 @@ export function AppShell() {
 
   return (
     <div className="flex h-full">
-      <Sidebar pklRole={pklRole} />
+      <Sidebar pklRole={pklRole} adminGroups={adminGroups} />
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar */}
         <header className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-line bg-surface/80 px-4 py-3 backdrop-blur lg:px-6">
