@@ -27,6 +27,8 @@ const PklManagement = lazy(() => import('./pages/admin/PklManagement'));
 const PklReports = lazy(() => import('./pages/admin/PklReports'));
 const SDMSMonitor = lazy(() => import('./pages/admin/SDMSMonitor'));
 const BkCounseling = lazy(() => import('./pages/admin/BkCounseling'));
+const Violations = lazy(() => import('./pages/admin/Violations'));
+const HomeroomDashboard = lazy(() => import('./pages/teacher/HomeroomDashboard'));
 
 // Guru / Staff / Siswa
 const TeacherHome = lazy(() => import('./pages/teacher/TeacherHome'));
@@ -104,6 +106,8 @@ export default function App() {
         <Route path="pkl-reports" element={<Page><PklReports /></Page>} />
         <Route path="sdms-monitor" element={<Page><SDMSMonitor /></Page>} />
         <Route path="bk" element={<Page><BkCounseling /></Page>} />
+        <Route path="violations" element={<Page><Violations /></Page>} />
+        <Route path="homeroom" element={<Page><HomeroomDashboard /></Page>} />
 
         {/* Guru / Orang tua */}
         <Route path="home" element={<HomeSwitch />} />

@@ -14,7 +14,7 @@ import { rbacPlugin } from './plugins/rbac.js';
 
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
-import { dashboardRoutes } from './routes/dashboard.js';
+import { dashboardRoutes, homeroomRoutes } from './routes/dashboard.js';
 import { attendanceRoutes } from './routes/attendance.js';
 import { faceRoutes } from './routes/face.js';
 import { qrRoutes } from './routes/qr.js';
@@ -34,6 +34,7 @@ import { importRoutes } from './routes/import.js';
 import { pklRoutes } from './routes/pkl.js';
 import { sdmsRoutes } from './routes/sdms.js';
 import { bkRoutes } from './routes/bk.js';
+import { violationRoutes } from './routes/violations.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOADS_DIR = path.resolve(__dirname, '../uploads');
@@ -95,6 +96,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     await api.register(healthRoutes);
     await api.register(authRoutes);
     await api.register(dashboardRoutes);
+    await api.register(homeroomRoutes);
     await api.register(attendanceRoutes);
     await api.register(faceRoutes);
     await api.register(qrRoutes);
@@ -113,6 +115,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     await api.register(importRoutes);
     await api.register(pklRoutes);
     await api.register(bkRoutes);
+    await api.register(violationRoutes);
     await api.register(sdmsRoutes);
   }, { prefix: '/api' });
 

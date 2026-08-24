@@ -166,6 +166,7 @@ model User {
   leaveReviews   LeaveRequest[] @relation("LeaveReviewer")
   updatedSettings SchoolSetting[]
   counselings    Counseling[]
+  recordedViolations StudentViolation[]
 
   @@index([roleId])
   @@index([username])
@@ -201,6 +202,7 @@ model Student {
   leaveRequests LeaveRequest[]
   pklAssignments PklAssignment[]
   counselings   Counseling[]
+  violations  StudentViolation[]
 
   @@index([nis])
   @@index([classId])
@@ -734,4 +736,38 @@ model Counseling {
   @@index([createdById])
   @@index([type])
   @@index([createdAt])
+}
+
+// ================= PELANGGARAN =================
+
+model ViolationType {
+  id          String   @id @default(cuid())
+  name        String   @unique // e.g. "Terlambat", "Tidak Pakai Seragam"
+  description String?
+  points      Int      @default(1) // bobot poin
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  violations StudentViolation[]
+}
+
+model StudentViolation {
+  id              String   @id @default(cuid())
+  studentId       String
+  violationTypeId String
+  date            DateTime @default(now())
+  notes           String?
+  recordedById    String   // siapa yang mencatat
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  student       Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  violationType ViolationType @relation(fields: [violationTypeId], references: [id], onDelete: Cascade)
+  recordedBy    User         @relation(fields: [recordedById], references: [id])
+
+  @@index([studentId])
+  @@index([violationTypeId])
+  @@index([date])
+  @@index([recordedById])
 }

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { prisma } from '../lib/prisma.js';
 import { todayStart, todayEnd, dateKey, localTime, localDate, currentMonthKey } from '../lib/time.js';
 import { getAttendanceRules, getBranding } from '../services/settings.js';
+import { PERMISSION_KEYS } from '../rbac/permissions.js';
 
 const STATUS_LABELS: Record<string, string> = {
   PRESENT: 'Hadir',
@@ -371,4 +372,59 @@ function dayName(): 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' |
   const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'] as const;
   const shifted = new Date(Date.now() + 7 * 3600_000);
   return days[shifted.getUTCDay()];
+}
+
+// ================== HOME ROOM TEACHER DASHBOARD ==================
+
+export function homeroomRoutes(app: FastifyInstance) {
+  app.get('/dashboard/homeroom/attendance', { preHandler: app.requirePermission(PERMISSION_KEYS.attendanceRead) }, async (request, reply) => {
+    const user = request.user!;
+    const { date } = request.query as { date?: string };
+    const targetDate = date ? new Date(date) : new Date();
+    const dayStart = new Date(targetDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(targetDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    // Find teacher
+    const teacher = await prisma.teacher.findUnique({ where: { userId: user.id } });
+    if (!teacher) return reply.status(403).send({ success: false, message: 'Bukan akun guru' });
+
+    // Find classes where this teacher is homeroom teacher
+    const classes = await prisma.class.findMany({
+      where: { homeroomTeacherId: teacher.id, isActive: true },
+      include: { students: { include: { user: true } } },
+    });
+
+    if (classes.length === 0) {
+      return reply.send({ success: true, data: { date: localDate(dayStart), present: 0, late: 0, sick: 0, excused: 0, absent: 0, total: 0 } });
+    }
+
+    const studentIds = classes.flatMap((c) => c.students.map((s) => s.id));
+    if (studentIds.length === 0) {
+      return reply.send({ success: true, data: { date: localDate(dayStart), present: 0, late: 0, sick: 0, excused: 0, absent: 0, total: 0 } });
+    }
+
+    const attendance = await prisma.attendance.findMany({
+      where: { studentId: { in: studentIds }, date: { gte: dayStart, lte: dayEnd } },
+    });
+
+    const statusCount = { PRESENT: 0, LATE: 0, SICK: 0, EXCUSED: 0, ABSENT: 0, LEAVE: 0 };
+    for (const a of attendance) {
+      statusCount[a.status] = (statusCount[a.status] || 0) + 1;
+    }
+
+    return reply.send({
+      success: true,
+      data: {
+        date: localDate(dayStart),
+        present: statusCount.PRESENT + statusCount.LATE,
+        late: statusCount.LATE,
+        sick: statusCount.SICK,
+        excused: statusCount.EXCUSED + statusCount.LEAVE,
+        absent: Math.max(0, studentIds.length - attendance.length),
+        total: studentIds.length,
+      },
+    });
+  });
 }

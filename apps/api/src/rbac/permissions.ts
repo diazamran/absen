@@ -44,6 +44,9 @@ export const PERMISSION_KEYS = {
   pklManage: 'pkl:manage',
   pklRead: 'pkl:read',
   pklAttendance: 'pkl:attendance',
+  violationsManage: 'violations:manage',
+  violationsRead: 'violations:read',
+  violationsCreate: 'violations:create',
 } as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[keyof typeof PERMISSION_KEYS];
@@ -97,6 +100,9 @@ const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     PERMISSION_KEYS.notificationsRead,
     PERMISSION_KEYS.faceRegister,
     PERMISSION_KEYS.monitorView,
+    PERMISSION_KEYS.violationsManage,
+    PERMISSION_KEYS.violationsRead,
+    PERMISSION_KEYS.violationsCreate,
   ],
   TEACHER: [
     PERMISSION_KEYS.dashboardView,
@@ -124,6 +130,9 @@ const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     PERMISSION_KEYS.reportsRead,
     PERMISSION_KEYS.notificationsRead,
     PERMISSION_KEYS.monitorView,
+    PERMISSION_KEYS.violationsManage,
+    PERMISSION_KEYS.violationsRead,
+    PERMISSION_KEYS.violationsCreate,
   ],
   STAFF: [
     PERMISSION_KEYS.dashboardView,
@@ -148,6 +157,8 @@ const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     PERMISSION_KEYS.notificationsRead,
     PERMISSION_KEYS.faceRegister,
     PERMISSION_KEYS.monitorView,
+    PERMISSION_KEYS.violationsCreate,
+    PERMISSION_KEYS.violationsRead,
   ],
   STUDENT: [
     PERMISSION_KEYS.dashboardView,

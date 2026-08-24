@@ -5,7 +5,7 @@ import {
   Home, ScanLine, Users, FileText, LayoutDashboard, GraduationCap, CalendarDays, BookOpen,
   ClipboardList, Smartphone, BarChart3, Bell, ScrollText, Settings, LogOut, Menu, X, ShieldCheck,
   ClipboardCheck, History, FilePlus2, UserRound, Baby, ScanFace, QrCode, MapPin, Building2, Activity,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, AlertTriangle,
 } from 'lucide-react';
 import { useAuth, hasRole, type MeData } from '../lib/auth';
 import { useTheme } from '../lib/theme';
@@ -46,6 +46,7 @@ const ADMIN_GROUPS: MenuGroup[] = [
       { to: '/app/users', label: 'Guru & Staff', icon: <Users className="h-5 w-5" /> },
       { to: '/app/classes', label: 'Kelas', icon: <ClipboardList className="h-5 w-5" /> },
       { to: '/app/face-register', label: 'Registrasi Wajah', icon: <ScanFace className="h-5 w-5" /> },
+      { to: '/app/violations', label: 'Pelanggaran', icon: <AlertTriangle className="h-5 w-5" /> },
     ],
   },
   {
@@ -111,10 +112,13 @@ function roleMenu(user: MeData | null, pklRole?: { isSupervisor: boolean; isPklA
     add({ to: '/app/attendance', label: 'Absensi Manual', icon: <ClipboardCheck className="h-5 w-5" /> });
     add({ to: '/app/qr-cards', label: 'Kartu QR', icon: <QrCode className="h-5 w-5" /> });
     add({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
+    add({ to: '/app/violations', label: 'Pelanggaran', icon: <AlertTriangle className="h-5 w-5" /> });
   }
   if (has('HOMEROOM_TEACHER')) {
+    add({ to: '/app/homeroom', label: 'Dashboard Kelas', icon: <LayoutDashboard className="h-5 w-5" /> });
     add({ to: '/app/qr-cards', label: 'Kartu QR', icon: <QrCode className="h-5 w-5" /> });
     add({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
+    add({ to: '/app/violations', label: 'Pelanggaran', icon: <AlertTriangle className="h-5 w-5" /> });
   }
 
   // 5. PKL — only for supervisors (any teacher-like role)
@@ -122,9 +126,10 @@ function roleMenu(user: MeData | null, pklRole?: { isSupervisor: boolean; isPklA
     add({ to: '/app/pkl-monitor', label: 'Monitor PKL', icon: <MapPin className="h-5 w-5" /> });
   }
 
-  // 5b. BK: menu konseling
+  // 5b. BK: menu konseling & pelanggaran
   if (has('BK')) {
     add({ to: '/app/bk', label: 'Konseling', icon: <ClipboardCheck className="h-5 w-5" /> });
+    add({ to: '/app/violations', label: 'Pelanggaran', icon: <AlertTriangle className="h-5 w-5" /> });
   }
 
   // 6. Laporan — consolidated (Piket + Wali Kelas + BK)
