@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '../../components/AppShell';
-import { Card, Button, Input, Select, Field, Modal, Empty, LoadingCard, Badge } from '../../lib/ui';
+import { Card, Button, Input, Select, Field, Modal, EmptyState, LoadingCard } from '../../lib/ui';
 import { api } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { useAuth } from '../../lib/auth';
@@ -78,11 +78,11 @@ export default function BkCounseling() {
     mutationFn: (data: typeof form) => api('/bk/counseling', { method: 'POST', body: data }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['bk-counseling'] });
-      toast.success('Konseling berhasil ditambahkan.');
+      toast('success', 'Konseling berhasil ditambahkan.');
       setShowForm(false);
       resetForm();
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast('error', e.message),
   });
 
   const updateMut = useMutation({
@@ -90,22 +90,22 @@ export default function BkCounseling() {
       api(`/bk/counseling/${id}`, { method: 'PUT', body: data }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['bk-counseling'] });
-      toast.success('Konseling berhasil diupdate.');
+      toast('success', 'Konseling berhasil diupdate.');
       setShowForm(false);
       setEditItem(null);
       resetForm();
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast('error', e.message),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => api(`/bk/counseling/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['bk-counseling'] });
-      toast.success('Konseling berhasil dihapus.');
+      toast('success', 'Konseling berhasil dihapus.');
       setDeleteId(null);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast('error', e.message),
   });
 
   const resetForm = () => setForm({ studentId: '', type: 'ACADEMIC', title: '', description: '', action: '', followUp: '' });
@@ -145,17 +145,17 @@ export default function BkCounseling() {
       {isLoading ? (
         <LoadingCard />
       ) : !counseling?.length ? (
-        <Empty message="Belum ada catatan konseling" />
+        <EmptyState icon={ClipboardCheck} title="Belum ada catatan konseling" description="Klik 'Tambah' untuk mencatat konseling siswa." />
       ) : (
         <div className="space-y-3">
           {counseling.map((c) => (
             <Card key={c.id} className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
                     <span className="font-semibold text-ink">{c.studentName}</span>
                     <span className="text-xs text-muted">({c.nis})</span>
-                    {c.className && <Badge className="text-xs">{c.className}</Badge>}
+                    {c.className && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">{c.className}</span>}
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_COLORS[c.type] || 'bg-gray-100 text-gray-700'}`}>
                       {TYPE_LABELS[c.type] || c.type}
                     </span>
@@ -189,7 +189,7 @@ export default function BkCounseling() {
       )}
 
       {showForm && (
-        <Modal onClose={() => { setShowForm(false); setEditItem(null); }} title={editItem ? 'Edit Konseling' : 'Tambah Konseling'}>
+        <Modal open={showForm} onClose={() => { setShowForm(false); setEditItem(null); }} title={editItem ? 'Edit Konseling' : 'Tambah Konseling'}>
           <div className="space-y-3">
             <Field label="Siswa">
               <Select
@@ -239,7 +239,7 @@ export default function BkCounseling() {
               <Button variant="ghost" onClick={() => { setShowForm(false); setEditItem(null); }}>Batal</Button>
               <Button
                 onClick={() => {
-                  if (!form.studentId || !form.title) { toast.error('Siswa dan judul wajib diisi.'); return; }
+                  if (!form.studentId || !form.title) { toast('error', 'Siswa dan judul wajib diisi.'); return; }
                   editItem ? updateMut.mutate({ id: editItem.id, ...form }) : createMut.mutate(form);
                 }}
                 disabled={createMut.isPending || updateMut.isPending}
@@ -252,7 +252,7 @@ export default function BkCounseling() {
       )}
 
       {deleteId && (
-        <Modal onClose={() => setDeleteId(null)} title="Hapus Konseling">
+        <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Hapus Konseling">
           <p className="text-sm text-muted mb-4">Yakin ingin menghapus catatan konseling ini?</p>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setDeleteId(null)}>Batal</Button>
