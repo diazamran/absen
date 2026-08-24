@@ -66,11 +66,13 @@ export default function BkCounseling() {
       ),
   });
 
+  const [studentSearch, setStudentSearch] = useState('');
+
   const { data: students } = useQuery({
-    queryKey: ['students-list'],
+    queryKey: ['students-list', studentSearch],
     queryFn: () =>
       api<{ success: boolean; data: { id: string; nis: string; fullName: string; className: string | null }[] }>(
-        '/students?pageSize=500',
+        `/students?pageSize=50&search=${encodeURIComponent(studentSearch)}`,
       ).then((r) => r.data),
   });
 
@@ -192,17 +194,35 @@ export default function BkCounseling() {
         <Modal open={showForm} onClose={() => { setShowForm(false); setEditItem(null); }} title={editItem ? 'Edit Konseling' : 'Tambah Konseling'}>
           <div className="space-y-3">
             <Field label="Siswa">
-              <Select
-                value={form.studentId}
-                onChange={(e) => setForm({ ...form, studentId: e.target.value })}
-              >
-                <option value="">Pilih siswa...</option>
-                {students?.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.fullName} ({s.nis}) - {s.className || '-'}
-                  </option>
-                ))}
-              </Select>
+              <Input
+                placeholder="Ketik nama atau NISN untuk mencari..."
+                value={studentSearch}
+                onChange={(e) => { setStudentSearch(e.target.value); if (form.studentId) setForm({ ...form, studentId: '' }); }}
+              />
+              {form.studentId && (
+                <p className="mt-1 text-sm text-primary font-medium">
+                  {students?.find((s) => s.id === form.studentId)?.fullName} ({students?.find((s) => s.id === form.studentId)?.nis})
+                  <button type="button" className="ml-2 text-xs text-red-500" onClick={() => { setForm({ ...form, studentId: '' }); setStudentSearch(''); }}>×</button>
+                </p>
+              )}
+              {!form.studentId && studentSearch && students && students.length > 0 && (
+                <div className="mt-1 max-h-40 overflow-y-auto rounded-xl border border-line bg-surface">
+                  {students.slice(0, 20).map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                      onClick={() => { setForm({ ...form, studentId: s.id }); setStudentSearch(''); }}
+                    >
+                      <span className="font-medium text-ink">{s.fullName}</span>
+                      <span className="ml-2 text-xs text-muted">{s.nis} · {s.className || '-'}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!form.studentId && studentSearch && students && students.length === 0 && (
+                <p className="mt-1 text-xs text-muted">Tidak ditemukan siswa dengan kata kunci tersebut.</p>
+              )}
             </Field>
             <Field label="Jenis">
               <Select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
