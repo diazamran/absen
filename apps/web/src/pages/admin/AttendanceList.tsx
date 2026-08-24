@@ -153,7 +153,7 @@ export default function AttendanceList() {
                   <p className="text-xs text-muted">{s.className} · {s.nis}</p>
                 </div>
                 <Button
-                  size="sm"
+                  className="!px-2.5 !py-1.5 text-xs"
                   onClick={() => quickAbsen.mutate(s.id)}
                   disabled={quickAbsen.isPending}
                 >
