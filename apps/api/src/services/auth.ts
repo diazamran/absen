@@ -116,8 +116,9 @@ export async function issueTokens(userId: string, params: IssueParams): Promise<
     fullName: user.fullName,
   };
 
+  const userRoles = [user.role.key, ...((user.additionalRoles as string[]) || [])];
   const accessToken = signToken(
-    { sub: user.id, role: user.role.key, name: user.fullName, typ: 'access' },
+    { sub: user.id, role: user.role.key, roles: userRoles, name: user.fullName, typ: 'access' },
     config.jwtSecret,
     accessTtlSeconds(),
     jti,

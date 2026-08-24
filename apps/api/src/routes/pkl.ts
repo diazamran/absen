@@ -28,6 +28,28 @@ const assignmentSchema = z.object({
 });
 
 export async function pklRoutes(app: FastifyInstance) {
+  // ===== CURRENT USER PKL ROLE =====
+  app.get('/pkl/me', { preHandler: app.authenticate }, async (request, reply) => {
+    const user = await prisma.user.findUnique({
+      where: { id: request.user!.id },
+      include: { teacher: true },
+    });
+    if (!user?.teacher) {
+      return reply.send({ success: true, data: { isSupervisor: false, isPklAdmin: false, teacherId: null } });
+    }
+    const roles = request.user!.roles || [request.user!.roleKey];
+    const isPklAdmin = roles.includes('ADMIN') || roles.includes('SUPER_ADMIN');
+    const assignmentCount = await prisma.pklAssignment.count({ where: { supervisorId: user.teacher.id } });
+    return reply.send({
+      success: true,
+      data: {
+        isSupervisor: assignmentCount > 0,
+        isPklAdmin,
+        teacherId: user.teacher.id,
+      },
+    });
+  });
+
   // ===== LOCATIONS =====
 
   // List all PKL locations

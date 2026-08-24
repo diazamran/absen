@@ -38,7 +38,7 @@ const ADMIN_MENU: NavItem[] = [
 ];
 
 /** Menu untuk role non-admin — gabungan semua role user. */
-function roleMenu(user: MeData | null): NavItem[] {
+function roleMenu(user: MeData | null, pklRole?: { isSupervisor: boolean; isPklAdmin: boolean } | null): NavItem[] {
   const roles = user?.roles || (user?.roleKey ? [user.roleKey] : []);
   const has = (r: string) => roles.includes(r);
 
@@ -71,7 +71,8 @@ function roleMenu(user: MeData | null): NavItem[] {
     add({ to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-5 w-5" /> });
   }
 
-  if (has('TEACHER')) {
+  // PKL: only for supervisors or PKL admins
+  if (has('TEACHER') && pklRole?.isSupervisor) {
     add({ to: '/app/pkl-monitor', label: 'Monitor PKL', icon: <MapPin className="h-5 w-5" /> });
   }
 
@@ -186,12 +187,17 @@ function LogoTile({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   );
 }
 
-function Sidebar({ onClose }: { onClose?: () => void }) {
+function Sidebar({ onClose, pklRole }: { onClose?: () => void; pklRole?: { isSupervisor: boolean; isPklAdmin: boolean } | null }) {
   const { user, logout } = useAuth();
   const { branding } = useTheme();
   const navigate = useNavigate();
   const isAdmin = hasRole(user, 'ADMIN') || hasRole(user, 'SUPER_ADMIN') || hasRole(user, 'HEADMASTER');
-  const menu = isAdmin ? ADMIN_MENU : roleMenu(user);
+
+  const menu = isAdmin ? ADMIN_MENU.filter((item) => {
+    // PKL Management only for SUPER_ADMIN, ADMIN, or PKL supervisors
+    if (item.to === '/app/pkl' && pklRole && !pklRole.isSupervisor && !pklRole.isPklAdmin) return false;
+    return true;
+  }) : roleMenu(user, pklRole);
 
   const doLogout = async () => {
     onClose?.();
@@ -263,7 +269,26 @@ export function AppShell() {
   const navigate = useNavigate();
   const [mobileMenu, setMobileMenu] = useState(false);
   const isAdmin = hasRole(user, 'ADMIN') || hasRole(user, 'SUPER_ADMIN') || hasRole(user, 'HEADMASTER');
-  const bottomNav = BOTTOM_NAV[user?.roleKey || ''] || BOTTOM_NAV.STUDENT;
+
+  // Check if current teacher is PKL supervisor
+  const { data: pklRole } = useQuery({
+    queryKey: ['pkl-me'],
+    queryFn: () => api<{ success: boolean; data: { isSupervisor: boolean; isPklAdmin: boolean; teacherId: string | null } }>('/pkl/me').then((r) => r.data),
+    staleTime: 60_000,
+  });
+
+  // Merge bottom nav from all roles (deduplicate by 'to')
+  const bottomNavSeen = new Set<string>();
+  const bottomNav: NavItem[] = [];
+  const addBottom = (items: NavItem[]) => { for (const item of items) { if (!bottomNavSeen.has(item.to)) { bottomNavSeen.add(item.to); bottomNav.push(item); } } };
+  if (isAdmin) {
+    addBottom(BOTTOM_NAV.ADMIN);
+  } else {
+    const roles = user?.roles || [user?.roleKey || 'STUDENT'];
+    for (const r of roles) {
+      if (BOTTOM_NAV[r]) addBottom(BOTTOM_NAV[r]);
+    }
+  }
 
   // Badge notifikasi belum dibaca (sinkron dengan halaman Notifikasi via query key yang sama)
   const { data: notifData } = useQuery({
@@ -281,7 +306,7 @@ export function AppShell() {
 
   return (
     <div className="flex h-full">
-      <Sidebar />
+      <Sidebar pklRole={pklRole} />
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar */}
         <header className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-line bg-surface/80 px-4 py-3 backdrop-blur lg:px-6">
@@ -352,7 +377,10 @@ export function AppShell() {
             </div>
             <nav className="space-y-1">
               {isAdmin ? (
-                ADMIN_MENU.map((item) => (
+                ADMIN_MENU.filter((item) => {
+                    if (item.to === '/app/pkl' && pklRole && !pklRole.isSupervisor && !pklRole.isPklAdmin) return false;
+                    return true;
+                  }).map((item) => (
                   <NavLink
                     key={item.to}
                     to={item.to}
@@ -366,7 +394,7 @@ export function AppShell() {
                   </NavLink>
                 ))
               ) : (
-                roleMenu(user).map((item) => (
+                roleMenu(user, pklRole).map((item) => (
                   <NavLink
                     key={item.to}
                     to={item.to}

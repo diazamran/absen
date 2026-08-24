@@ -26,7 +26,7 @@ export async function userRoutes(app: FastifyInstance) {
     const q = request.query as { role?: string; search?: string; page?: string; pageSize?: string };
     const page = Math.max(1, Number(q.page) || 1);
     const pageSize = Math.min(200, Math.max(1, Number(q.pageSize) || 200));
-    const isSuperAdmin = request.user?.roleKey === 'SUPER_ADMIN';
+    const isSuperAdmin = (request.user?.roles || [request.user?.roleKey]).includes('SUPER_ADMIN');
     const where = {
       role: { key: { notIn: ['STUDENT', 'PARENT', ...(!isSuperAdmin ? ['SUPER_ADMIN'] : [])] } },
       ...(q.role ? { role: { key: q.role as never } } : {}),
@@ -92,7 +92,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.post('/users', { preHandler: app.requirePermission(PERMISSION_KEYS.usersCreate) }, async (request, reply) => {
     const body = validate(userCreateSchema, request.body);
     // Hanya Super Admin boleh membuat akun Super Admin
-    if (body.roleKey === 'SUPER_ADMIN' && request.user?.roleKey !== 'SUPER_ADMIN') {
+    if (body.roleKey === 'SUPER_ADMIN' && !(request.user?.roles || []).includes('SUPER_ADMIN')) {
       throw ApiError.forbidden('FORBIDDEN', 'Hanya Super Admin yang bisa membuat akun Super Admin.');
     }
     if (await prisma.user.findUnique({ where: { username: body.username } })) {
@@ -170,7 +170,7 @@ export async function userRoutes(app: FastifyInstance) {
     const existing = await prisma.user.findUnique({ where: { id }, include: { role: true, teacher: true, staff: true } });
     if (!existing) throw ApiError.notFound('Akun tidak ditemukan.');
     // Hanya Super Admin boleh edit akun Super Admin
-    if (existing.role?.key === 'SUPER_ADMIN' && request.user?.roleKey !== 'SUPER_ADMIN') {
+    if (existing.role?.key === 'SUPER_ADMIN' && !(request.user?.roles || []).includes('SUPER_ADMIN')) {
       throw ApiError.forbidden('FORBIDDEN', 'Hanya Super Admin yang bisa mengedit akun Super Admin.');
     }
 
@@ -271,7 +271,7 @@ export async function userRoutes(app: FastifyInstance) {
     });
 
     // Block non-SUPER_ADMIN from deleting SUPER_ADMIN accounts
-    if (request.user?.roleKey !== 'SUPER_ADMIN') {
+    if (!(request.user?.roles || []).includes('SUPER_ADMIN')) {
       const superAdminTargets = users.filter((u) => u.role?.key === 'SUPER_ADMIN');
       if (superAdminTargets.length > 0) {
         throw ApiError.forbidden('FORBIDDEN', 'Hanya Super Admin yang bisa menghapus akun Super Admin.');
@@ -328,7 +328,7 @@ export async function userRoutes(app: FastifyInstance) {
     }
     // Hanya Super Admin boleh hapus akun Super Admin
     const targetUser = await prisma.user.findUnique({ where: { id }, include: { role: true } });
-    if (targetUser?.role?.key === 'SUPER_ADMIN' && request.user?.roleKey !== 'SUPER_ADMIN') {
+    if (targetUser?.role?.key === 'SUPER_ADMIN' && !(request.user?.roles || []).includes('SUPER_ADMIN')) {
       throw ApiError.forbidden('FORBIDDEN', 'Hanya Super Admin yang bisa menghapus akun Super Admin.');
     }
     const existing = await prisma.user.findUnique({

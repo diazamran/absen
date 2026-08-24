@@ -15,7 +15,9 @@ export const rbacPlugin = fp(async (app: FastifyInstance) => {
       await app.authenticate(request);
       const user = request.user;
       if (!user) throw ApiError.unauthorized();
-      if (!roleHasPermission(user.roleKey, permission)) {
+      // Check all roles (primary + additional)
+      const hasPermission = (user.roles || [user.roleKey]).some((r) => roleHasPermission(r, permission));
+      if (!hasPermission) {
         throw ApiError.forbidden();
       }
     };

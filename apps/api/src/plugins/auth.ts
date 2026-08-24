@@ -6,7 +6,7 @@ import { ApiError } from '../utils/errors.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
-    user?: { id: string; roleKey: string; fullName: string };
+    user?: { id: string; roleKey: string; roles: string[]; fullName: string };
   }
   interface FastifyInstance {
     authenticate: (request: FastifyRequest) => Promise<void>;
@@ -28,6 +28,7 @@ export const authPlugin = fp(async (app: FastifyInstance) => {
       request.user = {
         id: String(payload.sub),
         roleKey: String(payload.role),
+        roles: Array.isArray(payload.roles) ? payload.roles.map(String) : [String(payload.role)],
         fullName: String(payload.name || ''),
       };
     } catch {
@@ -45,6 +46,7 @@ export const authPlugin = fp(async (app: FastifyInstance) => {
           request.user = {
             id: String(payload.sub),
             roleKey: String(payload.role),
+            roles: Array.isArray(payload.roles) ? payload.roles.map(String) : [String(payload.role)],
             fullName: String(payload.name || ''),
           };
         }
