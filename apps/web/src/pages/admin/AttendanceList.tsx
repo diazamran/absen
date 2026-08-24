@@ -197,9 +197,11 @@ function ManualForm({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState({ studentId: '', status: 'PRESENT', type: 'CHECK_IN', date: '', checkIn: '', checkOut: '', notes: '' });
   const [search, setSearch] = useState('');
 
-  const { data: students } = useQuery({
-    queryKey: ['students', search],
-    queryFn: () => api<{ success: boolean; data: { id: string; nis: string; fullName: string; className: string | null }[] }>(`/students?search=${encodeURIComponent(search)}`).then((r) => r.data),
+  const { data: students, isLoading } = useQuery({
+    queryKey: ['students-manual', search],
+    queryFn: () => api<{ success: boolean; data: { id: string; nis: string; fullName: string; className: string | null }[] }>(
+      `/students?search=${encodeURIComponent(search)}&pageSize=50&isActive=true`
+    ).then((r) => r.data),
   });
 
   const mutation = useMutation({
