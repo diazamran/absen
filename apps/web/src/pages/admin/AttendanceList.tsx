@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ScanLine, Search, ClipboardEdit, Filter, Pencil, Trash2 } from 'lucide-react';
+import { ScanLine, Search, ClipboardEdit, Filter, Pencil, Trash2, UserPlus } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
@@ -13,6 +13,10 @@ interface AttRow {
   checkOut?: string | null; status: string; method: string; lateMinutes: number;
 }
 
+interface StudentRow {
+  id: string; nis: string; fullName: string; className: string | null; classId: string | null;
+}
+
 export default function AttendanceList() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -22,6 +26,7 @@ export default function AttendanceList() {
   const [status, setStatus] = useState('');
   const [q, setQ] = useState('');
   const [manualOpen, setManualOpen] = useState(false);
+  const [manualStudentId, setManualStudentId] = useState('');
   const [editing, setEditing] = useState<AttRow | null>(null);
 
   const { data: rows } = useQuery({
@@ -33,6 +38,24 @@ export default function AttendanceList() {
     queryKey: ['classes'],
     queryFn: () => api<{ success: boolean; data: { id: string; name: string }[] }>('/classes').then((r) => r.data),
   });
+
+  // When searching, also fetch all students to show unattended ones
+  const searchTerm = q.trim();
+  const { data: allStudents } = useQuery({
+    queryKey: ['students-for-attendance', searchTerm],
+    queryFn: () => api<{ success: boolean; data: StudentRow[] }>(
+      `/students?search=${encodeURIComponent(searchTerm)}&pageSize=50&isActive=true`
+    ).then((r) => r.data),
+    enabled: searchTerm.length >= 2,
+  });
+
+  // Build a set of student NIS that already attended today
+  const attendedNis = new Set((rows || []).map((r) => r.nis).filter(Boolean));
+
+  // Filter students that haven't attended yet
+  const unattendedStudents = (allStudents || []).filter(
+    (s) => !attendedNis.has(s.nis)
+  );
 
   const editMutation = useMutation({
     mutationFn: (payload: { id: string; status: string; checkIn?: string; checkOut?: string; notes?: string }) =>
@@ -66,12 +89,31 @@ export default function AttendanceList() {
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus catatan.'),
   });
 
+  // Quick absen mutation (from unattended list)
+  const quickAbsen = useMutation({
+    mutationFn: (studentId: string) =>
+      api('/attendance/manual', {
+        method: 'POST',
+        body: { studentId, status: 'PRESENT', type: 'CHECK_IN' },
+      }),
+    onSuccess: () => {
+      toast('success', 'Absensi berhasil dicatat.');
+      qc.invalidateQueries({ queryKey: ['attendance-today'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal mencatat absensi.'),
+  });
+
   return (
     <div>
       <PageHeader
         title="Absensi Hari Ini"
         subtitle="Data kehadiran realtime — klik ikon pensil untuk koreksi status/jam siswa"
-        action={<Button onClick={() => setManualOpen(true)}><ClipboardEdit className="h-4 w-4" /> Absen Manual</Button>}
+        action={
+          <Button onClick={() => { setManualStudentId(''); setManualOpen(true); }}>
+            <ClipboardEdit className="h-4 w-4" /> Absen Manual
+          </Button>
+        }
       />
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="relative min-w-0 flex-1 sm:max-w-xs">
@@ -94,6 +136,36 @@ export default function AttendanceList() {
         </Select>
       </div>
 
+      {/* Unattended students (shown when searching) */}
+      {searchTerm.length >= 2 && unattendedStudents.length > 0 && (
+        <div className="mb-4">
+          <p className="mb-2 text-xs font-semibold text-muted">
+            Belum hadir hari ini ({unattendedStudents.length} siswa) — klik untuk absen cepat:
+          </p>
+          <div className="space-y-1.5">
+            {unattendedStudents.map((s) => (
+              <Card key={s.id} className="flex items-center gap-3 p-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-500/10">
+                  <UserPlus className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-ink">{s.fullName}</p>
+                  <p className="text-xs text-muted">{s.className} · {s.nis}</p>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => quickAbsen.mutate(s.id)}
+                  disabled={quickAbsen.isPending}
+                >
+                  <ClipboardEdit className="h-3.5 w-3.5" /> Absen
+                </Button>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Today's attendance */}
       <div className="space-y-2">
         {(rows || [])
           .filter((r) => {
@@ -134,15 +206,18 @@ export default function AttendanceList() {
             )}
           </Card>
         ))}
-        {rows && rows.length === 0 && (
+        {rows && rows.length === 0 && !searchTerm && (
           <EmptyState icon={Search} title="Belum ada data absensi" description="Data akan muncul saat siswa mulai absen." />
         )}
-        {rows && rows.length > 0 && q.trim() && (rows || []).filter((r) => r.name.toLowerCase().includes(q.trim().toLowerCase()) || (r.nis || '').includes(q.trim())).length === 0 && (
-          <EmptyState icon={Search} title="Siswa tidak ditemukan" description={`Tidak ada siswa dengan nama/NISN "${q.trim()}" pada daftar hari ini. Coba klik Absen Manual untuk mencari semua siswa.`} />
+        {rows && rows.length > 0 && searchTerm && (
+          (rows || []).filter((r) => r.name.toLowerCase().includes(searchTerm.toLowerCase()) || (r.nis || '').toLowerCase().includes(searchTerm.toLowerCase())).length === 0
+          && unattendedStudents.length === 0
+        ) && (
+          <EmptyState icon={Search} title="Siswa tidak ditemukan" description={`Tidak ada siswa dengan nama/NISN "${searchTerm}" dalam database.`} />
         )}
       </div>
 
-      {manualOpen && <ManualForm onClose={() => setManualOpen(false)} />}
+      {manualOpen && <ManualForm onClose={() => setManualOpen(false)} initialStudentId={manualStudentId} />}
       {editing && (
         <EditForm
           row={editing}
@@ -191,13 +266,13 @@ function EditForm({ row, onClose, onSave, saving }: {
   );
 }
 
-function ManualForm({ onClose }: { onClose: () => void }) {
+function ManualForm({ onClose, initialStudentId }: { onClose: () => void; initialStudentId?: string }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ studentId: '', status: 'PRESENT', type: 'CHECK_IN', date: '', checkIn: '', checkOut: '', notes: '' });
+  const [form, setForm] = useState({ studentId: initialStudentId || '', status: 'PRESENT', type: 'CHECK_IN', date: '', checkIn: '', checkOut: '', notes: '' });
   const [search, setSearch] = useState('');
 
-  const { data: students, isLoading } = useQuery({
+  const { data: students } = useQuery({
     queryKey: ['students-manual', search],
     queryFn: () => api<{ success: boolean; data: { id: string; nis: string; fullName: string; className: string | null }[] }>(
       `/students?search=${encodeURIComponent(search)}&pageSize=50&isActive=true`
@@ -228,15 +303,15 @@ function ManualForm({ onClose }: { onClose: () => void }) {
   return (
     <Modal open onClose={onClose} title="Absensi Manual" wide>
       <div className="space-y-3">
-        <Field label="Cari siswa" hint={students?.length ? `${students.length} siswa ditemukan — tekan Enter untuk pilih yang pertama` : undefined}>
+        <Field label="Cari siswa" hint={students?.length ? `${students.length} siswa ditemukan` : undefined}>
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => {
-              // Enter → pilih siswa pertama langsung (percepat absensi piket)
               if (e.key === 'Enter' && students?.length) setForm({ ...form, studentId: students[0].id });
             }}
-            placeholder="NISN / nama…"
+            placeholder="Ketik nama / NISN…"
+            autoFocus
           />
         </Field>
         <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-2xl border border-line p-2">
@@ -250,7 +325,8 @@ function ManualForm({ onClose }: { onClose: () => void }) {
               <span className="text-xs text-muted">{s.nis} · {s.className}</span>
             </button>
           ))}
-          {students?.length === 0 && <p className="py-4 text-center text-sm text-muted">Tidak ada siswa ditemukan</p>}
+          {students?.length === 0 && search && <p className="py-4 text-center text-sm text-muted">Tidak ada siswa ditemukan untuk "{search}"</p>}
+          {!search && <p className="py-4 text-center text-sm text-muted">Ketik nama atau NISN untuk mencari siswa</p>}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Status">
