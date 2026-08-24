@@ -5,6 +5,7 @@ import {
   Home, ScanLine, Users, FileText, LayoutDashboard, GraduationCap, CalendarDays, BookOpen,
   ClipboardList, Smartphone, BarChart3, Bell, ScrollText, Settings, LogOut, Menu, X, ShieldCheck,
   ClipboardCheck, History, FilePlus2, UserRound, Baby, ScanFace, QrCode, MapPin, Building2, Activity,
+  ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { useAuth, hasRole, type MeData } from '../lib/auth';
 import { useTheme } from '../lib/theme';
@@ -253,6 +254,14 @@ function Sidebar({ onClose, pklRole, adminGroups }: { onClose?: () => void; pklR
   const groups = adminGroups || ADMIN_GROUPS;
   const menu = isAdmin ? flattenGroups(groups) : roleMenu(user, pklRole);
 
+  // Collapsible state: all groups open by default
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    groups.forEach((g) => { init[g.label || '__root__'] = true; });
+    return init;
+  });
+  const toggleGroup = (label: string) => setOpenGroups((p) => ({ ...p, [label]: !(p[label] ?? true) }));
+
   const doLogout = async () => {
     onClose?.();
     await logout();
@@ -287,15 +296,35 @@ function Sidebar({ onClose, pklRole, adminGroups }: { onClose?: () => void; pklR
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
         {isAdmin ? (
-          // Grouped menu for admin
-          groups.map((group) => (
-            <div key={group.label} className="mb-2">
-              {group.label && (
-                <p className="mb-1 mt-3 px-3.5 text-[10px] font-bold uppercase tracking-wider text-muted/70">{group.label}</p>
-              )}
-              {group.items.map((item) => renderNavItem(item))}
-            </div>
-          ))
+          // Grouped menu for admin — collapsible
+          groups.map((group) => {
+            const key = group.label || '__root__';
+            const isOpen = openGroups[key] ?? true;
+            if (!group.label) {
+              // Root items (no header) — always visible
+              return (
+                <div key={key} className="mb-1">
+                  {group.items.map((item) => renderNavItem(item))}
+                </div>
+              );
+            }
+            return (
+              <div key={key} className="mb-1">
+                <button
+                  onClick={() => toggleGroup(key)}
+                  className="flex w-full items-center justify-between rounded-lg px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted/70 hover:bg-slate-50 dark:hover:bg-slate-800/50 select-none"
+                >
+                  <span>{group.label}</span>
+                  {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                </button>
+                {isOpen && (
+                  <div className="mt-0.5 space-y-0.5">
+                    {group.items.map((item) => renderNavItem(item))}
+                  </div>
+                )}
+              </div>
+            );
+          })
         ) : (
           // Flat menu for non-admin
           menu.map((item) => renderNavItem(item))
