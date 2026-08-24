@@ -42,7 +42,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 export default function BkCounseling() {
   const { user } = useAuth();
-  const toast = useToast();
+  const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
