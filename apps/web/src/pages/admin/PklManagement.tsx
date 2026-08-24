@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MapPin, Plus, Trash2, Edit, Users, Search, Loader2, X, ChevronDown, Building2, GraduationCap, Download, Upload } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
+import { useAuth } from '../../lib/auth';
 import { Button, Card, Input, Badge, EmptyState, Skeleton } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
 import { Segmented } from '../../lib/ui';
@@ -235,9 +236,18 @@ function AssignmentForm({ locationId, onClose }: { locationId: string; onClose: 
 
 // ===== Main Page =====
 export default function PklManagement() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [tab, setTab] = useState<'locations' | 'assignments'>('locations');
+
+  // Check if current user is PKL admin or supervisor
+  const { data: pklRole } = useQuery({
+    queryKey: ['pkl-me'],
+    queryFn: () => api<{ success: boolean; data: { isSupervisor: boolean; isPklAdmin: boolean; teacherId: string | null } }>('/pkl/me').then((r) => r.data),
+    staleTime: 60_000,
+  });
+  const canManage = pklRole?.isPklAdmin || !pklRole?.isSupervisor; // admin bisa manage, supervisor tidak
   const [showForm, setShowForm] = useState<'add-location' | null>(null);
   const [editLocation, setEditLocation] = useState<PklLocation | null>(null);
   const [assignTo, setAssignTo] = useState<string | null>(null);
@@ -312,7 +322,7 @@ export default function PklManagement() {
     <div>
       <PageHeader
         title="Manajemen PKL"
-        subtitle="Kelola lokasi PKL, penugasan siswa, dan guru pembimbing"
+        subtitle={canManage ? "Kelola lokasi PKL, penugasan siswa, dan guru pembimbing" : "Lihat siswa PKL bimbingan Anda"}
       />
 
       {/* Tabs */}
@@ -325,7 +335,7 @@ export default function PklManagement() {
             { value: 'assignments', label: `Penugasan (${locations?.reduce((sum, l) => sum + l.students.length, 0) ?? 0})` },
           ]}
         />
-        {tab === 'locations' && (
+        {tab === 'locations' && canManage && (
           <div className="flex gap-2">
             <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleImport} />
             <Button variant="outline" onClick={downloadTemplate}>
@@ -397,7 +407,7 @@ export default function PklManagement() {
                     <p className="mt-1 text-xs font-semibold text-primary">{loc.studentCount} siswa ditugaskan</p>
                   </div>
                 </div>
-                <div className="flex gap-1">
+                {canManage && (<div className="flex gap-1">
                   <Button variant="outline" className="!px-2 !py-1.5" onClick={() => setAssignTo(loc.id)} title="Tambah siswa">
                     <Users className="h-4 w-4" />
                   </Button>
@@ -409,7 +419,7 @@ export default function PklManagement() {
                   }} title="Hapus">
                     <Trash2 className="h-4 w-4" />
                   </Button>
-                </div>
+                </div>)}
               </div>
               {/* Students list */}
               {loc.students.length > 0 && (
@@ -421,14 +431,14 @@ export default function PklManagement() {
                           <p className="truncate text-sm font-semibold text-ink">{s.fullName}</p>
                           <p className="text-xs text-muted">{s.nis} · {s.className ?? '-'}{s.supervisorName ? ` · 👨‍🏫 ${s.supervisorName}` : ''}</p>
                         </div>
-                        <button
+                        {canManage && <button
                           onClick={() => {
                             if (window.confirm(`Hapus penugasan ${s.fullName}?`)) deleteAssignment.mutate(s.assignmentId);
                           }}
                           className="rounded p-1 text-muted hover:bg-red-50 hover:text-red-500"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        </button>}
                       </div>
                     ))}
                   </div>

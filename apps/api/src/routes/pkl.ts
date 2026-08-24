@@ -28,6 +28,15 @@ const assignmentSchema = z.object({
 });
 
 export async function pklRoutes(app: FastifyInstance) {
+
+  // Helper: get current user's PKL scope (admin or supervisor)
+  async function getPklScope(userId: string): Promise<{ isAdmin: boolean; teacherId: string | null }> {
+    const user = await prisma.user.findUnique({ where: { id: userId }, include: { role: true, teacher: true } });
+    const roles = [user?.role?.key, ...((user?.additionalRoles as string[]) || [])].filter(Boolean);
+    const isAdmin = roles.includes('ADMIN') || roles.includes('SUPER_ADMIN') || roles.includes('HEADMASTER');
+    return { isAdmin, teacherId: user?.teacher?.id ?? null };
+  }
+
   // ===== CURRENT USER PKL ROLE =====
   app.get('/pkl/me', { preHandler: app.authenticate }, async (request, reply) => {
     const user = await prisma.user.findUnique({
@@ -229,6 +238,17 @@ export async function pklRoutes(app: FastifyInstance) {
       : await prisma.student.findUnique({ where: { userId: request.user!.id } });
     if (!student) throw ApiError.notFound('Siswa tidak ditemukan.');
 
+    // Supervisor hanya boleh absensi untuk siswa bimbingannya
+    if (body.studentId) {
+      const scope = await getPklScope(request.user!.id);
+      if (!scope.isAdmin && scope.teacherId) {
+        const assignment = await prisma.pklAssignment.findFirst({
+          where: { studentId: body.studentId, supervisorId: scope.teacherId, isActive: true },
+        });
+        if (!assignment) throw ApiError.forbidden('FORBIDDEN', 'Anda tidak memiliki akses ke siswa ini.');
+      }
+    }
+
     // Verifikasi lokasi
     const location = await prisma.pklLocation.findUnique({ where: { id: body.pklLocationId } });
     if (!location) throw ApiError.notFound('Lokasi PKL tidak ditemukan.');
@@ -318,6 +338,11 @@ export async function pklRoutes(app: FastifyInstance) {
   // Daftar siswa yang dibimbing + status hari ini
   app.get('/pkl/supervisor/:teacherId', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
     const { teacherId } = request.params as { teacherId: string };
+    // Supervisor hanya boleh lihat data sendiri
+    const scope = await getPklScope(request.user!.id);
+    if (!scope.isAdmin && scope.teacherId !== teacherId) {
+      throw ApiError.forbidden('FORBIDDEN', 'Anda hanya bisa melihat data siswa bimbingan sendiri.');
+    }
     const today = todayStart();
 
     const assignments = await prisma.pklAssignment.findMany({
@@ -364,6 +389,11 @@ export async function pklRoutes(app: FastifyInstance) {
   // Rekap PKL per bulan untuk satu guru pembimbing
   app.get('/pkl/supervisor/:teacherId/rekap', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
     const { teacherId } = request.params as { teacherId: string };
+    // Supervisor hanya boleh lihat rekap sendiri
+    const scope = await getPklScope(request.user!.id);
+    if (!scope.isAdmin && scope.teacherId !== teacherId) {
+      throw ApiError.forbidden('FORBIDDEN', 'Anda hanya bisa melihat rekap siswa bimbingan sendiri.');
+    }
     const { month } = request.query as { month?: string };
 
     const monthStart = month ? new Date(`${month}-01T00:00:00+07:00`) : new Date(`${new Date().toISOString().slice(0, 7)}-01T00:00:00+07:00`);
@@ -407,10 +437,15 @@ export async function pklRoutes(app: FastifyInstance) {
     });
   });
 
-  // ===== ADMIN: LIST ALL PKL STUDENTS (untuk page admin) =====
+  // ===== LIST PKL STUDENTS — scoped by role =====
   app.get('/pkl/students', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
     const { search } = request.query as { search?: string };
+    const scope = await getPklScope(request.user!.id);
     const where: Record<string, unknown> = { isActive: true };
+    // Supervisor hanya lihat siswa bimbingannya
+    if (!scope.isAdmin && scope.teacherId) {
+      where.supervisorId = scope.teacherId;
+    }
     if (search) {
       where.OR = [
         { student: { user: { fullName: { contains: search, mode: 'insensitive' } } } },
@@ -453,14 +488,18 @@ export async function pklRoutes(app: FastifyInstance) {
 
   // ===== LAPORAN PKL =====
 
-  // Laporan PKL harian
+  // Laporan PKL harian — scoped by supervisor
   app.get('/pkl/report/daily', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
     const { date, locationId, classId } = request.query as { date?: string; locationId?: string; classId?: string };
     const targetDate = date ? new Date(`${date}T00:00:00+07:00`) : todayStart();
     const dayEnd = new Date(targetDate.getTime() + 24 * 3600_000);
 
-    // Ambil semua assignment aktif
+    const scope = await getPklScope(request.user!.id);
     const whereAssignment: Record<string, unknown> = { isActive: true };
+    // Supervisor hanya lihat siswanya sendiri
+    if (!scope.isAdmin && scope.teacherId) {
+      whereAssignment.supervisorId = scope.teacherId;
+    }
     if (locationId) whereAssignment.pklLocationId = locationId;
     if (classId) whereAssignment.student = { classId };
 
@@ -520,13 +559,18 @@ export async function pklRoutes(app: FastifyInstance) {
     });
   });
 
-  // Laporan PKL bulanan
+  // Laporan PKL bulanan — scoped by supervisor
   app.get('/pkl/report/monthly', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
     const { month, locationId, classId } = request.query as { month?: string; locationId?: string; classId?: string };
     const monthStart = month ? new Date(`${month}-01T00:00:00+07:00`) : new Date(`${new Date().toISOString().slice(0, 7)}-01T00:00:00+07:00`);
     const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0, 23, 59, 59);
 
+    const scope = await getPklScope(request.user!.id);
     const whereAssignment: Record<string, unknown> = { isActive: true };
+    // Supervisor hanya lihat siswanya sendiri
+    if (!scope.isAdmin && scope.teacherId) {
+      whereAssignment.supervisorId = scope.teacherId;
+    }
     if (locationId) whereAssignment.pklLocationId = locationId;
     if (classId) whereAssignment.student = { classId };
 

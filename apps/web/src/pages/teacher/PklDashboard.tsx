@@ -41,16 +41,24 @@ export default function PklDashboard() {
   const { user } = useAuth();
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
 
+  // Get teacherId from /pkl/me
+  const { data: pklMe } = useQuery({
+    queryKey: ['pkl-me'],
+    queryFn: () => api<{ success: boolean; data: { isSupervisor: boolean; isPklAdmin: boolean; teacherId: string | null } }>('/pkl/me').then((r) => r.data),
+    staleTime: 60_000,
+  });
+  const teacherId = pklMe?.teacherId;
+
   const { data: students, isLoading } = useQuery({
-    queryKey: ['pkl-supervisor', user?.id],
-    queryFn: () => api<{ success: boolean; data: SupervisedStudent[] }>(`/pkl/supervisor/${user!.id}`).then((r) => r.data),
-    enabled: !!user,
+    queryKey: ['pkl-supervisor', teacherId],
+    queryFn: () => api<{ success: boolean; data: SupervisedStudent[] }>(`/pkl/supervisor/${teacherId}`).then((r) => r.data),
+    enabled: !!teacherId,
   });
 
   const { data: rekap, isLoading: rekapLoading } = useQuery({
-    queryKey: ['pkl-rekap', user?.id, month],
-    queryFn: () => api<{ success: boolean; data: RekapItem[] }>(`/pkl/supervisor/${user!.id}/rekap?month=${month}`).then((r) => r.data),
-    enabled: !!user,
+    queryKey: ['pkl-rekap', teacherId, month],
+    queryFn: () => api<{ success: boolean; data: RekapItem[] }>(`/pkl/supervisor/${teacherId}/rekap?month=${month}`).then((r) => r.data),
+    enabled: !!teacherId,
   });
 
   const present = students?.filter((s) => s.todayAttendance.status === 'PRESENT' || s.todayAttendance.status === 'LATE').length ?? 0;
