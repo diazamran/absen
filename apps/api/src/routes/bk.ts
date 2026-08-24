@@ -50,7 +50,7 @@ export async function bkRoutes(app: FastifyInstance) {
       data: data.map((c) => ({
         id: c.id,
         studentId: c.studentId,
-        studentName: c.student.user.fullName,
+        studentName: c.student.user?.fullName ?? '-',
         nis: c.student.nis,
         className: c.student.class?.name ?? null,
         type: c.type,
