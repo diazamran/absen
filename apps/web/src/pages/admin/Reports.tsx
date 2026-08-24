@@ -50,7 +50,7 @@ function exportLeaveRecapPdf(data: any, schoolName: string) {
       y += 5;
     });
 
-    doc.save(`rekap_cuti_${dateKey()}.pdf`);
+    doc.save(`rekap_cuti_${new Date().toISOString().slice(0,10)}.pdf`);
   });
 }
 
@@ -64,7 +64,7 @@ function exportLeaveRecapExcel(data: any) {
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `rekap_cuti_${dateKey()}.csv`; a.click();
+  a.href = url; a.download = `rekap_cuti_${new Date().toISOString().slice(0,10)}.csv`; a.click();
   URL.revokeObjectURL(url);
 }
 
