@@ -199,7 +199,7 @@ export default function BkCounseling() {
                 <option value="">Pilih siswa...</option>
                 {students?.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.user.fullName} ({s.nis}) - {s.class?.name || '-'}
+                    {s.user?.fullName ?? s.nis} ({s.nis}) - {s.class?.name || '-'}
                   </option>
                 ))}
               </Select>
