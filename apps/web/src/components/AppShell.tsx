@@ -34,6 +34,7 @@ const ADMIN_MENU: NavItem[] = [
   { to: '/app/devices', label: 'Perangkat', icon: <Smartphone className="h-5 w-5" /> },
   { to: '/app/audit', label: 'Audit Log', icon: <ScrollText className="h-5 w-5" /> },
   { to: '/app/sdms-monitor', label: 'Monitor SDMS', icon: <Activity className="h-5 w-5" /> },
+  { to: '/app/bk', label: 'Konseling', icon: <ClipboardCheck className="h-5 w-5" /> },
   { to: '/app/settings', label: 'Pengaturan', icon: <Settings className="h-5 w-5" /> },
 ];
 
@@ -58,8 +59,8 @@ function roleMenu(user: MeData | null, pklRole?: { isSupervisor: boolean; isPklA
     add({ to: '/app/leave/mine', label: 'Ajukan Izin', icon: <FilePlus2 className="h-5 w-5" /> });
   }
 
-  // 3. Guru / Wali Kelas: Kelas
-  if (has('TEACHER') || has('HOMEROOM_TEACHER')) {
+  // 3. Guru / Wali Kelas / BK: Kelas
+  if (has('TEACHER') || has('HOMEROOM_TEACHER') || has('BK')) {
     add({ to: '/app/classes', label: 'Kelas', icon: <ClipboardList className="h-5 w-5" /> });
   }
 
@@ -80,8 +81,13 @@ function roleMenu(user: MeData | null, pklRole?: { isSupervisor: boolean; isPklA
     add({ to: '/app/pkl-monitor', label: 'Monitor PKL', icon: <MapPin className="h-5 w-5" /> });
   }
 
-  // 6. Laporan — consolidated (Piket + Wali Kelas + Guru)
-  if (has('PIKET') || has('HOMEROOM_TEACHER')) {
+  // 5b. BK: menu konseling
+  if (has('BK')) {
+    add({ to: '/app/bk', label: 'Konseling', icon: <ClipboardCheck className="h-5 w-5" /> });
+  }
+
+  // 6. Laporan — consolidated (Piket + Wali Kelas + BK)
+  if (has('PIKET') || has('HOMEROOM_TEACHER') || has('BK')) {
     add({ to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-5 w-5" /> });
   }
 
@@ -135,11 +141,14 @@ function buildBottomNav(user: MeData | null, pklRole?: { isSupervisor: boolean; 
     } else {
       add({ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> });
     }
-    if (has('TEACHER') || has('HOMEROOM_TEACHER')) {
+    if (has('TEACHER') || has('HOMEROOM_TEACHER') || has('BK')) {
       add({ to: '/app/classes', label: 'Kelas', icon: <GraduationCap className="h-6 w-6" /> });
     }
     if (has('TEACHER') && pklRole?.isSupervisor) {
       add({ to: '/app/pkl-monitor', label: 'PKL', icon: <MapPin className="h-6 w-6" /> });
+    }
+    if (has('BK')) {
+      add({ to: '/app/bk', label: 'BK', icon: <ClipboardCheck className="h-6 w-6" /> });
     }
     if (has('PIKET') || has('HOMEROOM_TEACHER')) {
       add({ to: '/app/leave', label: 'Izin', icon: <FilePlus2 className="h-6 w-6" /> });

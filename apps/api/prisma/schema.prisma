@@ -165,6 +165,7 @@ model User {
   manualAttendance Attendance[] @relation("ManualAttendance")
   leaveReviews   LeaveRequest[] @relation("LeaveReviewer")
   updatedSettings SchoolSetting[]
+  counselings    Counseling[]
 
   @@index([roleId])
   @@index([username])
@@ -199,6 +200,7 @@ model Student {
   attendance    Attendance[]
   leaveRequests LeaveRequest[]
   pklAssignments PklAssignment[]
+  counselings   Counseling[]
 
   @@index([nis])
   @@index([classId])
@@ -711,4 +713,25 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@index([entity, entityId])
+}
+
+model Counseling {
+  id          String   @id @default(cuid())
+  studentId   String
+  type        String   // ACADEMIC, DISCIPLINE, PERSONAL, SOCIAL, CAREER, OTHER
+  title       String
+  description String?
+  action      String?
+  followUp    String?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  creator User    @relation(fields: [createdById], references: [id])
+
+  @@index([studentId])
+  @@index([createdById])
+  @@index([type])
+  @@index([createdAt])
 }

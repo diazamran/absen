@@ -33,6 +33,7 @@ import { uploadRoutes } from './routes/upload.js';
 import { importRoutes } from './routes/import.js';
 import { pklRoutes } from './routes/pkl.js';
 import { sdmsRoutes } from './routes/sdms.js';
+import { bkRoutes } from './routes/bk.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOADS_DIR = path.resolve(__dirname, '../uploads');
@@ -111,6 +112,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     await api.register(uploadRoutes);
     await api.register(importRoutes);
     await api.register(pklRoutes);
+    await api.register(bkRoutes);
     await api.register(sdmsRoutes);
   }, { prefix: '/api' });
 

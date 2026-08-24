@@ -11,7 +11,7 @@ async function main() {
   // ===== Roles & Permissions =====
   const roleKeys = [
     'SUPER_ADMIN', 'ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER',
-    'TEACHER', 'STAFF', 'PIKET', 'STUDENT', 'PARENT',
+    'TEACHER', 'BK', 'STAFF', 'PIKET', 'STUDENT', 'PARENT',
   ] as const;
 
   const roles = new Map<string, string>();

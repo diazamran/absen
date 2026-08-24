@@ -14,7 +14,7 @@ interface UserRow {
 }
 
 const ROLE_LABEL: Record<string, string> = {
-  SUPER_ADMIN: 'Super Admin', TEACHER: 'Guru', HOMEROOM_TEACHER: 'Wali Kelas', STAFF: 'Staff', ADMIN: 'Admin', HEADMASTER: 'Kepala Sekolah', PIKET: 'Petugas Piket',
+  SUPER_ADMIN: 'Super Admin', TEACHER: 'Guru', HOMEROOM_TEACHER: 'Wali Kelas', BK: 'Guru BK', STAFF: 'Staff', ADMIN: 'Admin', HEADMASTER: 'Kepala Sekolah', PIKET: 'Petugas Piket',
 };
 
 export default function Users() {
@@ -159,7 +159,7 @@ export default function Users() {
                       {u.additionalRoles && u.additionalRoles.length > 0 && (
                         u.additionalRoles.map((ar) => (
                           <span key={ar} className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
-                            +{ar === 'PIKET' ? 'Piket' : ar === 'HOMEROOM_TEACHER' ? 'Wali' : ar === 'HEADMASTER' ? 'Kepsek' : ar === 'TEACHER' ? 'Guru' : ar === 'STAFF' ? 'Staff' : ar}
+                            +{ar === 'PIKET' ? 'Piket' : ar === 'HOMEROOM_TEACHER' ? 'Wali' : ar === 'HEADMASTER' ? 'Kepsek' : ar === 'BK' ? 'BK' : ar === 'TEACHER' ? 'Guru' : ar === 'STAFF' ? 'Staff' : ar}
                           </span>
                         ))
                       )}
@@ -274,6 +274,7 @@ function UserForm({ onClose, subjects, initial }: { onClose: () => void; subject
             <option value="HEADMASTER">Kepala Sekolah</option>
             <option value="HOMEROOM_TEACHER">Wali Kelas</option>
             <option value="TEACHER">Guru</option>
+            <option value="BK">Guru BK</option>
             <option value="PIKET">Petugas Piket</option>
             <option value="STAFF">Staff</option>
           </Select>
@@ -295,7 +296,7 @@ function UserForm({ onClose, subjects, initial }: { onClose: () => void; subject
           <p className="mb-2 text-sm font-semibold text-ink">Tambahan Role</p>
           <p className="mb-3 text-xs text-muted">Pilih role tambahan selain role utama. Contoh: Guru yang juga Petugas Piket dan Wali Kelas.</p>
           <div className="flex flex-wrap gap-3">
-            {['PIKET', 'HOMEROOM_TEACHER', 'HEADMASTER', 'TEACHER', 'STAFF', 'ADMIN'].map((r) => (
+            {['PIKET', 'HOMEROOM_TEACHER', 'HEADMASTER', 'BK', 'TEACHER', 'STAFF', 'ADMIN'].map((r) => (
               <label key={r} className="flex items-center gap-2 text-sm text-ink">
                 <input
                   type="checkbox"
@@ -305,7 +306,7 @@ function UserForm({ onClose, subjects, initial }: { onClose: () => void; subject
                     setAdditionalRoles(e.target.checked ? [...additionalRoles, r] : additionalRoles.filter((x) => x !== r));
                   }}
                 />
-                {r === 'PIKET' ? 'Petugas Piket' : r === 'HOMEROOM_TEACHER' ? 'Wali Kelas' : r === 'HEADMASTER' ? 'Kepala Sekolah' : r === 'TEACHER' ? 'Guru' : r === 'STAFF' ? 'Staff' : 'Admin'}
+                {r === 'PIKET' ? 'Petugas Piket' : r === 'HOMEROOM_TEACHER' ? 'Wali Kelas' : r === 'HEADMASTER' ? 'Kepala Sekolah' : r === 'BK' ? 'Guru BK' : r === 'TEACHER' ? 'Guru' : r === 'STAFF' ? 'Staff' : 'Admin'}
               </label>
             ))}
           </div>
