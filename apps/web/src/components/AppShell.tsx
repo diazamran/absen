@@ -117,8 +117,8 @@ function roleMenu(user: MeData | null, pklRole?: { isSupervisor: boolean; isPklA
     add({ to: '/app/leave', label: 'Persetujuan Izin', icon: <FileText className="h-5 w-5" /> });
   }
 
-  // 5. PKL — only for supervisors
-  if (has('TEACHER') && pklRole?.isSupervisor) {
+  // 5. PKL — only for supervisors (any teacher-like role)
+  if (pklRole?.isSupervisor) {
     add({ to: '/app/pkl-monitor', label: 'Monitor PKL', icon: <MapPin className="h-5 w-5" /> });
   }
 
@@ -185,7 +185,7 @@ function buildBottomNav(user: MeData | null, pklRole?: { isSupervisor: boolean; 
     if (has('TEACHER') || has('HOMEROOM_TEACHER') || has('BK')) {
       add({ to: '/app/classes', label: 'Kelas', icon: <GraduationCap className="h-6 w-6" /> });
     }
-    if (has('TEACHER') && pklRole?.isSupervisor) {
+    if (pklRole?.isSupervisor) {
       add({ to: '/app/pkl-monitor', label: 'PKL', icon: <MapPin className="h-6 w-6" /> });
     }
     if (has('BK')) {
