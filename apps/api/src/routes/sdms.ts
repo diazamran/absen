@@ -202,7 +202,7 @@ async function ensureHomeroomRole(userId: string): Promise<void> {
     const updated = [...current, 'HOMEROOM_TEACHER'];
     await prisma.user.update({
       where: { id: userId },
-      data: { additionalRoles: updated as unknown as Record<string, unknown> },
+      data: { additionalRoles: JSON.parse(JSON.stringify(updated)) },
     });
   } catch {
     // Silent — role assignment tidak boleh gagalkan sync
