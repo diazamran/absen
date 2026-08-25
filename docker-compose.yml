@@ -33,7 +33,7 @@ services:
     container_name: presensiku_api
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://presensiku:${DB_PASSWORD:-presensiku123}@postgres:5432/presensiku
+      DATABASE_URL: postgresql://presensiku:${DB_PASSWORD:-presensiku123}@postgres:5432/presensiku?connection_limit=20&pool_timeout=10
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
