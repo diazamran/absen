@@ -4,7 +4,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci
 COPY . .
 RUN node scripts/generate-icons.mjs
-RUN npx vite build
+RUN node node_modules/vite/bin/vite.js build
 
 FROM nginx:1.27-alpine
 COPY --from=build /app/dist /usr/share/nginx/html

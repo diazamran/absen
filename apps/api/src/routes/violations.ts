@@ -148,7 +148,7 @@ export async function violationRoutes(app: FastifyInstance) {
     const user = request.user!;
 
     // Verify student exists
-    const student = await prisma.student.findUnique({ where: { id: body.studentId }, include: { user: true } });
+    const student = await prisma.student.findUnique({ where: { id: body.studentId }, include: { user: true, class: true } });
     if (!student) throw ApiError.notFound('Siswa tidak ditemukan');
 
     // Verify violation type exists
@@ -177,7 +177,7 @@ export async function violationRoutes(app: FastifyInstance) {
       className: student.class?.name ?? '-',
       violationType: vType.name,
       points: vType.points,
-      recordedBy: user.fullName ?? user.username,
+      recordedBy: user.fullName,
       date: body.date ?? new Date().toISOString().slice(0, 10),
     });
     return reply.status(201).send({ success: true, data: violation });
@@ -216,7 +216,7 @@ export async function violationRoutes(app: FastifyInstance) {
       count: results.length,
       violationType: vType.name,
       points: vType.points,
-      recordedBy: user.fullName ?? user.username,
+      recordedBy: user.fullName,
     });
     return reply.status(201).send({ success: true, data: { count: results.length } });
   });
