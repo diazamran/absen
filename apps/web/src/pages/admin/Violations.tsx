@@ -109,7 +109,7 @@ export default function Violations() {
   // Mutations
   const createType = useMutation({
     mutationFn: (data: { name: string; description?: string; points: number }) =>
-      api('/violations/types', { method: 'POST', body: JSON.stringify(data) }),
+      api('/violations/types', { method: 'POST', body: data }),
     onSuccess: () => {
       toast('success', 'Jenis pelanggaran ditambahkan');
       qc.invalidateQueries({ queryKey: ['violation-types'] });
@@ -120,7 +120,7 @@ export default function Violations() {
 
   const updateType = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<ViolationType> }) =>
-      api(`/violations/types/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+      api(`/violations/types/${id}`, { method: 'PUT', body: data }),
     onSuccess: () => {
       toast('success', 'Jenis pelanggaran diperbarui');
       qc.invalidateQueries({ queryKey: ['violation-types'] });
@@ -140,7 +140,7 @@ export default function Violations() {
 
   const addViolation = useMutation({
     mutationFn: (data: { studentId: string; violationTypeId: string; date: string; notes?: string }) =>
-      api('/violations', { method: 'POST', body: JSON.stringify(data) }),
+      api('/violations', { method: 'POST', body: data }),
     onSuccess: () => {
       toast('success', 'Pelanggaran dicatat');
       qc.invalidateQueries({ queryKey: ['violations'] });
@@ -152,7 +152,7 @@ export default function Violations() {
 
   const bulkAdd = useMutation({
     mutationFn: (data: { studentIds: string[]; violationTypeId: string; date: string; notes?: string }) =>
-      api<{ success: boolean; data: { count: number } }>('/violations/bulk', { method: 'POST', body: JSON.stringify(data) }),
+      api<{ success: boolean; data: { count: number } }>('/violations/bulk', { method: 'POST', body: data }),
     onSuccess: (r) => {
       toast('success', `${r.data.count} pelanggaran dicatat`);
       qc.invalidateQueries({ queryKey: ['violations'] });
