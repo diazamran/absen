@@ -376,7 +376,7 @@ function dayName(): 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' |
 
 // ================== HOME ROOM TEACHER DASHBOARD ==================
 
-export function homeroomRoutes(app: FastifyInstance) {
+export async function homeroomRoutes(app: FastifyInstance) {
   app.get('/dashboard/homeroom/attendance', { preHandler: app.requirePermission(PERMISSION_KEYS.attendanceRead) }, async (request, reply) => {
     const user = request.user!;
     const { date } = request.query as { date?: string };
