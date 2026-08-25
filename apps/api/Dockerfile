@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-cert
 # Semua dependency (termasuk prisma CLI untuk migrate deploy saat startup)
 FROM base AS deps
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm install
 COPY prisma ./prisma
 RUN npx prisma generate
 
