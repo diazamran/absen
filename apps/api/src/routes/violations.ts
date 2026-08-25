@@ -68,7 +68,7 @@ export async function violationRoutes(app: FastifyInstance) {
 
     if (body.name && body.name !== existing.name) {
       const dup = await prisma.violationType.findUnique({ where: { name: body.name } });
-      if (dup) throw new ApiError(400, 'Nama jenis pelanggaran sudah ada');
+      if (dup) throw ApiError.badRequest('DUPLICATE', 'Nama jenis pelanggaran sudah ada');
     }
 
     const type = await prisma.violationType.update({ where: { id }, data: body });
@@ -152,7 +152,7 @@ export async function violationRoutes(app: FastifyInstance) {
 
     // Verify violation type exists
     const vType = await prisma.violationType.findUnique({ where: { id: body.violationTypeId } });
-    if (!vType) throw new ApiError(404, 'Jenis pelanggaran tidak ditemukan');
+    if (!vType) throw ApiError.notFound('Jenis pelanggaran tidak ditemukan');
     if (!vType.isActive) throw ApiError.badRequest('INACTIVE', 'Jenis pelanggaran sudah nonaktif');
 
     const violation = await prisma.studentViolation.create({
@@ -180,7 +180,7 @@ export async function violationRoutes(app: FastifyInstance) {
     const user = request.user!;
 
     const vType = await prisma.violationType.findUnique({ where: { id: body.violationTypeId } });
-    if (!vType) throw new ApiError(404, 'Jenis pelanggaran tidak ditemukan');
+    if (!vType) throw ApiError.notFound('Jenis pelanggaran tidak ditemukan');
 
     const date = body.date ? new Date(body.date) : new Date();
     const results: string[] = [];
