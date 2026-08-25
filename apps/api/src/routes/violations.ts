@@ -52,7 +52,7 @@ export async function violationRoutes(app: FastifyInstance) {
   app.post('/violations/types', { preHandler: app.requirePermission(PERMISSION_KEYS.violationsManage) }, async (request, reply) => {
     const body = validate(violationTypeSchema, request.body);
     const existing = await prisma.violationType.findUnique({ where: { name: body.name } });
-    if (existing) throw new ApiError(400, 'Nama jenis pelanggaran sudah ada');
+    if (existing) throw ApiError.badRequest('DUPLICATE', 'Nama jenis pelanggaran sudah ada');
 
     const type = await prisma.violationType.create({ data: body });
     await audit({ userId: request.user!.id, action: 'violation-type.create', entity: 'ViolationType', entityId: type.id, newValue: type });
@@ -64,7 +64,7 @@ export async function violationRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const body = validate(violationTypeSchema.partial(), request.body);
     const existing = await prisma.violationType.findUnique({ where: { id } });
-    if (!existing) throw new ApiError(404, 'Jenis pelanggaran tidak ditemukan');
+    if (!existing) throw ApiError.notFound('Jenis pelanggaran tidak ditemukan');
 
     if (body.name && body.name !== existing.name) {
       const dup = await prisma.violationType.findUnique({ where: { name: body.name } });
@@ -80,9 +80,9 @@ export async function violationRoutes(app: FastifyInstance) {
   app.delete('/violations/types/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.violationsManage) }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const existing = await prisma.violationType.findUnique({ where: { id }, include: { _count: { select: { violations: true } } } });
-    if (!existing) throw new ApiError(404, 'Jenis pelanggaran tidak ditemukan');
+    if (!existing) throw ApiError.notFound('Jenis pelanggaran tidak ditemukan');
     if (existing._count.violations > 0) {
-      throw new ApiError(400, `Jenis pelanggaran "${existing.name}" masih digunakan oleh ${existing._count.violations} data pelanggaran. Nonaktifkan saja.`);
+      throw ApiError.badRequest('IN_USE', `Jenis pelanggaran "${existing.name}" masih digunakan oleh ${existing._count.violations} data pelanggaran. Nonaktifkan saja.`);
     }
 
     await prisma.violationType.delete({ where: { id } });
@@ -148,12 +148,12 @@ export async function violationRoutes(app: FastifyInstance) {
 
     // Verify student exists
     const student = await prisma.student.findUnique({ where: { id: body.studentId }, include: { user: true } });
-    if (!student) throw new ApiError(404, 'Siswa tidak ditemukan');
+    if (!student) throw ApiError.notFound('Siswa tidak ditemukan');
 
     // Verify violation type exists
     const vType = await prisma.violationType.findUnique({ where: { id: body.violationTypeId } });
     if (!vType) throw new ApiError(404, 'Jenis pelanggaran tidak ditemukan');
-    if (!vType.isActive) throw new ApiError(400, 'Jenis pelanggaran sudah nonaktif');
+    if (!vType.isActive) throw ApiError.badRequest('INACTIVE', 'Jenis pelanggaran sudah nonaktif');
 
     const violation = await prisma.studentViolation.create({
       data: {
@@ -209,7 +209,7 @@ export async function violationRoutes(app: FastifyInstance) {
   app.delete('/violations/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.violationsManage) }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const existing = await prisma.studentViolation.findUnique({ where: { id } });
-    if (!existing) throw new ApiError(404, 'Data pelanggaran tidak ditemukan');
+    if (!existing) throw ApiError.notFound('Data pelanggaran tidak ditemukan');
 
     await prisma.studentViolation.delete({ where: { id } });
     await audit({ userId: request.user!.id, action: 'violation.delete', entity: 'StudentViolation', entityId: id, oldValue: existing });
@@ -226,7 +226,7 @@ export async function violationRoutes(app: FastifyInstance) {
       where: { id: studentId },
       include: { user: true, class: true },
     });
-    if (!student) throw new ApiError(404, 'Siswa tidak ditemukan');
+    if (!student) throw ApiError.notFound('Siswa tidak ditemukan');
 
     const violations = await prisma.studentViolation.findMany({
       where: { studentId },
