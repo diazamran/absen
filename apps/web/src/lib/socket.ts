@@ -35,3 +35,7 @@ export function joinDashboard(): void {
 export function joinUserRoom(userId: string): void {
   getSocket().emit('join:user', userId);
 }
+
+export function joinGate(): void {
+  getSocket().emit('join:dashboard');
+}

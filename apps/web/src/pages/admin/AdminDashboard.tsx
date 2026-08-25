@@ -30,6 +30,7 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const [period, setPeriod] = useState<'today' | 'class'>('today');
   const [liveEvents, setLiveEvents] = useState<RealtimeEvent[]>([]);
+  const [liveViolations, setLiveViolations] = useState<Record<string, unknown>[]>([]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', user?.roleKey],
@@ -45,6 +46,11 @@ export default function AdminDashboard() {
     [qc],
   );
   useSocketEvent<RealtimeEvent>('attendance:new', onAttendance);
+
+  useSocketEvent<Record<string, unknown>>('violation:new', useCallback((ev: Record<string, unknown>) => {
+    setLiveViolations((prev) => [ev, ...prev].slice(0, 5));
+    qc.invalidateQueries({ queryKey: ['dashboard'] });
+  }, [qc]));
 
   useEffect(() => {
     joinDashboard();
@@ -171,6 +177,35 @@ export default function AdminDashboard() {
           })}
         </div>
       </Card>
+
+      {/* Pelanggaran Realtime */}
+      {liveViolations.length > 0 && (
+        <Card>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="font-bold text-ink">Pelanggaran Terbaru</h3>
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-red-500">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" /> LIVE
+            </span>
+          </div>
+          <div className="space-y-2">
+            {liveViolations.map((v, i) => (
+              <div key={`violation-${i}`} className="flex items-center gap-3 rounded-xl bg-red-50/70 px-3 py-2.5 animate-fade-in dark:bg-red-500/10">
+                <div className="h-9 w-9 rounded-full bg-red-500/15 text-red-600 dark:text-red-300 flex items-center justify-center text-sm font-bold">
+                  ⚠
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-ink">{String(v.studentName)}</p>
+                  <p className="text-xs text-muted">{String(v.className)} · {String(v.violationType)}</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-bold text-red-600">{String(v.points)} poin</span>
+                  <p className="text-xs text-muted">oleh {String(v.recordedBy)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Belum hadir */}
       {data.absentToday.length > 0 && (

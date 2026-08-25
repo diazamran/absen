@@ -5,6 +5,7 @@ import { validate } from '../utils/validate.js';
 import { ApiError } from '../utils/errors.js';
 import { audit } from '../lib/audit.js';
 import { PERMISSION_KEYS } from '../rbac/permissions.js';
+import { emitViolation } from '../realtime/emitter.js';
 
 const violationTypeSchema = z.object({
   name: z.string().min(1, 'Nama jenis pelanggaran wajib diisi'),
@@ -55,7 +56,7 @@ export async function violationRoutes(app: FastifyInstance) {
     if (existing) throw ApiError.badRequest('DUPLICATE', 'Nama jenis pelanggaran sudah ada');
 
     const type = await prisma.violationType.create({ data: body });
-    await audit({ userId: request.user!.id, action: 'violation-type.create', entity: 'ViolationType', entityId: type.id, newValue: type });
+    audit({ userId: request.user!.id, action: 'violation-type.create', entity: 'ViolationType', entityId: type.id, newValue: type });
     return reply.status(201).send({ success: true, data: type });
   });
 
@@ -72,7 +73,7 @@ export async function violationRoutes(app: FastifyInstance) {
     }
 
     const type = await prisma.violationType.update({ where: { id }, data: body });
-    await audit({ userId: request.user!.id, action: 'violation-type.update', entity: 'ViolationType', entityId: id, oldValue: existing, newValue: type });
+    audit({ userId: request.user!.id, action: 'violation-type.update', entity: 'ViolationType', entityId: id, oldValue: existing, newValue: type });
     return reply.send({ success: true, data: type });
   });
 
@@ -86,7 +87,7 @@ export async function violationRoutes(app: FastifyInstance) {
     }
 
     await prisma.violationType.delete({ where: { id } });
-    await audit({ userId: request.user!.id, action: 'violation-type.delete', entity: 'ViolationType', entityId: id, oldValue: existing });
+    audit({ userId: request.user!.id, action: 'violation-type.delete', entity: 'ViolationType', entityId: id, oldValue: existing });
     return reply.send({ success: true });
   });
 
@@ -170,7 +171,15 @@ export async function violationRoutes(app: FastifyInstance) {
       },
     });
 
-    await audit({ userId: request.user!.id, action: 'violation.create', entity: 'StudentViolation', entityId: violation.id, newValue: violation });
+    audit({ userId: request.user!.id, action: 'violation.create', entity: 'StudentViolation', entityId: violation.id, newValue: violation });
+    emitViolation({
+      studentName: student.user?.fullName ?? student.nis,
+      className: student.class?.name ?? '-',
+      violationType: vType.name,
+      points: vType.points,
+      recordedBy: user.fullName ?? user.username,
+      date: body.date ?? new Date().toISOString().slice(0, 10),
+    });
     return reply.status(201).send({ success: true, data: violation });
   });
 
@@ -201,7 +210,14 @@ export async function violationRoutes(app: FastifyInstance) {
       results.push(v.id);
     }
 
-    await audit({ userId: request.user!.id, action: 'violation.bulk-create', entity: 'StudentViolation', newValue: { count: results.length, violationTypeId: body.violationTypeId } });
+    audit({ userId: request.user!.id, action: 'violation.bulk-create', entity: 'StudentViolation', newValue: { count: results.length, violationTypeId: body.violationTypeId } });
+    emitViolation({
+      type: 'bulk',
+      count: results.length,
+      violationType: vType.name,
+      points: vType.points,
+      recordedBy: user.fullName ?? user.username,
+    });
     return reply.status(201).send({ success: true, data: { count: results.length } });
   });
 

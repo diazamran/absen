@@ -49,6 +49,19 @@ export function emitNotification(userId: string, notification: unknown): void {
   io?.to(`user:${userId}`).emit('notification:new', notification);
 }
 
+export function emitViolation(event: unknown): void {
+  io?.to('dashboard').emit('violation:new', event);
+}
+
+export function emitPklCheckin(event: unknown): void {
+  io?.to('dashboard').emit('pkl:checkin', event);
+}
+
 export function emitLeaveUpdate(event: unknown): void {
   io?.to('dashboard').emit('leave:updated', event);
+}
+
+/** Generic broadcast ke semua client (mis. data update) */
+export function broadcast(event: string, data: unknown): void {
+  io?.emit(event, data);
 }

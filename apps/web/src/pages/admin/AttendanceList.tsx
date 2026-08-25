@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ScanLine, Search, ClipboardEdit, Filter, Pencil, Trash2, UserPlus } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
@@ -7,6 +7,7 @@ import { useToast } from '../../lib/toast';
 import { Card, Input, Select, Button, Badge, Modal, Field, EmptyState } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
 import { STATUS_LABELS, METHOD_LABELS } from '../../lib/format';
+import { useSocketEvent, joinDashboard } from '../../lib/socket';
 
 interface AttRow {
   id: string; name: string; nis: string | null; className: string | null; time: string | null;
@@ -29,10 +30,17 @@ export default function AttendanceList() {
   const [manualStudentId, setManualStudentId] = useState('');
   const [editing, setEditing] = useState<AttRow | null>(null);
 
+  // Realtime: join dashboard room & invalidate on new attendance
+  const onAttRealtime = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['attendance-today'] });
+  }, [qc]);
+  useSocketEvent('attendance:new', onAttRealtime);
+  useEffect(() => { joinDashboard(); }, []);
+
   const { data: rows } = useQuery({
     queryKey: ['attendance-today', classId, status],
     queryFn: () => api<{ success: boolean; data: AttRow[] }>(`/attendance/today?classId=${classId}&status=${status}`).then((r) => r.data),
-    refetchInterval: 15_000,
+    refetchInterval: 60_000, // fallback: 60s (realtime updates via WebSocket)
   });
   const { data: classes } = useQuery({
     queryKey: ['classes'],
