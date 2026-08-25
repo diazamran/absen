@@ -175,17 +175,38 @@ async function findClassByName(sdmaName: string): Promise<string | undefined> {
 }
 
 // Helper: find teacher by SDMS waliKelas name
-async function findTeacherByName(nama: string): Promise<string | undefined> {
+async function findTeacherByName(nama: string): Promise<{ teacherId: string; userId: string } | undefined> {
   if (!nama) return undefined;
   // Find user with matching full name and TEACHER role
   const user = await prisma.user.findFirst({
     where: {
       fullName: { contains: nama, mode: 'insensitive' },
-      role: { key: 'TEACHER' },
+      OR: [
+        { role: { key: 'TEACHER' } },
+        { additionalRoles: { path: '$', string_contains: 'HOMEROOM_TEACHER' } },
+      ],
     },
     include: { teacher: true },
   });
-  return user?.teacher?.id;
+  if (!user?.teacher) return undefined;
+  return { teacherId: user.teacher.id, userId: user.id };
+}
+
+// Helper: add HOMEROOM_TEACHER role to teacher's user (fire-and-forget)
+async function ensureHomeroomRole(userId: string): Promise<void> {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { additionalRoles: true } });
+    if (!user) return;
+    const current = (user.additionalRoles as string[]) || [];
+    if (current.includes('HOMEROOM_TEACHER')) return; // sudah ada
+    const updated = [...current, 'HOMEROOM_TEACHER'];
+    await prisma.user.update({
+      where: { id: userId },
+      data: { additionalRoles: updated },
+    });
+  } catch {
+    // Silent — role assignment tidak boleh gagalkan sync
+  }
 }
 
 // Upsert siswa from SDMS payload
@@ -310,7 +331,12 @@ async function upsertKelas(payload: Record<string, unknown>) {
   // Resolve homeroom teacher from waliKelas name
   let homeroomTeacherId: string | undefined;
   if (waliKelas?.nama) {
-    homeroomTeacherId = await findTeacherByName(waliKelas.nama as string);
+    const found = await findTeacherByName(waliKelas.nama as string);
+    if (found) {
+      homeroomTeacherId = found.teacherId;
+      // Auto-assign HOMEROOM_TEACHER role ke guru wali kelas
+      ensureHomeroomRole(found.userId);
+    }
   }
 
   // Find existing class by fuzzy name match
@@ -320,7 +346,12 @@ async function upsertKelas(payload: Record<string, unknown>) {
     // Update existing class with new major/wali kelas/room data
     const updateData: Record<string, unknown> = {};
     if (majorId && !existing.majorId) updateData.major = { connect: { id: majorId } };
-    if (homeroomTeacherId && !existing.homeroomTeacherId) updateData.homeroomTeacher = { connect: { id: homeroomTeacherId } };
+    if (homeroomTeacherId && homeroomTeacherId !== existing.homeroomTeacherId) {
+      updateData.homeroomTeacher = { connect: { id: homeroomTeacherId } };
+      // Auto-assign HOMEROOM_TEACHER role
+      const found = waliKelas?.nama ? await findTeacherByName(waliKelas.nama as string) : null;
+      if (found) ensureHomeroomRole(found.userId);
+    }
     if (ruangan && !existing.room) updateData.room = ruangan;
     if (grade && grade !== existing.grade) updateData.grade = grade;
 
