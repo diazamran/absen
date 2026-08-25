@@ -409,7 +409,7 @@ export function homeroomRoutes(app: FastifyInstance) {
       where: { studentId: { in: studentIds }, date: { gte: dayStart, lte: dayEnd } },
     });
 
-    const statusCount = { PRESENT: 0, LATE: 0, SICK: 0, EXCUSED: 0, ABSENT: 0, LEAVE: 0 };
+    const statusCount: Record<string, number> = { PRESENT: 0, LATE: 0, SICK: 0, EXCUSED: 0, ABSENT: 0, LEAVE: 0, OFFICIAL_DUTY: 0, DISPENSATION: 0 };
     for (const a of attendance) {
       statusCount[a.status] = (statusCount[a.status] || 0) + 1;
     }

@@ -50,19 +50,19 @@ export async function violationRoutes(app: FastifyInstance) {
 
   // Create violation type
   app.post('/violations/types', { preHandler: app.requirePermission(PERMISSION_KEYS.violationsManage) }, async (request, reply) => {
-    const body = validate(request.body, violationTypeSchema);
+    const body = validate(violationTypeSchema, request.body);
     const existing = await prisma.violationType.findUnique({ where: { name: body.name } });
     if (existing) throw new ApiError(400, 'Nama jenis pelanggaran sudah ada');
 
     const type = await prisma.violationType.create({ data: body });
-    await audit(request, 'violation-type.create', 'ViolationType', type.id, null, type);
+    await audit({ userId: request.user!.id, action: 'violation-type.create', entity: 'ViolationType', entityId: type.id, newValue: type });
     return reply.status(201).send({ success: true, data: type });
   });
 
   // Update violation type
   app.put('/violations/types/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.violationsManage) }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const body = validate(request.body, violationTypeSchema.partial());
+    const body = validate(violationTypeSchema.partial(), request.body);
     const existing = await prisma.violationType.findUnique({ where: { id } });
     if (!existing) throw new ApiError(404, 'Jenis pelanggaran tidak ditemukan');
 
@@ -72,7 +72,7 @@ export async function violationRoutes(app: FastifyInstance) {
     }
 
     const type = await prisma.violationType.update({ where: { id }, data: body });
-    await audit(request, 'violation-type.update', 'ViolationType', id, existing, type);
+    await audit({ userId: request.user!.id, action: 'violation-type.update', entity: 'ViolationType', entityId: id, oldValue: existing, newValue: type });
     return reply.send({ success: true, data: type });
   });
 
@@ -86,7 +86,7 @@ export async function violationRoutes(app: FastifyInstance) {
     }
 
     await prisma.violationType.delete({ where: { id } });
-    await audit(request, 'violation-type.delete', 'ViolationType', id, existing, null);
+    await audit({ userId: request.user!.id, action: 'violation-type.delete', entity: 'ViolationType', entityId: id, oldValue: existing });
     return reply.send({ success: true });
   });
 
@@ -143,7 +143,7 @@ export async function violationRoutes(app: FastifyInstance) {
 
   // Add student violation
   app.post('/violations', { preHandler: app.requirePermission(PERMISSION_KEYS.violationsCreate) }, async (request, reply) => {
-    const body = validate(request.body, studentViolationSchema);
+    const body = validate(studentViolationSchema, request.body);
     const user = request.user!;
 
     // Verify student exists
@@ -170,13 +170,13 @@ export async function violationRoutes(app: FastifyInstance) {
       },
     });
 
-    await audit(request, 'violation.create', 'StudentViolation', violation.id, null, violation);
+    await audit({ userId: request.user!.id, action: 'violation.create', entity: 'StudentViolation', entityId: violation.id, newValue: violation });
     return reply.status(201).send({ success: true, data: violation });
   });
 
   // Bulk add violations
   app.post('/violations/bulk', { preHandler: app.requirePermission(PERMISSION_KEYS.violationsCreate) }, async (request, reply) => {
-    const body = validate(request.body, bulkViolationSchema);
+    const body = validate(bulkViolationSchema, request.body);
     const user = request.user!;
 
     const vType = await prisma.violationType.findUnique({ where: { id: body.violationTypeId } });
@@ -201,7 +201,7 @@ export async function violationRoutes(app: FastifyInstance) {
       results.push(v.id);
     }
 
-    await audit(request, 'violation.bulk-create', 'StudentViolation', null, null, { count: results.length, violationTypeId: body.violationTypeId });
+    await audit({ userId: request.user!.id, action: 'violation.bulk-create', entity: 'StudentViolation', newValue: { count: results.length, violationTypeId: body.violationTypeId } });
     return reply.status(201).send({ success: true, data: { count: results.length } });
   });
 
@@ -212,7 +212,7 @@ export async function violationRoutes(app: FastifyInstance) {
     if (!existing) throw new ApiError(404, 'Data pelanggaran tidak ditemukan');
 
     await prisma.studentViolation.delete({ where: { id } });
-    await audit(request, 'violation.delete', 'StudentViolation', id, existing, null);
+    await audit({ userId: request.user!.id, action: 'violation.delete', entity: 'StudentViolation', entityId: id, oldValue: existing });
     return reply.send({ success: true });
   });
 
