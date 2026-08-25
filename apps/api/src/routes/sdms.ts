@@ -183,10 +183,12 @@ async function findTeacherByName(nama: string): Promise<{ teacherId: string; use
       fullName: { contains: nama, mode: 'insensitive' },
       role: { key: 'TEACHER' },
     },
-    include: { teacher: true },
   });
-  if (!user?.teacher) return undefined;
-  return { teacherId: user.teacher.id, userId: user.id };
+  if (!user) return undefined;
+  // Find teacher record linked to this user
+  const teacher = await prisma.teacher.findFirst({ where: { userId: user.id } });
+  if (!teacher) return undefined;
+  return { teacherId: teacher.id, userId: user.id };
 }
 
 // Helper: add HOMEROOM_TEACHER role to teacher's user (fire-and-forget)
@@ -194,13 +196,13 @@ async function ensureHomeroomRole(userId: string): Promise<void> {
   try {
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { additionalRoles: true } });
     if (!user) return;
-    const raw = user.additionalRoles;
+    const raw = user.additionalRoles as unknown;
     const current: string[] = Array.isArray(raw) ? (raw as string[]) : [];
     if (current.includes('HOMEROOM_TEACHER')) return; // sudah ada
     const updated = [...current, 'HOMEROOM_TEACHER'];
     await prisma.user.update({
       where: { id: userId },
-      data: { additionalRoles: JSON.parse(JSON.stringify(updated)) },
+      data: { additionalRoles: updated as unknown as Record<string, unknown> },
     });
   } catch {
     // Silent — role assignment tidak boleh gagalkan sync

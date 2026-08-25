@@ -172,9 +172,11 @@ export async function violationRoutes(app: FastifyInstance) {
     });
 
     audit({ userId: request.user!.id, action: 'violation.create', entity: 'StudentViolation', entityId: violation.id, newValue: violation });
+    // Use violation result (has includes) for emit to avoid TS type issues with 'class' keyword
+    const vStudent = (violation as unknown as { student?: { user?: { fullName?: string } | null; nis?: string; class?: { name?: string } | null } | null }).student;
     emitViolation({
-      studentName: student.user?.fullName ?? student.nis,
-      className: student.class?.name ?? '-',
+      studentName: vStudent?.user?.fullName ?? vStudent?.nis ?? student.nis,
+      className: vStudent?.class?.name ?? '-',
       violationType: vType.name,
       points: vType.points,
       recordedBy: user.fullName,
@@ -264,7 +266,7 @@ export async function violationRoutes(app: FastifyInstance) {
     return reply.send({
       success: true,
       data: {
-        student: { id: student.id, name: student.user?.fullName ?? student.nis, nis: student.nis, class: student.class?.name },
+        student: { id: student.id, name: student.user?.fullName ?? student.nis, nis: student.nis, class: (student as unknown as { class?: { name?: string } }).class?.name },
         totalPoints,
         totalViolations: violations.length,
         byType: Object.values(byType),
@@ -309,7 +311,7 @@ export async function violationRoutes(app: FastifyInstance) {
           studentId: sid,
           name: v.student?.user?.fullName ?? v.student?.nis ?? '-',
           nis: v.student?.nis ?? '-',
-          className: v.student?.class?.name ?? '-',
+          className: (v.student as unknown as { class?: { name?: string } } | null)?.class?.name ?? '-',
           majorName: v.student?.major?.name ?? '-',
           totalPoints: 0,
           totalViolations: 0,
