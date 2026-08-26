@@ -77,9 +77,11 @@ async function schoolStats(dayStart: Date, dayEnd: Date) {
     },
   });
 
-  // Hitung alpa (ABSENT) dan cuti (LEAVE) terpisah
+  // Hitung alpa, cuti, dispensasi terpisah
   const absentCount = counts.ABSENT || 0;
   const leaveCount = counts.LEAVE || 0;
+  const dispensationCount = counts.DISPENSATION || 0;
+  const excusedOnly = (counts.EXCUSED || 0) + (counts.SICK || 0) + (counts.OFFICIAL_DUTY || 0);
   // notYet = total siswa aktif - yang sudah hadir/check-in hari ini
   // Termasuk yang absen, cuti, izin, sakit, terlambat
   const notYet2 = Math.max(0, activeStudents - total);
@@ -147,9 +149,10 @@ async function schoolStats(dayStart: Date, dayEnd: Date) {
       total,
       present,
       late: counts.LATE || 0,
-      excused: (counts.EXCUSED || 0) + (counts.SICK || 0) + (counts.OFFICIAL_DUTY || 0) + (counts.DISPENSATION || 0),
+      excused: excusedOnly,
       absent: absentCount,
       leave: leaveCount,
+      dispensation: dispensationCount,
       notYet: notYet2,
       percent,
       activeStudents,

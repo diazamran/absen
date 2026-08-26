@@ -11,7 +11,7 @@ import { STATUS_LABELS, STATUS_COLORS, timeLabel, cn } from '../../lib/format';
 
 interface DashboardData {
   stats: {
-    total: number; present: number; late: number; excused: number; absent: number; leave: number; notYet: number; percent: number; activeStudents: number;
+    total: number; present: number; late: number; excused: number; absent: number; leave: number; dispensation: number; notYet: number; percent: number; activeStudents: number;
   };
   chart: { name: string; value: number; color: string }[];
   recent: { id: string; name: string; nis: string | null; className: string | null; time: string; status: string; statusLabel: string; method: string; lateMinutes: number }[];    absentToday: { id: string; name: string; nis: string; className: string | null }[];
@@ -70,6 +70,7 @@ export default function AdminDashboard() {
         <StatCard label="Terlambat" value={s.late} icon={Clock3} color="#f59e0b" />
         <StatCard label="Izin / Sakit" value={s.excused} icon={FileQuestion} color="#3b82f6" />
         <StatCard label="Alpa" value={s.absent} icon={Ban} color="#ef4444" />
+        <StatCard label="Dispensasi" value={s.dispensation} icon={CheckCircle2} color="#14b8a6" />
         <StatCard label="Cuti" value={s.leave || 0} icon={FileQuestion} color="#8b5cf6" />
         <StatCard label="Belum Hadir" value={s.notYet} icon={UserX} color="#64748b" />
         <StatCard label="Total Siswa" value={s.activeStudents} icon={Users} color="#0ea5e9" />
