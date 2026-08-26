@@ -92,22 +92,24 @@ async function schoolStats(dayStart: Date, dayEnd: Date) {
     const topViol = await prisma.studentViolation.groupBy({
       by: ['studentId'],
       _sum: { points: true },
-      orderBy: { _sum: { points: 'desc' } },
-      take: 10,
+      orderBy: { studentId: 'asc' },
     });
-    if (topViol.length > 0) {
-      const studentIds = topViol.map((v) => v.studentId);
-      const students = await prisma.student.findMany({
-        where: { id: { in: studentIds } },
+    const sortedViol = topViol.sort((a, b) => (b._sum.points ?? 0) - (a._sum.points ?? 0)).slice(0, 10);
+    if (sortedViol.length > 0) {
+      const violIds = sortedViol.map((v) => v.studentId).filter((id): id is string => !!id);
+      const violStudents = await prisma.student.findMany({
+        where: { id: { in: violIds } },
         include: { user: { select: { fullName: true } }, class: { select: { name: true } } },
       });
-      const studentMap = new Map(students.map((s) => [s.id, s]));
-      topViolators = topViol
+      const violMap = new Map(violStudents.map((s) => [s.id, s]));
+      topViolators = sortedViol
         .map((v) => {
-          const s = studentMap.get(v.studentId);
-          return s ? { id: s.id, name: s.user?.fullName ?? '-', nis: s.nis, className: s.class?.name ?? null, totalPoints: v._sum.points ?? 0 } : null;
+          if (!v.studentId) return null;
+          const s = violMap.get(v.studentId);
+          const pts = v._sum.points ?? 0;
+          return { id: s?.id ?? v.studentId, name: s?.user?.fullName ?? '-', nis: s?.nis ?? null, className: s?.class?.name ?? null, totalPoints: pts };
         })
-        .filter((x): x is { id: string; name: string; nis: string | null; className: string | null; totalPoints: number } => x !== null && x.totalPoints > 0);
+        .filter((x): x is { id: string; name: string; nis: string | null; className: string | null; totalPoints: number } => !!x && x.totalPoints > 0);
     }
   } catch { /* violations table may not exist */ }
 
@@ -123,24 +125,24 @@ async function schoolStats(dayStart: Date, dayEnd: Date) {
         date: { gte: new Date(`${monthStart}-01T00:00:00+07:00`) },
         studentId: { not: null },
       },
-      _count: { _all: true },
-      orderBy: { _count: { _all: 'desc' } },
-      take: 10,
+      _count: true,
+      orderBy: { studentId: 'asc' },
     });
-    if (topAbsentRaw.length > 0) {
-      const absStudentIds = topAbsentRaw.map((a) => a.studentId).filter((id): id is string => id !== null);
+    const sortedAbsent = topAbsentRaw.sort((a, b) => (b._count ?? 0) - (a._count ?? 0)).slice(0, 10);
+    if (sortedAbsent.length > 0) {
+      const absIds = sortedAbsent.map((a) => a.studentId).filter((id): id is string => !!id);
       const absStudents = await prisma.student.findMany({
-        where: { id: { in: absStudentIds } },
+        where: { id: { in: absIds } },
         include: { user: { select: { fullName: true } }, class: { select: { name: true } } },
       });
       const absMap = new Map(absStudents.map((s) => [s.id, s]));
-      topAbsentStudents = topAbsentRaw
+      topAbsentStudents = sortedAbsent
         .map((a) => {
           if (!a.studentId) return null;
           const s = absMap.get(a.studentId);
-          return s ? { id: s.id, name: s.user?.fullName ?? '-', nis: s.nis, className: s.class?.name ?? null, absenCount: a._count._all } : null;
+          return { id: s?.id ?? a.studentId, name: s?.user?.fullName ?? '-', nis: s?.nis ?? null, className: s?.class?.name ?? null, absenCount: a._count ?? 0 };
         })
-        .filter((x): x is { id: string; name: string; nis: string | null; className: string | null; absenCount: number } => x !== null);
+        .filter((x): x is { id: string; name: string; nis: string | null; className: string | null; absenCount: number } => !!x && x.absenCount > 0);
     }
   } catch { /* table may not exist yet */ }
 
