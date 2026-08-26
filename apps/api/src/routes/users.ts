@@ -18,7 +18,7 @@ const userCreateSchema = z.object({
   email: z.string().optional(),
   subjectId: z.string().optional(),
   isPiket: z.boolean().optional(),
-  additionalRoles: z.array(z.enum(['SUPER_ADMIN', 'ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF', 'PIKET'])).optional(),
+  additionalRoles: z.array(z.enum(['SUPER_ADMIN', 'ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'BK', 'STAFF', 'PIKET'])).optional(),
 });
 
 export async function userRoutes(app: FastifyInstance) {
@@ -162,7 +162,7 @@ export async function userRoutes(app: FastifyInstance) {
         isPiket: z.boolean().optional(),
         password: z.string().min(6).optional(),
         roleKey: z.enum(['SUPER_ADMIN', 'ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'BK', 'STAFF', 'PIKET']).optional(),
-        additionalRoles: z.array(z.enum(['SUPER_ADMIN', 'ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'STAFF', 'PIKET'])).optional(),
+        additionalRoles: z.array(z.enum(['SUPER_ADMIN', 'ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'TEACHER', 'BK', 'STAFF', 'PIKET'])).optional(),
       }),
       request.body,
     );
