@@ -90,13 +90,7 @@ async function schoolStats(dayStart: Date, dayEnd: Date) {
   let topViolators: Array<{ id: string; name: string; nis: string | null; className: string | null; totalPoints: number }> = [];
   try {
     type ViolRow = { studentId: string; totalPoints: string };
-    const topViolRows = await prisma.$queryRaw<ViolRow>`
-      SELECT "studentId", SUM("points")::text AS "totalPoints"
-      FROM "StudentViolation"
-      GROUP BY "studentId"
-      ORDER BY SUM("points") DESC
-      LIMIT 10
-    `;
+    const topViolRows = (await prisma.$queryRaw<ViolRow[]>`SELECT "studentId", SUM("points")::text AS "totalPoints" FROM "StudentViolation" GROUP BY "studentId" ORDER BY SUM("points") DESC LIMIT 10`) as ViolRow[];
     const violIds = topViolRows.map((r) => r.studentId).filter(Boolean);
     if (violIds.length > 0) {
       const violStudents = await prisma.student.findMany({
@@ -116,16 +110,7 @@ async function schoolStats(dayStart: Date, dayEnd: Date) {
   try {
     const monthStart = currentMonthKey();
     type AbsRow = { studentId: string; absenCount: string };
-    const topAbsentRows = await prisma.$queryRaw<AbsRow>`
-      SELECT "studentId", COUNT(*)::text AS "absenCount"
-      FROM "Attendance"
-      WHERE "status" = 'ABSENT' AND "type" = 'CHECK_IN'
-        AND "date" >= ${new Date(`${monthStart}-01T00:00:00+07:00`)}
-        AND "studentId" IS NOT NULL
-      GROUP BY "studentId"
-      ORDER BY COUNT(*) DESC
-      LIMIT 10
-    `;
+    const topAbsentRows = (await prisma.$queryRaw<AbsRow[]>`SELECT "studentId", COUNT(*)::text AS "absenCount" FROM "Attendance" WHERE "status" = 'ABSENT' AND "type" = 'CHECK_IN' AND "date" >= ${new Date(`${monthStart}-01T00:00:00+07:00`)} AND "studentId" IS NOT NULL GROUP BY "studentId" ORDER BY COUNT(*) DESC LIMIT 10`) as AbsRow[];
     const absIds = topAbsentRows.map((r) => r.studentId).filter(Boolean);
     if (absIds.length > 0) {
       const absStudents = await prisma.student.findMany({
