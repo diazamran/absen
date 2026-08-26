@@ -300,7 +300,7 @@ function ManualForm({ onClose, initialStudentId }: { onClose: () => void; initia
     queryFn: () => selectedClassId ? api<{ success: boolean; data: { id: string; nis: string; fullName: string; className: string }[] }>(`/students?classId=${selectedClassId}&isActive=true&pageSize=200`).then((r) => r.data) : null,
     enabled: !!selectedClassId,
   });
-  const clsStudents = classStudents?.data || [];
+  const clsStudents = classStudents || [];
   useEffect(() => { if (clsStudents.length && mode === 'bulk') setSelectedIds(new Set(clsStudents.map((s) => s.id))); }, [clsStudents, mode]);
 
   const [bulkSaving, setBulkSaving] = useState(false);
