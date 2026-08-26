@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
-import { Users, CheckCircle2, Clock3, FileQuestion, UserX, Loader2, ChevronRight } from 'lucide-react';
+import { Users, CheckCircle2, Clock3, FileQuestion, UserX, Loader2, ChevronRight, AlertTriangle, Ban } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useSocketEvent, joinDashboard } from '../../lib/socket';
@@ -11,12 +11,13 @@ import { STATUS_LABELS, STATUS_COLORS, timeLabel, cn } from '../../lib/format';
 
 interface DashboardData {
   stats: {
-    total: number; present: number; late: number; excused: number; absent: number; notYet: number; percent: number; activeStudents: number;
+    total: number; present: number; late: number; excused: number; absent: number; leave: number; notYet: number; percent: number; activeStudents: number;
   };
   chart: { name: string; value: number; color: string }[];
-  recent: { id: string; name: string; nis: string | null; className: string | null; time: string; status: string; statusLabel: string; method: string; lateMinutes: number }[];
-  absentToday: { id: string; name: string; nis: string; className: string | null }[];
+  recent: { id: string; name: string; nis: string | null; className: string | null; time: string; status: string; statusLabel: string; method: string; lateMinutes: number }[];    absentToday: { id: string; name: string; nis: string; className: string | null }[];
   classes: { id: string; name: string; total: number; present: number }[];
+  topViolators: { id: string; name: string; nis: string | null; className: string | null; totalPoints: number }[];
+  topAbsentStudents: { id: string; name: string; nis: string | null; className: string | null; absenCount: number }[];
 }
 
 interface RealtimeEvent {
@@ -68,6 +69,8 @@ export default function AdminDashboard() {
         <StatCard label="Hadir" value={s.present} icon={CheckCircle2} color="#22c55e" />
         <StatCard label="Terlambat" value={s.late} icon={Clock3} color="#f59e0b" />
         <StatCard label="Izin / Sakit" value={s.excused} icon={FileQuestion} color="#3b82f6" />
+        <StatCard label="Alpa" value={s.absent} icon={Ban} color="#ef4444" />
+        <StatCard label="Cuti" value={s.leave || 0} icon={FileQuestion} color="#8b5cf6" />
         <StatCard label="Belum Hadir" value={s.notYet} icon={UserX} color="#64748b" />
         <StatCard label="Total Siswa" value={s.activeStudents} icon={Users} color="#0ea5e9" />
       </div>
@@ -178,6 +181,60 @@ export default function AdminDashboard() {
         </div>
       </Card>
 
+      {/* Top 10 Siswa Melanggar */}
+      {data.topViolators.length > 0 && (
+        <Card>
+          <div className="mb-3 flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-orange-500" />
+            <h3 className="font-bold text-ink">Top 10 Siswa Melanggar</h3>
+            <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">Akumulasi</span>
+          </div>
+          <div className="space-y-1.5">
+            {data.topViolators.map((v, i) => (
+              <div key={v.id} className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">
+                  {i + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-ink">{v.name}</p>
+                  <p className="text-xs text-muted">{v.className} · {v.nis}</p>
+                </div>
+                <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-sm font-bold text-red-700 dark:bg-red-500/20 dark:text-red-300">
+                  {v.totalPoints} poin
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Top 10 Siswa Paling Sering Alpa (Akumulasi Bulan Ini) */}
+      {data.topAbsentStudents.length > 0 && (
+        <Card>
+          <div className="mb-3 flex items-center gap-2">
+            <Ban className="h-5 w-5 text-red-500" />
+            <h3 className="font-bold text-ink">Top 10 Siswa Paling Sering Alpa</h3>
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700 dark:bg-red-500/20 dark:text-red-300">Bulan Ini</span>
+          </div>
+          <div className="space-y-1.5">
+            {data.topAbsentStudents.map((s, i) => (
+              <div key={s.id} className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700 dark:bg-red-500/20 dark:text-red-300">
+                  {i + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-ink">{s.name}</p>
+                  <p className="text-xs text-muted">{s.className} · {s.nis}</p>
+                </div>
+                <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-sm font-bold text-red-700 dark:bg-red-500/20 dark:text-red-300">
+                  {s.absenCount} hari
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {/* Pelanggaran Realtime */}
       {liveViolations.length > 0 && (
         <Card>
@@ -210,7 +267,7 @@ export default function AdminDashboard() {
       {/* Belum hadir */}
       {data.absentToday.length > 0 && (
         <Card>
-          <h3 className="mb-3 font-bold text-ink">Belum Melakukan Absensi</h3>
+          <h3 className="mb-3 font-bold text-ink">Belum Melakukan Absensi Hari Ini</h3>
           <div className="flex flex-wrap gap-2">
             {data.absentToday.map((a) => (
               <span key={a.id} className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm text-muted">

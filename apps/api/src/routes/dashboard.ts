@@ -39,7 +39,6 @@ async function schoolStats(dayStart: Date, dayEnd: Date) {
   const percent = total ? Math.round((present / total) * 100) : 0;
 
   const activeStudents = await prisma.student.count({ where: { isActive: true } });
-  const notYet = Math.max(0, activeStudents - total);
 
   const recent = await prisma.attendance.findMany({
     where: { date: { gte: dayStart, lt: dayEnd }, type: 'CHECK_IN' },
@@ -78,14 +77,80 @@ async function schoolStats(dayStart: Date, dayEnd: Date) {
     },
   });
 
+  // Hitung alpa (ABSENT) dan cuti (LEAVE) terpisah
+  const absentCount = counts.ABSENT || 0;
+  const leaveCount = counts.LEAVE || 0;
+  // notYet = total siswa aktif - yang sudah hadir/check-in hari ini
+  // Termasuk yang absen, cuti, izin, sakit, terlambat
+  const notYet2 = Math.max(0, activeStudents - total);
+
+  // Top 10 siswa dengan poin pelanggaran terbanyak (akumulasi)
+  let topViolators: Array<{ id: string; name: string; nis: string | null; className: string | null; totalPoints: number }> = [];
+  try {
+    const topViol = await prisma.studentViolation.groupBy({
+      by: ['studentId'],
+      _sum: { points: true },
+      orderBy: { _sum: { points: 'desc' } },
+      take: 10,
+    });
+    if (topViol.length > 0) {
+      const studentIds = topViol.map((v) => v.studentId);
+      const students = await prisma.student.findMany({
+        where: { id: { in: studentIds } },
+        include: { user: { select: { fullName: true } }, class: { select: { name: true } } },
+      });
+      const studentMap = new Map(students.map((s) => [s.id, s]));
+      topViolators = topViol
+        .map((v) => {
+          const s = studentMap.get(v.studentId);
+          return s ? { id: s.id, name: s.user?.fullName ?? '-', nis: s.nis, className: s.class?.name ?? null, totalPoints: v._sum.points ?? 0 } : null;
+        })
+        .filter((x): x is { id: string; name: string; nis: string | null; className: string | null; totalPoints: number } => x !== null && x.totalPoints > 0);
+    }
+  } catch { /* violations table may not exist */ }
+
+  // Top 10 siswa yang paling sering alpa (AKUMULASI bulan ini)
+  let topAbsentStudents: Array<{ id: string; name: string; nis: string | null; className: string | null; absenCount: number }> = [];
+  try {
+    const monthStart = currentMonthKey();
+    const topAbsentRaw = await prisma.attendance.groupBy({
+      by: ['studentId'],
+      where: {
+        status: 'ABSENT',
+        type: 'CHECK_IN',
+        date: { gte: new Date(`${monthStart}-01T00:00:00+07:00`) },
+        studentId: { not: null },
+      },
+      _count: { _all: true },
+      orderBy: { _count: { _all: 'desc' } },
+      take: 10,
+    });
+    if (topAbsentRaw.length > 0) {
+      const absStudentIds = topAbsentRaw.map((a) => a.studentId).filter((id): id is string => id !== null);
+      const absStudents = await prisma.student.findMany({
+        where: { id: { in: absStudentIds } },
+        include: { user: { select: { fullName: true } }, class: { select: { name: true } } },
+      });
+      const absMap = new Map(absStudents.map((s) => [s.id, s]));
+      topAbsentStudents = topAbsentRaw
+        .map((a) => {
+          if (!a.studentId) return null;
+          const s = absMap.get(a.studentId);
+          return s ? { id: s.id, name: s.user?.fullName ?? '-', nis: s.nis, className: s.class?.name ?? null, absenCount: a._count._all } : null;
+        })
+        .filter((x): x is { id: string; name: string; nis: string | null; className: string | null; absenCount: number } => x !== null);
+    }
+  } catch { /* table may not exist yet */ }
+
   return {
     stats: {
       total,
       present,
       late: counts.LATE || 0,
-      excused: (counts.EXCUSED || 0) + (counts.SICK || 0) + (counts.OFFICIAL_DUTY || 0) + (counts.DISPENSATION || 0) + (counts.LEAVE || 0),
-      absent: counts.ABSENT || 0,
-      notYet,
+      excused: (counts.EXCUSED || 0) + (counts.SICK || 0) + (counts.OFFICIAL_DUTY || 0) + (counts.DISPENSATION || 0),
+      absent: absentCount,
+      leave: leaveCount,
+      notYet: notYet2,
       percent,
       activeStudents,
     },
@@ -95,7 +160,8 @@ async function schoolStats(dayStart: Date, dayEnd: Date) {
       { name: 'Izin', value: counts.EXCUSED || 0, color: '#3b82f6' },
       { name: 'Sakit', value: counts.SICK || 0, color: '#a855f7' },
       { name: 'Dispensasi', value: counts.DISPENSATION || 0, color: '#14b8a6' },
-      { name: 'Tidak Hadir', value: counts.ABSENT || 0, color: '#ef4444' },
+      { name: 'Tidak Hadir', value: absentCount, color: '#ef4444' },
+      { name: 'Cuti', value: leaveCount, color: '#8b5cf6' },
     ],
     recent: recent.map((r) => ({
       id: r.id,
@@ -120,6 +186,8 @@ async function schoolStats(dayStart: Date, dayEnd: Date) {
       total: c._count.students,
       present: c.students.length,
     })),
+    topViolators,
+    topAbsentStudents,
   };
 }
 
