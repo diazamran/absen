@@ -197,14 +197,44 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   }
 
   // ===== Validasi lokasi (opsional) =====
+  // Jika siswa aktif di PKL, gunakan koordinat DUDU (lokasi PKL) sebagai referensi GPS.
+  // Jika tidak PKL, gunakan koordinat sekolah.
   let locationVerified = false;
   if (rules.locationEnabled) {
     if (input.latitude === undefined || input.longitude === undefined) {
       throw ApiError.badRequest('LOCATION_REQUIRED', 'Lokasi belum akurat. Aktifkan GPS dan tunggu beberapa detik.');
     }
-    const dist = haversineMeters(input.latitude, input.longitude, rules.schoolLatitude, rules.schoolLongitude);
-    if (dist > rules.radiusMeters) {
-      throw ApiError.badRequest('OUTSIDE_LOCATION', `Anda berada di luar area absensi sekolah (${Math.round(dist)} m dari sekolah).`);
+    // Cek apakah siswa aktif di PKL
+    let refLat = rules.schoolLatitude;
+    let refLng = rules.schoolLongitude;
+    let refRadius = rules.radiusMeters;
+    let locationLabel = 'sekolah';
+    const targetForLocation = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      include: {
+        student: {
+          include: {
+            pklAssignments: {
+              where: { isActive: true },
+              include: { pklLocation: true },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+    if (targetForLocation?.student?.pklAssignments?.[0]?.pklLocation) {
+      const dudu = targetForLocation.student.pklAssignments[0].pklLocation;
+      if (dudu.latitude != null && dudu.longitude != null) {
+        refLat = dudu.latitude;
+        refLng = dudu.longitude;
+        refRadius = dudu.radiusMeter;
+        locationLabel = dudu.name;
+      }
+    }
+    const dist = haversineMeters(input.latitude, input.longitude, refLat, refLng);
+    if (dist > refRadius) {
+      throw ApiError.badRequest('OUTSIDE_LOCATION', `Anda berada di luar area absensi ${locationLabel} (${Math.round(dist)} m dari ${locationLabel}).`);
     }
     if (input.accuracy !== undefined && input.accuracy > 200) {
       throw ApiError.badRequest('LOCATION_INACCURATE', 'Lokasi belum akurat. Aktifkan GPS dan tunggu beberapa detik.');
