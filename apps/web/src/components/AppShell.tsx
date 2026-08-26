@@ -443,7 +443,7 @@ export function AppShell() {
 
         {/* Bottom nav (mobile) */}
         <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur lg:hidden dark:bg-slate-900/95" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-          <div className="mx-auto flex max-w-md items-center justify-around py-1.5">
+          <div className="mx-auto flex w-full max-w-sm items-center justify-around px-2 py-1.5">
             {bottomNav.map((item) => (
               <NavLink
                 key={item.to}
