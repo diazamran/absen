@@ -464,8 +464,8 @@ export function AppShell() {
       {mobileMenu && (
         <div className="fixed inset-0 z-[70] lg:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileMenu(false)} />
-          <div className="absolute inset-y-0 left-0 w-72 animate-fade-in bg-surface p-4 dark:bg-slate-800">
-            <div className="mb-4 flex items-center justify-between">
+          <div className="absolute inset-y-0 left-0 flex w-72 animate-fade-in flex-col bg-surface dark:bg-slate-800">
+            <div className="sticky top-0 z-10 flex items-center justify-between bg-surface px-4 py-4 dark:bg-slate-800">
               <div className="flex items-center gap-3">
                 <LogoTile size="sm" />
                 <div>
@@ -477,7 +477,7 @@ export function AppShell() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <nav className="space-y-1">
+            <nav className="flex-1 space-y-1 overflow-y-auto px-4 pb-6">
               {isAdmin ? (
                 adminGroups.map((group) => (
                   <div key={group.label} className="mb-2">

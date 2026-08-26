@@ -63,7 +63,7 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-5">
       {/* Kartu statistik */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 place-items-center gap-3 sm:place-items-stretch lg:grid-cols-4">
         <StatCard label="Kehadiran Hari Ini" value={`${s.percent}%`} icon={Users} color="#0d9488" />
         <StatCard label="Hadir" value={s.present} icon={CheckCircle2} color="#22c55e" />
         <StatCard label="Terlambat" value={s.late} icon={Clock3} color="#f59e0b" />
