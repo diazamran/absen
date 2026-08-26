@@ -277,8 +277,11 @@ function EditForm({ row, onClose, onSave, saving }: {
 function ManualForm({ onClose, initialStudentId }: { onClose: () => void; initialStudentId?: string }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [mode, setMode] = useState<'single' | 'bulk'>(initialStudentId ? 'single' : 'bulk');
   const [form, setForm] = useState({ studentId: initialStudentId || '', status: 'PRESENT', type: 'CHECK_IN', date: '', checkIn: '', checkOut: '', notes: '' });
   const [search, setSearch] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const { data: students } = useQuery({
     queryKey: ['students-manual', search],
@@ -286,6 +289,39 @@ function ManualForm({ onClose, initialStudentId }: { onClose: () => void; initia
       `/students?search=${encodeURIComponent(search)}&pageSize=50&isActive=true`
     ).then((r) => r.data),
   });
+
+  const { data: classList } = useQuery({
+    queryKey: ['classes-list'],
+    queryFn: () => api<{ success: boolean; data: { id: string; name: string }[] }>('/classes?isActive=true').then((r) => r.data),
+  });
+
+  const { data: classStudents, isLoading: loadingClass } = useQuery({
+    queryKey: ['class-students', selectedClassId],
+    queryFn: () => selectedClassId ? api<{ success: boolean; data: { id: string; nis: string; fullName: string; className: string }[] }>(`/classes/${selectedClassId}/students`).then((r) => r.data) : null,
+    enabled: !!selectedClassId,
+  });
+  const clsStudents = classStudents?.data || [];
+  useEffect(() => { if (clsStudents.length && mode === 'bulk') setSelectedIds(new Set(clsStudents.map((s) => s.id))); }, [clsStudents, mode]);
+
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const handleBulkSave = async () => {
+    if (!selectedIds.size) return;
+    setBulkSaving(true);
+    let ok = 0, fail = 0;
+    for (const sid of selectedIds) {
+      try {
+        await api('/attendance/manual', { method: 'POST', body: { studentId: sid, status: form.status, type: form.type, date: form.date || undefined, checkIn: form.checkIn || undefined, checkOut: form.checkOut || undefined, notes: form.notes || undefined } });
+        ok++;
+      } catch { fail++; }
+    }
+    setBulkSaving(false);
+    toast('success', `Berhasil: ${ok} siswa, Gagal: ${fail} siswa`);
+    qc.invalidateQueries({ queryKey: ['attendance-today'] });
+    qc.invalidateQueries({ queryKey: ['dashboard'] });
+    onClose();
+  };
+  const toggleAll = () => { if (!clsStudents) return; setSelectedIds(prev => prev.size === clsStudents.length ? new Set() : new Set(clsStudents.map(s => s.id))); };
+  const toggleOne = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -311,31 +347,63 @@ function ManualForm({ onClose, initialStudentId }: { onClose: () => void; initia
   return (
     <Modal open onClose={onClose} title="Absensi Manual" wide>
       <div className="space-y-3">
-        <Field label="Cari siswa" hint={students?.length ? `${students.length} siswa ditemukan` : undefined}>
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && students?.length) setForm({ ...form, studentId: students[0].id });
-            }}
-            placeholder="Ketik nama / NISN…"
-            autoFocus
-          />
-        </Field>
-        <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-2xl border border-line p-2">
-          {students?.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setForm({ ...form, studentId: s.id })}
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm ${form.studentId === s.id ? 'bg-primary-soft font-semibold text-primary-dark' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-            >
-              <span className="font-medium text-ink">{s.fullName}</span>
-              <span className="text-xs text-muted">{s.nis} · {s.className}</span>
-            </button>
-          ))}
-          {students?.length === 0 && search && <p className="py-4 text-center text-sm text-muted">Tidak ada siswa ditemukan untuk "{search}"</p>}
-          {!search && <p className="py-4 text-center text-sm text-muted">Ketik nama atau NISN untuk mencari siswa</p>}
-        </div>
+        {!initialStudentId && (
+          <div className="flex gap-2 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+            <button onClick={() => setMode('bulk')} className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${mode === 'bulk' ? 'bg-primary text-white shadow' : 'text-muted hover:text-ink'}`}>📋 Per Kelas</button>
+            <button onClick={() => setMode('single')} className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${mode === 'single' ? 'bg-primary text-white shadow' : 'text-muted hover:text-ink'}`}>👤 Per Siswa</button>
+          </div>
+        )}
+        {mode === 'bulk' && (
+          <>
+            <Field label="Pilih Kelas">
+              <Select value={selectedClassId} onChange={(e) => { setSelectedClassId(e.target.value); setSelectedIds(new Set()); }}>
+                <option value="">— Pilih Kelas —</option>
+                {classList?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </Select>
+            </Field>
+            {selectedClassId && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs text-muted">{clsStudents.length} siswa · {selectedIds.size} dipilih</span>
+                  <button onClick={toggleAll} className="text-xs font-medium text-primary hover:underline">{selectedIds.size === clsStudents.length ? 'Batal Pilih' : 'Pilih Semua'}</button>
+                </div>
+                <div className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-line p-2">
+                  {loadingClass && <p className="py-4 text-center text-sm text-muted">Memuat…</p>}
+                  {clsStudents.map((s) => (
+                    <label key={s.id} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm cursor-pointer ${selectedIds.has(s.id) ? 'bg-primary-soft' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                      <input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => toggleOne(s.id)} className="h-4 w-4 rounded text-primary" />
+                      <span className="flex-1 font-medium text-ink">{s.fullName}</span>
+                      <span className="text-xs text-muted">{s.nis}</span>
+                    </label>
+                  ))}
+                  {clsStudents.length === 0 && !loadingClass && <p className="py-4 text-center text-sm text-muted">Tidak ada siswa</p>}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+        {mode === 'single' && (
+          <>
+            <Field label="Cari siswa" hint={students?.length ? `${students.length} siswa ditemukan` : undefined}>
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && students?.length) setForm({ ...form, studentId: students[0].id }); }}
+                placeholder="Ketik nama / NISN…" autoFocus
+              />
+            </Field>
+            <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-2xl border border-line p-2">
+              {students?.map((s) => (
+                <button key={s.id} onClick={() => setForm({ ...form, studentId: s.id })} className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm ${form.studentId === s.id ? 'bg-primary-soft font-semibold text-primary-dark' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                  <span className="font-medium text-ink">{s.fullName}</span>
+                  <span className="text-xs text-muted">{s.nis} · {s.className}</span>
+                </button>
+              ))}
+              {students?.length === 0 && search && <p className="py-4 text-center text-sm text-muted">Tidak ada siswa ditemukan</p>}
+              {!search && <p className="py-4 text-center text-sm text-muted">Ketik nama atau NISN</p>}
+            </div>
+          </>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Status">
             <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
@@ -359,7 +427,11 @@ function ManualForm({ onClose, initialStudentId }: { onClose: () => void; initia
       </div>
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="outline" onClick={onClose}>Batal</Button>
-        <Button onClick={() => mutation.mutate()} disabled={!form.studentId || mutation.isPending}>{mutation.isPending ? 'Menyimpan…' : 'Simpan'}</Button>
+        {mode === 'bulk' ? (
+          <Button onClick={handleBulkSave} disabled={!selectedIds.size || bulkSaving}>{bulkSaving ? 'Menyimpan…' : `Simpan ${selectedIds.size} Siswa`}</Button>
+        ) : (
+          <Button onClick={() => singleMutation.mutate()} disabled={!form.studentId || singleMutation.isPending}>{singleMutation.isPending ? 'Menyimpan…' : 'Simpan'}</Button>
+        )}
       </div>
     </Modal>
   );
