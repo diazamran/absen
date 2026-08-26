@@ -157,16 +157,16 @@ export function EmptyState({ icon: Icon, title, description }: { icon: LucideIco
 // ===== Stat card =====
 export function StatCard({ label, value, icon: Icon, color, suffix }: { label: string; value: string | number; icon: LucideIcon; color: string; suffix?: string }) {
   return (
-    <Card className="flex items-center gap-3 p-4">
-      <div className="rounded-2xl p-2.5" style={{ backgroundColor: `${color}1a`, color }}>
+    <Card className="flex h-full items-center gap-3 p-3 sm:p-4">
+      <div className="shrink-0 rounded-2xl p-2 sm:p-2.5" style={{ backgroundColor: `${color}1a`, color }}>
         <Icon className="h-5 w-5" />
       </div>
       <div className="min-w-0">
-        <p className="text-2xl font-bold leading-tight text-ink">
+        <p className="text-lg font-bold leading-tight text-ink sm:text-2xl">
           {value}
-          {suffix && <span className="ml-0.5 text-sm font-semibold text-muted">{suffix}</span>}
+          {suffix && <span className="ml-0.5 text-xs font-semibold text-muted">{suffix}</span>}
         </p>
-        <p className="truncate text-xs font-medium text-muted">{label}</p>
+        <p className="truncate text-[10px] font-medium text-muted sm:text-xs">{label}</p>
       </div>
     </Card>
   );
