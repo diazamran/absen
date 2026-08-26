@@ -161,12 +161,11 @@ function buildBottomNav(user: MeData | null, pklRole?: { isSupervisor: boolean; 
   const add = (item: NavItem) => { if (!seen.has(item.to)) { seen.add(item.to); items.push(item); } };
 
   if (isAdmin) {
-    add({ to: '/app/dashboard', label: 'Beranda', icon: <Home className="h-6 w-6" /> });
     add({ to: '/app/gate', label: 'Gerbang', icon: <ScanLine className="h-6 w-6" /> });
-    add({ to: '/app/attendance', label: 'Absensi', icon: <ScanLine className="h-6 w-6" /> });
     add({ to: '/app/students', label: 'Data', icon: <Users className="h-6 w-6" /> });
-    add({ to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> });
-    add({ to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-6 w-6" /> });
+    add({ to: '/app/dashboard', label: 'Beranda', icon: <Home className="h-6 w-6" /> });
+    add({ to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> });
+    add({ to: '/app/absensi', label: 'Absensi', icon: <ScanLine className="h-6 w-6" /> });
   } else if (has('STUDENT')) {
     add({ to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> });
     add({ to: '/app/pkl-absent', label: 'PKL', icon: <MapPin className="h-6 w-6" /> });
@@ -207,12 +206,11 @@ function buildBottomNav(user: MeData | null, pklRole?: { isSupervisor: boolean; 
   // Profil always last
   add({ to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> });
 
-  // Mobile: max 5 items (hide Laporan/Notif if too many)
+  // Mobile: max 5 items - order: Gerbang/Absen, Data, Beranda (middle), Profil, [extra]
   if (items.length > 5) {
-    const pinned = items.filter((i) => ['/app/home', '/app/gate', '/app/absent', '/app/pkl-absent', '/app/classes', '/app/students', '/app/profile'].includes(i.to));
-    const rest = items.filter((i) => !['/app/home', '/app/gate', '/app/absent', '/app/pkl-absent', '/app/classes', '/app/students', '/app/profile'].includes(i.to));
-    const merged = [...pinned, ...rest];
-    return merged.slice(0, 5);
+    const order = ['/app/gate', '/app/students', '/app/dashboard', '/app/profile', '/app/absensi', '/app/home', '/app/pkl-absent', '/app/absent', '/app/classes', '/app/leave', '/app/leave/mine', '/app/pkl-monitor', '/app/bk', '/app/history', '/app/reports', '/app/notifications'];
+    const sorted = order.filter((t) => items.some((i) => i.to === t)).map((t) => items.find((i) => i.to === t)!);
+    return sorted.slice(0, 5);
   }
   return items;
 }
