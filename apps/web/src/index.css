@@ -37,6 +37,20 @@ body {
   background: transparent;
 }
 
+/* Android safe area bottom — ensures bottom nav is above system nav bar */
+.safe-bottom {
+  padding-bottom: max(8px, env(safe-area-inset-bottom, 8px));
+}
+
+/* Better tap targets on mobile */
+@media (hover: none) and (pointer: coarse) {
+  a, button {
+    min-height: 44px;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+}
+
 /* Kamera fullscreen */
 .camera-view video {
   object-fit: cover;

@@ -433,25 +433,25 @@ export function AppShell() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto px-4 pb-24 pt-5 lg:px-6 lg:pb-8">
+        <main className="flex-1 overflow-y-auto px-4 pb-28 pt-5 lg:px-6 lg:pb-8">
           <div className="mx-auto w-full max-w-6xl">
             <Outlet />
           </div>
         </main>
 
         {/* Bottom nav (mobile) */}
-        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur lg:hidden dark:bg-slate-900/95" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-          <div className="mx-auto flex w-full max-w-sm items-center justify-around px-2 py-1.5">
+        <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-line bg-surface/95 backdrop-blur safe-bottom lg:hidden dark:bg-slate-900/95">
+          <div className="mx-auto flex w-full max-w-sm items-center justify-around px-1 pt-1.5 pb-2">
             {bottomNav.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) =>
-                  cn('flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[11px] font-medium', isActive ? 'text-primary' : 'text-muted')
+                  cn('flex min-h-[48px] min-w-[48px] flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-1.5 text-[11px] font-medium active:scale-95', isActive ? 'text-primary' : 'text-muted')
                 }
               >
                 {item.icon}
-                {item.label}
+                <span className="leading-none">{item.label}</span>
               </NavLink>
             ))}
           </div>
