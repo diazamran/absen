@@ -297,7 +297,7 @@ function ManualForm({ onClose, initialStudentId }: { onClose: () => void; initia
 
   const { data: classStudents, isLoading: loadingClass } = useQuery({
     queryKey: ['class-students', selectedClassId],
-    queryFn: () => selectedClassId ? api<{ success: boolean; data: { id: string; nis: string; fullName: string; className: string }[] }>(`/classes/${selectedClassId}/students`).then((r) => r.data) : null,
+    queryFn: () => selectedClassId ? api<{ success: boolean; data: { id: string; nis: string; fullName: string; className: string }[] }>(`/students?classId=${selectedClassId}&isActive=true&pageSize=200`).then((r) => r.data) : null,
     enabled: !!selectedClassId,
   });
   const clsStudents = classStudents?.data || [];
@@ -323,7 +323,7 @@ function ManualForm({ onClose, initialStudentId }: { onClose: () => void; initia
   const toggleAll = () => { if (!clsStudents) return; setSelectedIds(prev => prev.size === clsStudents.length ? new Set() : new Set(clsStudents.map(s => s.id))); };
   const toggleOne = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
-  const mutation = useMutation({
+  const singleMutation = useMutation({
     mutationFn: () =>
       api('/attendance/manual', {
         method: 'POST',
