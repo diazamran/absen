@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Upload, Download, Loader2, ShieldCheck, CheckCircle2, XCircle, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Search, Upload, Download, Loader2, ShieldCheck, CheckCircle2, XCircle, Pencil, Trash2, KeyRound } from 'lucide-react';
 import { api, ApiError, downloadCsv } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Input, Field, Select, Modal, Badge, EmptyState } from '../../lib/ui';
@@ -27,6 +27,7 @@ export default function Users() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
+  const [showResetPwd, setShowResetPwd] = useState(false);
 
   useEffect(() => { setPage(1); }, [search]);
 
@@ -86,6 +87,22 @@ export default function Users() {
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus.'),
   });
 
+  const resetPassword = useMutation({
+    mutationFn: async (password?: string) => {
+      return api<{ success: boolean; message: string; data: { count: number; password: string } }>(
+        '/users/reset-password',
+        { method: 'POST', body: { ids: Array.from(selected), ...(password ? { password } : {}) } }
+      );
+    },
+    onSuccess: (res) => {
+      toast('success', res.message);
+      setSelected(new Set());
+      setShowResetPwd(false);
+      qc.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal reset password.'),
+  });
+
   const doExport = async () => {
     try {
       await downloadCsv('/export/users', 'guru-staff.csv');
@@ -105,10 +122,16 @@ export default function Users() {
         </div>
         <div className="flex flex-wrap gap-2">
           {selected.size > 0 && (
-            <Button variant="danger" onClick={() => window.confirm(`Hapus permanen ${selected.size} akun terpilih? Riwayat absen, jadwal, dan izin terkait ikut terhapus dan tidak bisa dikembalikan.`) && bulkDelete.mutate()} disabled={bulkDelete.isPending}>
-              {bulkDelete.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              Hapus Terpilih ({selected.size})
-            </Button>
+            <>
+              <Button variant="warning" onClick={() => setShowResetPwd(true)} disabled={resetPassword.isPending}>
+                {resetPassword.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                Reset Password ({selected.size})
+              </Button>
+              <Button variant="danger" onClick={() => window.confirm(`Hapus permanen ${selected.size} akun terpilih? Riwayat absen, jadwal, dan izin terkait ikut terhapus dan tidak bisa dikembalikan.`) && bulkDelete.mutate()} disabled={bulkDelete.isPending}>
+                {bulkDelete.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Hapus Terpilih ({selected.size})
+              </Button>
+            </>
           )}
           <Button variant="outline" onClick={doExport}>
             <Download className="h-4 w-4" /> Export
@@ -222,10 +245,122 @@ export default function Users() {
       {showCreate && <UserForm onClose={() => setShowCreate(false)} subjects={subjects || []} />}
       {editing && <UserForm initial={editing} onClose={() => setEditing(null)} subjects={subjects || []} />}
       {showImport && <UserImport onClose={() => setShowImport(false)} />}
+      {showResetPwd && (
+        <ResetPasswordModal
+          count={selected.size}
+          onConfirm={(pwd) => resetPassword.mutate(pwd || undefined)}
+          onClose={() => setShowResetPwd(false)}
+          isLoading={resetPassword.isPending}
+        />
+      )}
     </div>
   );
 }
 
+/* ───── Reset Password Massal Modal ───── */
+function ResetPasswordModal({ count, onConfirm, onClose, isLoading }: {
+  count: number;
+  onConfirm: (password: string) => void;
+  onClose: () => void;
+  isLoading: boolean;
+}) {
+  const [mode, setMode] = useState<'default' | 'custom'>('default');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const canSubmit = mode === 'default' || (password.length >= 6);
+
+  return (
+    <Modal open onClose={onClose} title="Reset Password Massal" wide>
+      <div className="space-y-5">
+        {/* Info */}
+        <div className="flex items-start gap-3 rounded-xl bg-amber-50 p-4 dark:bg-amber-500/10">
+          <KeyRound className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+              Reset password {count} akun terpilih
+            </p>
+            <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-300/70">
+              Semua akun yang dipilih akan memiliki password yang sama. Pastikan Anda sudah memberitahu pemilik akun.
+            </p>
+          </div>
+        </div>
+
+        {/* Pilihan Mode */}
+        <div className="space-y-3">
+          <p className="text-sm font-medium text-ink">Pilih Metode Reset</p>
+
+          {/* Default Password */}
+          <label className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition-all ${mode === 'default' ? 'border-[var(--primary)] bg-primary-soft/30' : 'border-line/60 hover:border-primary/40'}`}>
+            <input
+              type="radio"
+              name="pwd-mode"
+              className="mt-0.5 accent-[var(--primary)]"
+              checked={mode === 'default'}
+              onChange={() => setMode('default')}
+            />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-ink">Password Default</p>
+              <p className="mt-1 text-xs text-muted">Semua akun akan direset ke <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs dark:bg-slate-700">guru12345</code></p>
+            </div>
+          </label>
+
+          {/* Custom Password */}
+          <label className={`flex items-start gap-3 rounded-xl border-2 p-4 transition-all ${mode === 'custom' ? 'border-[var(--primary)] bg-primary-soft/30' : 'border-line/60 hover:border-primary/40'}`}>
+            <input
+              type="radio"
+              name="pwd-mode"
+              className="mt-0.5 accent-[var(--primary)]"
+              checked={mode === 'custom'}
+              onChange={() => setMode('custom')}
+            />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-ink">Password Kustom</p>
+              <p className="mb-2 text-xs text-muted">Tentukan password sendiri untuk semua akun terpilih</p>
+              {mode === 'custom' && (
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Masukkan password baru (min. 6 karakter)"
+                    autoFocus
+                    className="w-full rounded-lg border border-line bg-white px-3 py-2 pr-16 text-sm outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)] dark:border-slate-600 dark:bg-slate-800"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-xs text-muted hover:text-ink"
+                  >
+                    {showPassword ? 'Sembunyi' : 'Lihat'}
+                  </button>
+                </div>
+              )}
+              {mode === 'custom' && password.length > 0 && password.length < 6 && (
+                <p className="mt-1 text-xs text-red-500">Minimal 6 karakter</p>
+              )}
+            </div>
+          </label>
+        </div>
+
+        {/* Actions */}
+        <div className="flex justify-end gap-2 border-t border-line/60 pt-4">
+          <Button variant="outline" onClick={onClose} disabled={isLoading}>Batal</Button>
+          <Button
+            variant="warning"
+            onClick={() => onConfirm(mode === 'default' ? '' : password)}
+            disabled={!canSubmit || isLoading}
+          >
+            {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {mode === 'default' ? `Reset ke "guru12345"` : `Reset ke "${password || '...'}"`}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ───── User Create / Edit Form ───── */
 function UserForm({ onClose, subjects, initial }: { onClose: () => void; subjects: { id: string; name: string }[]; initial?: UserRow }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -246,7 +381,6 @@ function UserForm({ onClose, subjects, initial }: { onClose: () => void; subject
   const mutation = useMutation({
     mutationFn: () => {
       if (initial) {
-        // Edit: jangan kirim password jika kosong
         const { password, ...rest } = form;
         const body: Record<string, unknown> = { ...rest, additionalRoles };
         if (password) body.password = password;
@@ -320,7 +454,7 @@ function UserForm({ onClose, subjects, initial }: { onClose: () => void; subject
   );
 }
 
-// ===== Import massal CSV =====
+/* ───── Import massal CSV ───── */
 interface PreviewRow {
   line: number; nama: string; username: string; roleLabel: string; roleKey: string;
   password: string; nip: string; position: string; subjectName: string; phone: string;

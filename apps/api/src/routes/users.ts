@@ -251,6 +251,57 @@ export async function userRoutes(app: FastifyInstance) {
     return reply.send({ success: true, message: 'Akun diperbarui.' });
   });
 
+  // Reset password massal — reset password guru/staff ke password default
+  app.post('/users/reset-password', { preHandler: app.requirePermission(PERMISSION_KEYS.usersUpdate) }, async (request, reply) => {
+    const body = validate(z.object({
+      ids: z.array(z.string()).min(1, 'Minimal 1 akun dipilih.'),
+      password: z.string().min(6, 'Password minimal 6 karakter.').optional(),
+    }), request.body);
+
+    // Prevent reset own password via bulk
+    const userId = request.user!.id;
+
+    const users = await prisma.user.findMany({
+      where: { id: { in: body.ids } },
+      select: { id: true, fullName: true, role: { select: { key: true } } },
+    });
+
+    if (users.length === 0) {
+      throw ApiError.notFound('Tidak ada akun ditemukan.');
+    }
+
+    // Filter out SUPER_ADMIN if not super admin
+    const isSuperAdmin = (request.user?.roles || [request.user?.roleKey]).includes('SUPER_ADMIN');
+    const filtered = isSuperAdmin ? users : users.filter((u) => u.role?.key !== 'SUPER_ADMIN');
+
+    if (filtered.length === 0) {
+      throw ApiError.badRequest('Tidak ada akun yang bisa di-reset.');
+    }
+
+    const newPassword = body.password || 'guru12345';
+    const passwordHash = await hashPassword(newPassword);
+    const ids = filtered.map((u) => u.id);
+
+    const result = await prisma.user.updateMany({
+      where: { id: { in: ids } },
+      data: { passwordHash },
+    });
+
+    await audit({
+      userId,
+      action: 'USERS_PASSWORD_RESET',
+      entity: 'User',
+      newValue: { count: result.count, newPassword: '***' },
+      request,
+    });
+
+    return reply.send({
+      success: true,
+      message: `${result.count} password berhasil direset ke "${newPassword}".`,
+      data: { count: result.count, password: newPassword },
+    });
+  });
+
   // Bulk delete — hapus banyak akun sekaligus (satu transaksi, sangat cepat)
   app.post('/users/bulk-delete', { preHandler: app.requirePermission(PERMISSION_KEYS.usersDelete) }, async (request, reply) => {
     const { ids } = request.body as { ids: string[] };
