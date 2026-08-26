@@ -43,7 +43,7 @@ const ADMIN_GROUPS: MenuGroup[] = [
     label: 'Data Sekolah',
     items: [
       { to: '/app/students', label: 'Siswa', icon: <GraduationCap className="h-5 w-5" /> },
-      { to: '/app/users', label: 'Guru & Staff', icon: <Users className="h-5 w-5" /> },
+      { to: '/app/users', label: 'Guru', icon: <Users className="h-5 w-5" /> },
       { to: '/app/classes', label: 'Kelas', icon: <ClipboardList className="h-5 w-5" /> },
       { to: '/app/face-register', label: 'Registrasi Wajah', icon: <ScanFace className="h-5 w-5" /> },
       { to: '/app/violations', label: 'Pelanggaran', icon: <AlertTriangle className="h-5 w-5" /> },

@@ -11,7 +11,7 @@ import { cn } from '../lib/format';
 type RoleTab = 'staff' | 'admin' | 'student' | 'parent';
 
 const ROLE_TABS: { value: RoleTab; label: string }[] = [
-  { value: 'staff', label: 'Guru & Staff' },
+  { value: 'staff', label: 'Staff' },
   { value: 'admin', label: 'Admin' },
   { value: 'student', label: 'Siswa' },
   { value: 'parent', label: 'Orang Tua' },

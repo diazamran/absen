@@ -114,7 +114,7 @@ export default function Users() {
 
   return (
     <div>
-      <PageHeader title="Guru & Staff" subtitle="Kelola akun tenaga pendidik dan kependidikan" />
+      <PageHeader title="Guru" subtitle="Kelola akun guru dan tenaga pendidik" />
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
@@ -513,7 +513,7 @@ function UserImport({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <Modal open onClose={onClose} title="Import Guru & Staff (CSV)" wide>
+    <Modal open onClose={onClose} title="Import Guru (CSV)" wide>
       <div className="space-y-4">
         <div className="flex items-center justify-between rounded-2xl bg-primary-soft/40 p-3">
           <p className="text-xs text-muted">Kolom: Nama, Username, Role (Guru/Wali Kelas/Staff/Admin/Kepala Sekolah/Petugas Piket), Password, NIP, Jabatan, Mata Pelajaran, No HP.</p>
