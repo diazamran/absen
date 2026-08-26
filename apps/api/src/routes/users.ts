@@ -168,7 +168,7 @@ export async function userRoutes(app: FastifyInstance) {
     );
 
     const existing = await prisma.user.findUnique({ where: { id }, include: { role: true, teacher: true, staff: true } });
-    if (!existing) throw ApiError.notFound('Akun tidak ditemukan.');
+    if (!existing) throw ApiError.notFound('NOT_FOUND', 'Akun tidak ditemukan.');
     // Hanya Super Admin boleh edit akun Super Admin
     if (existing.role?.key === 'SUPER_ADMIN' && !(request.user?.roles || []).includes('SUPER_ADMIN')) {
       throw ApiError.forbidden('FORBIDDEN', 'Hanya Super Admin yang bisa mengedit akun Super Admin.');
@@ -267,7 +267,7 @@ export async function userRoutes(app: FastifyInstance) {
     });
 
     if (users.length === 0) {
-      throw ApiError.notFound('Tidak ada akun ditemukan.');
+      throw ApiError.notFound('NOT_FOUND', 'Tidak ada akun ditemukan.');
     }
 
     // Filter out SUPER_ADMIN if not super admin
@@ -275,7 +275,7 @@ export async function userRoutes(app: FastifyInstance) {
     const filtered = isSuperAdmin ? users : users.filter((u) => u.role?.key !== 'SUPER_ADMIN');
 
     if (filtered.length === 0) {
-      throw ApiError.badRequest('Tidak ada akun yang bisa di-reset.');
+      throw ApiError.badRequest('NO_RESETTABLE_ACCOUNTS', 'Tidak ada akun yang bisa di-reset.');
     }
 
     const newPassword = body.password || 'guru12345';
@@ -386,7 +386,7 @@ export async function userRoutes(app: FastifyInstance) {
       where: { id },
       include: { teacher: true, staff: true, student: true, parent: true },
     });
-    if (!existing) throw ApiError.notFound('Akun tidak ditemukan.');
+    if (!existing) throw ApiError.notFound('NOT_FOUND', 'Akun tidak ditemukan.');
 
     // Hapus PERMANEN: bersihkan semua data terkait dalam satu transaksi,
     // agar tidak ada sisa data (riwayat absen, wajah, izin, dll) yang menggantung.
