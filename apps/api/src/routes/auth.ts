@@ -325,4 +325,125 @@ export async function authRoutes(app: FastifyInstance) {
       },
     });
   });
+
+  // ===== SSO Callback dari SDMS =====
+  // GET /api/auth/sso-callback?token=<jwt_dari_sdms>
+  // SDMS redirect ke: https://absen.smkn1kras.sch.id/sso/callback?token=xxx
+  // Nginx forward /sso/callback → /api/auth/sso-callback
+  app.get('/auth/sso-callback', async (request, reply) => {
+    const { token } = request.query as { token?: string };
+
+    const SSO_SECRET  = process.env.SSO_SECRET     || 'sso_secret_absen_smkn1kras_2026';
+    const APP_URL     = config.appUrl;
+
+    if (!token) {
+      return reply.redirect(`${APP_URL}/login?error=sso_no_token`);
+    }
+
+    try {
+      // Verifikasi JWT dari SDMS (HMAC-SHA256, custom JWT dari SDMS menggunakan jsonwebtoken)
+      // SDMS memakai jsonwebtoken standar — verifikasi manual
+      const parts = token.split('.');
+      if (parts.length !== 3) throw new Error('INVALID_TOKEN');
+
+      const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf8');
+      const sdmsPayload = JSON.parse(payloadJson) as {
+        sub: string; username: string; full_name: string; role: string;
+        extra_roles?: string[]; aud: string; iss: string; exp: number;
+      };
+
+      // Verifikasi signature dengan HMAC-SHA256
+      const { hmacSign } = await import('../lib/crypto.js');
+      const expected = hmacSign(`${parts[0]}.${parts[1]}`, SSO_SECRET);
+      const actual   = parts[2];
+      if (expected !== actual) throw new Error('INVALID_SIGNATURE');
+
+      // Cek expiry
+      if (sdmsPayload.exp * 1000 < Date.now()) throw new Error('TOKEN_EXPIRED');
+
+      // Cek audience & issuer
+      if (sdmsPayload.aud !== 'absen' || sdmsPayload.iss !== 'sdms-core') {
+        throw new Error('INVALID_AUDIENCE');
+      }
+
+      // Petakan role SDMS → role absen
+      const roleMap: Record<string, string> = {
+        super_admin:    'ADMIN',
+        admin:          'ADMIN',
+        kepala_sekolah: 'ADMIN',
+        guru:           'TEACHER',
+        wali_kelas:     'TEACHER',
+        pegawai:        'STAFF',
+        operator:       'STAFF',
+        petugas_piket:  'TEACHER',
+        siswa:          'STUDENT',
+      };
+      const targetRoleKey = roleMap[sdmsPayload.role] || 'TEACHER';
+
+      // Cari atau buat user
+      let user = await prisma.user.findUnique({
+        where: { username: sdmsPayload.username },
+        include: { role: true },
+      });
+
+      if (!user) {
+        // Cari role di DB
+        const roleRow = await prisma.role.findFirst({ where: { key: targetRoleKey } });
+        if (!roleRow) throw new Error(`Role ${targetRoleKey} tidak ditemukan di DB`);
+
+        const { hashPassword: hp } = await import('../lib/crypto.js');
+        const { randomBytes } = await import('node:crypto');
+        user = await prisma.user.create({
+          data: {
+            username:     sdmsPayload.username,
+            fullName:     sdmsPayload.full_name || sdmsPayload.username,
+            passwordHash: await hp(randomBytes(16).toString('hex')),
+            roleId:       roleRow.id,
+            isActive:     true,
+          },
+          include: { role: true },
+        });
+        app.log.info(`[SSO] User baru dibuat: ${sdmsPayload.username} (${targetRoleKey})`);
+      } else {
+        // Update nama jika berubah
+        if (sdmsPayload.full_name && sdmsPayload.full_name !== user.fullName) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { fullName: sdmsPayload.full_name },
+          });
+        }
+      }
+
+      if (!user.isActive) {
+        return reply.redirect(`${APP_URL}/login?error=sso_inactive`);
+      }
+
+      // Buat access token lokal absen
+      const { signToken: st } = await import('../lib/crypto.js');
+      const { accessTtlSeconds } = await import('../services/auth.js');
+      const userRoles = [user.role.key];
+      const accessToken = st(
+        { sub: user.id, role: user.role.key, roles: userRoles, name: user.fullName, typ: 'access' },
+        config.jwtSecret,
+        accessTtlSeconds(),
+        `sso_${Date.now()}`,
+      );
+
+      app.log.info(`[SSO] ✅ ${user.role.key} login via SSO: ${user.fullName}`);
+
+      // Redirect ke /sso di frontend dengan token di fragment (#)
+      return reply.redirect(`${APP_URL}/sso#access=${accessToken}&role=${user.role.key}`);
+
+    } catch (err: any) {
+      app.log.warn(`[SSO] Error: ${err.message}`);
+      const errMap: Record<string, string> = {
+        'TOKEN_EXPIRED': 'sso_expired',
+        'INVALID_SIGNATURE': 'sso_invalid',
+        'INVALID_AUDIENCE': 'sso_invalid',
+        'INVALID_TOKEN': 'sso_invalid',
+      };
+      const code = errMap[err.message] || 'sso_error';
+      return reply.redirect(`${APP_URL}/login?error=${code}`);
+    }
+  });
 }

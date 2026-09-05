@@ -119,6 +119,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     await api.register(sdmsRoutes);
   }, { prefix: '/api' });
 
+  // SSO callback dari SDMS — /sso/callback?token=xxx
+  // Forward ke handler backend, lalu redirect ke frontend React /sso
+  app.get('/sso/callback', async (request, reply) => {
+    const qs = (request.url.includes('?') ? request.url.slice(request.url.indexOf('?')) : '');
+    return reply.redirect(307, `/api/auth/sso-callback${qs}`);
+  });
+
   // 404 API
   app.setNotFoundHandler((request, reply) => {
     if (request.url.startsWith('/api/')) {

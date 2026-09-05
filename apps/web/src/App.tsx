@@ -7,6 +7,7 @@ import { LoadingCard } from './lib/ui';
 
 const Login = lazy(() => import('./pages/Login'));
 const Monitor = lazy(() => import('./pages/Monitor'));
+const SsoCallback = lazy(() => import('./pages/SsoCallback'));
 
 // Admin
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
@@ -78,6 +79,7 @@ export default function App() {
       <Routes>
       <Route path="/login" element={<Page><Login /></Page>} />
       <Route path="/monitor" element={<Page><Monitor /></Page>} />
+      <Route path="/sso" element={<Page><SsoCallback /></Page>} />
 
       <Route
         path="/app"
