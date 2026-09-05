@@ -328,35 +328,35 @@ export async function authRoutes(app: FastifyInstance) {
 
   // ===== SSO Callback dari SDMS =====
   // GET /api/auth/sso-callback?token=<jwt_dari_sdms>
-  // SDMS redirect ke: https://absen.smkn1kras.sch.id/sso/callback?token=xxx
-  // Nginx forward /sso/callback → /api/auth/sso-callback
   app.get('/auth/sso-callback', async (request, reply) => {
     const { token } = request.query as { token?: string };
+    const SSO_SECRET = process.env.SSO_SECRET || 'sso_secret_absen_smkn1kras_2026';
+    const APP_URL    = config.appUrl;
 
-    const SSO_SECRET  = process.env.SSO_SECRET     || 'sso_secret_absen_smkn1kras_2026';
-    const APP_URL     = config.appUrl;
-
-    if (!token) {
-      return reply.redirect(`${APP_URL}/login?error=sso_no_token`);
-    }
+    if (!token) return reply.redirect(`${APP_URL}/login?error=sso_no_token`);
 
     try {
-      // Verifikasi JWT dari SDMS (HMAC-SHA256, custom JWT dari SDMS menggunakan jsonwebtoken)
-      // SDMS memakai jsonwebtoken standar — verifikasi manual
+      // SDMS menggunakan jsonwebtoken (HS256) — verifikasi manual
+      // jsonwebtoken menggunakan base64url untuk header & payload, HMAC-SHA256 untuk signature
       const parts = token.split('.');
       if (parts.length !== 3) throw new Error('INVALID_TOKEN');
 
-      const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf8');
-      const sdmsPayload = JSON.parse(payloadJson) as {
+      // Verifikasi signature: HMAC-SHA256(header.payload, secret) dalam base64url
+      const crypto = await import('node:crypto');
+      const signingInput = `${parts[0]}.${parts[1]}`;
+      const expectedSig  = crypto.default
+        .createHmac('sha256', SSO_SECRET)
+        .update(signingInput)
+        .digest('base64url');   // jsonwebtoken juga pakai base64url
+
+      if (expectedSig !== parts[2]) throw new Error('INVALID_SIGNATURE');
+
+      // Decode payload
+      const payloadJson  = Buffer.from(parts[1], 'base64url').toString('utf8');
+      const sdmsPayload  = JSON.parse(payloadJson) as {
         sub: string; username: string; full_name: string; role: string;
         extra_roles?: string[]; aud: string; iss: string; exp: number;
       };
-
-      // Verifikasi signature dengan HMAC-SHA256
-      const { hmacSign } = await import('../lib/crypto.js');
-      const expected = hmacSign(`${parts[0]}.${parts[1]}`, SSO_SECRET);
-      const actual   = parts[2];
-      if (expected !== actual) throw new Error('INVALID_SIGNATURE');
 
       // Cek expiry
       if (sdmsPayload.exp * 1000 < Date.now()) throw new Error('TOKEN_EXPIRED');
@@ -366,7 +366,7 @@ export async function authRoutes(app: FastifyInstance) {
         throw new Error('INVALID_AUDIENCE');
       }
 
-      // Petakan role SDMS → role absen
+      // Petakan role SDMS → role key di absen
       const roleMap: Record<string, string> = {
         super_admin:    'ADMIN',
         admin:          'ADMIN',
@@ -387,63 +387,56 @@ export async function authRoutes(app: FastifyInstance) {
       });
 
       if (!user) {
-        // Cari role di DB
         const roleRow = await prisma.role.findFirst({ where: { key: targetRoleKey } });
-        if (!roleRow) throw new Error(`Role ${targetRoleKey} tidak ditemukan di DB`);
+        if (!roleRow) throw new Error(`Role ${targetRoleKey} tidak ditemukan`);
 
-        const { hashPassword: hp } = await import('../lib/crypto.js');
-        const { randomBytes } = await import('node:crypto');
+        const cryptoLib = await import('../lib/crypto.js');
+        const randomLib = await import('node:crypto');
         user = await prisma.user.create({
           data: {
             username:     sdmsPayload.username,
             fullName:     sdmsPayload.full_name || sdmsPayload.username,
-            passwordHash: await hp(randomBytes(16).toString('hex')),
+            passwordHash: await cryptoLib.hashPassword(randomLib.default.randomBytes(16).toString('hex')),
             roleId:       roleRow.id,
             isActive:     true,
           },
           include: { role: true },
         });
-        app.log.info(`[SSO] User baru dibuat: ${sdmsPayload.username} (${targetRoleKey})`);
+        app.log.info(`[SSO] User baru: ${sdmsPayload.username} (${targetRoleKey})`);
       } else {
-        // Update nama jika berubah
+        // Update nama jika berubah di SDMS
         if (sdmsPayload.full_name && sdmsPayload.full_name !== user.fullName) {
-          await prisma.user.update({
-            where: { id: user.id },
-            data: { fullName: sdmsPayload.full_name },
-          });
+          await prisma.user.update({ where: { id: user.id }, data: { fullName: sdmsPayload.full_name } });
         }
       }
 
-      if (!user.isActive) {
-        return reply.redirect(`${APP_URL}/login?error=sso_inactive`);
-      }
+      if (!user.isActive) return reply.redirect(`${APP_URL}/login?error=sso_inactive`);
 
       // Buat access token lokal absen
-      const { signToken: st } = await import('../lib/crypto.js');
-      const { accessTtlSeconds } = await import('../services/auth.js');
-      const userRoles = [user.role.key];
-      const accessToken = st(
+      const authLib    = await import('../services/auth.js');
+      const cryptoLib2 = await import('../lib/crypto.js');
+      const userRoles  = [user.role.key, ...((user.additionalRoles as string[]) || [])];
+      const accessToken = cryptoLib2.signToken(
         { sub: user.id, role: user.role.key, roles: userRoles, name: user.fullName, typ: 'access' },
         config.jwtSecret,
-        accessTtlSeconds(),
+        authLib.accessTtlSeconds(),
         `sso_${Date.now()}`,
       );
 
       app.log.info(`[SSO] ✅ ${user.role.key} login via SSO: ${user.fullName}`);
 
-      // Redirect ke /sso di frontend dengan token di fragment (#)
+      // Redirect ke /sso di frontend React dengan token di URL fragment
       return reply.redirect(`${APP_URL}/sso#access=${accessToken}&role=${user.role.key}`);
 
     } catch (err: any) {
       app.log.warn(`[SSO] Error: ${err.message}`);
       const errMap: Record<string, string> = {
-        'TOKEN_EXPIRED': 'sso_expired',
-        'INVALID_SIGNATURE': 'sso_invalid',
-        'INVALID_AUDIENCE': 'sso_invalid',
-        'INVALID_TOKEN': 'sso_invalid',
+        TOKEN_EXPIRED:     'sso_expired',
+        INVALID_SIGNATURE: 'sso_invalid',
+        INVALID_AUDIENCE:  'sso_invalid',
+        INVALID_TOKEN:     'sso_invalid',
       };
-      const code = errMap[err.message] || 'sso_error';
-      return reply.redirect(`${APP_URL}/login?error=${code}`);
+      return reply.redirect(`${APP_URL}/login?error=${errMap[err.message] || 'sso_error'}`);
     }
   });
 }
