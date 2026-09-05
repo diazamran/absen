@@ -5,20 +5,16 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { setTokens } from '../lib/api';
+
+const TOKEN_KEY   = 'presensiku_access';
+const REFRESH_KEY = 'presensiku_refresh';
 
 export default function SsoCallback() {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Ambil token dari URL fragment (#access=xxx&role=yyy)
-    const hash   = window.location.hash.substring(1);
-    const params = new URLSearchParams(hash);
-    const access = params.get('access');
-    const role   = params.get('role');
-
-    // Cek error dari query string (redirect dari backend saat gagal)
+    // Cek error dari query string dulu (redirect dari backend saat gagal)
     const qError = new URLSearchParams(window.location.search).get('error');
     if (qError) {
       const messages: Record<string, string> = {
@@ -32,20 +28,28 @@ export default function SsoCallback() {
       return;
     }
 
+    // Ambil token dari URL fragment (#access=xxx&role=yyy)
+    const hash   = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    const access = params.get('access');
+    const role   = params.get('role');
+
     if (!access) {
       setError('Token tidak ditemukan. Silakan buka kembali dari SDMS.');
       return;
     }
 
-    // Simpan access token (refresh token tidak ada untuk SSO — session pendek)
-    setTokens(access, '');
+    // Simpan access token — JANGAN simpan refresh token kosong
+    // karena auth context akan coba refresh jika refresh key ada tapi access kosong
+    localStorage.setItem(TOKEN_KEY, access);
+    localStorage.removeItem(REFRESH_KEY);
 
     // Bersihkan hash dari URL
     history.replaceState(null, '', '/sso');
 
     // Redirect ke halaman sesuai role
     const dest = role === 'STUDENT' ? '/app/absent'
-               : role === 'PARENT'  ? '/app/parent'
+               : role === 'PARENT'  ? '/app/home'
                : '/app';
     navigate(dest, { replace: true });
   }, [navigate]);
@@ -54,7 +58,7 @@ export default function SsoCallback() {
     return (
       <div style={{
         minHeight: '100vh', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)',
+        justifyContent: 'center', background: 'linear-gradient(135deg,#1a7fe8,#8b5cf6)',
         fontFamily: 'system-ui,sans-serif',
       }}>
         <div style={{
@@ -76,10 +80,11 @@ export default function SsoCallback() {
     );
   }
 
+  // Loading state — biasanya hanya muncul sebentar sebelum redirect
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)',
+      justifyContent: 'center', background: 'linear-gradient(135deg,#1a7fe8,#8b5cf6)',
       fontFamily: 'system-ui,sans-serif',
     }}>
       <div style={{
