@@ -1,20 +1,17 @@
 /**
  * SsoCallback — halaman perantara SSO dari SDMS
  * URL: /sso#access=<token>&role=<role>
- * Simpan token ke localStorage lalu redirect ke /app sesuai role.
  */
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 const TOKEN_KEY   = 'presensiku_access';
 const REFRESH_KEY = 'presensiku_refresh';
 
 export default function SsoCallback() {
-  const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Cek error dari query string dulu (redirect dari backend saat gagal)
+    // Cek error dari query string
     const qError = new URLSearchParams(window.location.search).get('error');
     if (qError) {
       const messages: Record<string, string> = {
@@ -28,7 +25,7 @@ export default function SsoCallback() {
       return;
     }
 
-    // Ambil token dari URL fragment (#access=xxx&role=yyy)
+    // Ambil token dari URL fragment
     const hash   = window.location.hash.substring(1);
     const params = new URLSearchParams(hash);
     const access = params.get('access');
@@ -39,20 +36,18 @@ export default function SsoCallback() {
       return;
     }
 
-    // Simpan access token — JANGAN simpan refresh token kosong
-    // karena auth context akan coba refresh jika refresh key ada tapi access kosong
+    // Simpan access token di KEDUA key agar AuthProvider mau panggil /auth/me
+    // AuthProvider cek: jika refresh token ada → U0() return true → fetch /auth/me
     localStorage.setItem(TOKEN_KEY, access);
-    localStorage.removeItem(REFRESH_KEY);
+    localStorage.setItem(REFRESH_KEY, access);
 
-    // Bersihkan hash dari URL
-    history.replaceState(null, '', '/sso');
-
-    // Redirect ke halaman sesuai role
+    // Hard reload ke halaman tujuan agar React app mount ulang
+    // sehingga AuthProvider membaca token baru dari localStorage
     const dest = role === 'STUDENT' ? '/app/absent'
                : role === 'PARENT'  ? '/app/home'
                : '/app';
-    navigate(dest, { replace: true });
-  }, [navigate]);
+    window.location.replace(dest);
+  }, []);
 
   if (error) {
     return (
@@ -80,7 +75,6 @@ export default function SsoCallback() {
     );
   }
 
-  // Loading state — biasanya hanya muncul sebentar sebelum redirect
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center',
@@ -94,9 +88,7 @@ export default function SsoCallback() {
       }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>🔑</div>
         <h2 style={{ margin: '0 0 8px', color: '#1e293b' }}>Masuk via SDMS</h2>
-        <p style={{ color: '#64748b', fontSize: 14, marginBottom: 24 }}>
-          Memverifikasi sesi…
-        </p>
+        <p style={{ color: '#64748b', fontSize: 14, marginBottom: 24 }}>Memverifikasi sesi…</p>
         <div style={{
           width: 36, height: 36, border: '4px solid #e2e8f0',
           borderTopColor: '#3b82f6', borderRadius: '50%',
