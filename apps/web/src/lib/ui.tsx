@@ -3,7 +3,7 @@ import { X, type LucideIcon } from 'lucide-react';
 import { cn } from './format';
 
 // ===== Button =====
-type BtnVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline';
+type BtnVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'warning';
 export function Button({
   variant = 'primary',
   className,
@@ -16,6 +16,7 @@ export function Button({
     ghost: 'text-ink hover:bg-slate-100 dark:hover:bg-slate-800',
     danger: 'bg-red-500 text-white hover:bg-red-600 active:scale-[.98]',
     outline: 'border border-line text-ink hover:bg-slate-50 dark:hover:bg-slate-800',
+    warning: 'bg-amber-500 text-white hover:bg-amber-600 active:scale-[.98]',
   };
   return (
     <button
