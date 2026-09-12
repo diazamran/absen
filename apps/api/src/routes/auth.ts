@@ -404,9 +404,21 @@ export async function authRoutes(app: FastifyInstance) {
         });
         app.log.info(`[SSO] User baru: ${sdmsPayload.username} (${targetRoleKey})`);
       } else {
-        // Update nama jika berubah di SDMS
+        // Update nama DAN role agar selalu sinkron dengan SDMS
+        const roleRow = await prisma.role.findFirst({ where: { key: targetRoleKey } });
+        const updateData: Record<string, unknown> = {};
         if (sdmsPayload.full_name && sdmsPayload.full_name !== user.fullName) {
-          await prisma.user.update({ where: { id: user.id }, data: { fullName: sdmsPayload.full_name } });
+          updateData.fullName = sdmsPayload.full_name;
+        }
+        if (roleRow && user.roleId !== roleRow.id) {
+          updateData.roleId = roleRow.id;
+        }
+        if (Object.keys(updateData).length > 0) {
+          user = await prisma.user.update({
+            where: { id: user.id },
+            data: updateData,
+            include: { role: true },
+          });
         }
       }
 
@@ -422,7 +434,7 @@ export async function authRoutes(app: FastifyInstance) {
       // Redirect ke /sso di frontend React dengan KEDUA token di URL fragment
       // SsoCallback.tsx akan simpan access ke presensiku_access, refresh ke presensiku_refresh
       return reply.redirect(
-        `${APP_URL}/sso#access=${tokens.accessToken}&refresh=${tokens.refreshToken}&role=${user.role.key}`,
+        `${APP_URL}/sso#access=${tokens.accessToken}&refresh=${tokens.refreshToken}&role=${targetRoleKey}`,
       );
 
     } catch (err: any) {

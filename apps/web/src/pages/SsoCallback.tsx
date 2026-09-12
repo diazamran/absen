@@ -55,8 +55,8 @@ export default function SsoCallback() {
       dest = '/app/absent';       // Siswa → langsung ke halaman absensi
     } else if (role === 'PARENT') {
       dest = '/app/home';         // Orang tua → beranda
-    } else if (role === 'ADMIN') {
-      dest = '/app/dashboard';    // Admin → dashboard admin
+    } else if (role === 'ADMIN' || role === 'SUPER_ADMIN') {
+      dest = '/app/dashboard';    // Admin / Super Admin → dashboard admin
     } else if (role === 'TEACHER' || role === 'STAFF') {
       dest = '/app/home';         // Guru / Staff → beranda
     } else {
