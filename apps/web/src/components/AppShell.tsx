@@ -156,63 +156,80 @@ function buildBottomNav(user: MeData | null, pklRole?: { isSupervisor: boolean; 
   const has = (r: string) => roles.includes(r);
   const isAdmin = has('ADMIN') || has('SUPER_ADMIN') || has('HEADMASTER');
 
-  const items: NavItem[] = [];
-  const seen = new Set<string>();
-  const add = (item: NavItem) => { if (!seen.has(item.to)) { seen.add(item.to); items.push(item); } };
-
+  // Admin
   if (isAdmin) {
-    add({ to: '/app/gate', label: 'Gerbang', icon: <ScanLine className="h-6 w-6" /> });
-    add({ to: '/app/students', label: 'Data', icon: <Users className="h-6 w-6" /> });
-    add({ to: '/app/dashboard', label: 'Beranda', icon: <Home className="h-6 w-6" /> });
-    add({ to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> });
-    add({ to: '/app/attendance', label: 'Absensi', icon: <ScanLine className="h-6 w-6" /> });
-  } else if (has('STUDENT')) {
-    add({ to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> });
-    add({ to: '/app/pkl-absent', label: 'PKL', icon: <MapPin className="h-6 w-6" /> });
-    add({ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> });
-    add({ to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> });
-    add({ to: '/app/leave/mine', label: 'Izin', icon: <FilePlus2 className="h-6 w-6" /> });
-  } else if (has('PARENT')) {
-    add({ to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> });
-    add({ to: '/app/children', label: 'Anak', icon: <Baby className="h-6 w-6" /> });
-    add({ to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> });
-    add({ to: '/app/notifications', label: 'Notif', icon: <Bell className="h-6 w-6" /> });
-  } else {
-    // Guru / Staff / Piket / Wali Kelas — dynamic merge
-    add({ to: '/app/home', label: 'Beranda', icon: <Home className="h-6 w-6" /> });
-
-    if (has('PIKET')) {
-      add({ to: '/app/gate', label: 'Gerbang', icon: <ScanLine className="h-6 w-6" /> });
-    } else {
-      add({ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> });
-    }
-    if (has('TEACHER') || has('HOMEROOM_TEACHER') || has('BK')) {
-      add({ to: '/app/classes', label: 'Kelas', icon: <GraduationCap className="h-6 w-6" /> });
-    }
-    if (pklRole?.isSupervisor) {
-      add({ to: '/app/pkl-monitor', label: 'PKL', icon: <MapPin className="h-6 w-6" /> });
-    }
-    if (has('BK')) {
-      add({ to: '/app/bk', label: 'BK', icon: <ClipboardCheck className="h-6 w-6" /> });
-    }
-    if (has('PIKET') || has('HOMEROOM_TEACHER')) {
-      add({ to: '/app/leave', label: 'Izin', icon: <FilePlus2 className="h-6 w-6" /> });
-    } else if (has('STAFF') || has('TEACHER')) {
-      add({ to: '/app/leave/mine', label: 'Izin', icon: <FilePlus2 className="h-6 w-6" /> });
-    }
-    add({ to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> });
+    return [
+      { to: '/app/dashboard', label: 'Beranda',  icon: <Home className="h-6 w-6" /> },
+      { to: '/app/gate',      label: 'Gerbang',  icon: <ScanLine className="h-6 w-6" /> },
+      { to: '/app/students',  label: 'Siswa',    icon: <Users className="h-6 w-6" /> },
+      { to: '/app/reports',   label: 'Laporan',  icon: <BarChart3 className="h-6 w-6" /> },
+      { to: '/app/profile',   label: 'Profil',   icon: <UserRound className="h-6 w-6" /> },
+    ];
   }
 
-  // Profil always last
-  add({ to: '/app/profile', label: 'Profil', icon: <UserRound className="h-6 w-6" /> });
-
-  // Mobile: max 5 items - order: Gerbang/Absen, Data, Beranda (middle), Profil, [extra]
-  if (items.length > 5) {
-    const order = ['/app/gate', '/app/students', '/app/dashboard', '/app/profile', '/app/attendance', '/app/home', '/app/pkl-absent', '/app/absent', '/app/classes', '/app/leave', '/app/leave/mine', '/app/pkl-monitor', '/app/bk', '/app/history', '/app/reports', '/app/notifications'];
-    const sorted = order.filter((t) => items.some((i) => i.to === t)).map((t) => items.find((i) => i.to === t)!);
-    return sorted.slice(0, 5);
+  // Siswa
+  if (has('STUDENT')) {
+    return [
+      { to: '/app/home',       label: 'Beranda', icon: <Home className="h-6 w-6" /> },
+      { to: '/app/absent',     label: 'Absen',   icon: <ScanLine className="h-6 w-6" /> },
+      { to: '/app/history',    label: 'Riwayat', icon: <History className="h-6 w-6" /> },
+      { to: '/app/leave/mine', label: 'Izin',    icon: <FilePlus2 className="h-6 w-6" /> },
+      { to: '/app/profile',    label: 'Profil',  icon: <UserRound className="h-6 w-6" /> },
+    ];
   }
-  return items;
+
+  // Orang tua
+  if (has('PARENT')) {
+    return [
+      { to: '/app/home',          label: 'Beranda', icon: <Home className="h-6 w-6" /> },
+      { to: '/app/children',      label: 'Anak',    icon: <Baby className="h-6 w-6" /> },
+      { to: '/app/history',       label: 'Riwayat', icon: <History className="h-6 w-6" /> },
+      { to: '/app/notifications', label: 'Notif',   icon: <Bell className="h-6 w-6" /> },
+      { to: '/app/profile',       label: 'Profil',  icon: <UserRound className="h-6 w-6" /> },
+    ];
+  }
+
+  // Piket
+  if (has('PIKET')) {
+    return [
+      { to: '/app/home',    label: 'Beranda',  icon: <Home className="h-6 w-6" /> },
+      { to: '/app/gate',    label: 'Gerbang',  icon: <ScanLine className="h-6 w-6" /> },
+      { to: '/app/leave',   label: 'Izin',     icon: <FilePlus2 className="h-6 w-6" /> },
+      { to: '/app/history', label: 'Riwayat',  icon: <History className="h-6 w-6" /> },
+      { to: '/app/profile', label: 'Profil',   icon: <UserRound className="h-6 w-6" /> },
+    ];
+  }
+
+  // Wali kelas
+  if (has('HOMEROOM_TEACHER')) {
+    return [
+      { to: '/app/home',     label: 'Beranda', icon: <Home className="h-6 w-6" /> },
+      { to: '/app/homeroom', label: 'Kelas',   icon: <GraduationCap className="h-6 w-6" /> },
+      { to: '/app/leave',    label: 'Izin',    icon: <FilePlus2 className="h-6 w-6" /> },
+      { to: '/app/reports',  label: 'Laporan', icon: <BarChart3 className="h-6 w-6" /> },
+      { to: '/app/profile',  label: 'Profil',  icon: <UserRound className="h-6 w-6" /> },
+    ];
+  }
+
+  // BK
+  if (has('BK')) {
+    return [
+      { to: '/app/home',       label: 'Beranda',   icon: <Home className="h-6 w-6" /> },
+      { to: '/app/bk',         label: 'Konseling', icon: <ClipboardCheck className="h-6 w-6" /> },
+      { to: '/app/violations', label: 'Pelangg.',  icon: <AlertTriangle className="h-6 w-6" /> },
+      { to: '/app/reports',    label: 'Laporan',   icon: <BarChart3 className="h-6 w-6" /> },
+      { to: '/app/profile',    label: 'Profil',    icon: <UserRound className="h-6 w-6" /> },
+    ];
+  }
+
+  // Guru / Staff — default
+  return [
+    { to: '/app/home',    label: 'Beranda', icon: <Home className="h-6 w-6" /> },
+    { to: '/app/classes', label: 'Kelas',   icon: <GraduationCap className="h-6 w-6" /> },
+    { to: '/app/history', label: 'Riwayat', icon: <History className="h-6 w-6" /> },
+    { to: '/app/reports', label: 'Laporan', icon: <BarChart3 className="h-6 w-6" /> },
+    { to: '/app/profile', label: 'Profil',  icon: <UserRound className="h-6 w-6" /> },
+  ];
 }
 
 export function useClock() {
