@@ -37,12 +37,17 @@ echo "➜ Restart backend..."
 cd ../..
 pm2 restart presensiku-api --silent
 
-# Bersihkan data absensi hari ini
-echo "➜ Membersihkan data absensi hari ini..."
+# Bersihkan data absensi hari ini — OPTSIONAL (CLEAR_TODAY_ATTENDANCE=true di .env).
+# Default TIDAK menghapus, agar update di jam sekolah aman.
 source .env
 DB_PASS="${DB_PASSWORD:-presensiku123}"
-sudo -u postgres psql -d presensiku -c "DELETE FROM \"Attendance\" WHERE DATE(\"date\") = CURRENT_DATE;" 2>/dev/null || true
-sudo -u postgres psql -d presensiku -c "DELETE FROM \"Notification\" WHERE DATE(\"createdAt\") = CURRENT_DATE;" 2>/dev/null || true
+if [[ "${CLEAR_TODAY_ATTENDANCE:-false}" == "true" ]]; then
+  echo "➜ Membersihkan data absensi hari ini..."
+  sudo -u postgres psql -d presensiku -c "DELETE FROM \"Attendance\" WHERE DATE(\"date\") = CURRENT_DATE;" 2>/dev/null || true
+  sudo -u postgres psql -d presensiku -c "DELETE FROM \"Notification\" WHERE DATE(\"createdAt\") = CURRENT_DATE;" 2>/dev/null || true
+else
+  echo "➜ Data absensi hari ini TIDAK dihapus (set CLEAR_TODAY_ATTENDANCE=true di .env untuk mengaktifkan)."
+fi
 
 echo ""
 echo "✅ Update selesai!"
