@@ -22,20 +22,20 @@ git reset --hard origin/main
 echo "➜ Build backend..."
 cd apps/api
 npm ci --silent
-npx prisma generate --silent
+npx prisma generate
 npx tsc -p tsconfig.json
-npx prisma migrate deploy 2>/dev/null || true
+npx prisma migrate deploy || true
 
-# Build frontend
+# Build frontend — gagal build = hentikan update (jangan lanjut pakai frontend lama diam-diam)
 echo "➜ Build frontend..."
 cd ../apps/web
 npm ci --silent
-npx vite build 2>/dev/null || echo "⚠ Frontend build gagal, skip..."
+npx vite build || { echo "❌ Frontend build gagal — update dihentikan. Perbaiki error di atas lalu jalankan ulang." >&2; exit 1; }
 
-# Restart backend via PM2
-echo "➜ Restart backend..."
+# Restart backend via PM2 (mulai baru bila belum terdaftar)
+echo "➜ Restart backend via PM2..."
 cd ../..
-pm2 restart presensiku-api --silent
+pm2 restart presensiku-api || (cd apps/api && pm2 start dist/server.js --name presensiku-api)
 
 # Bersihkan data absensi hari ini — OPTSIONAL (CLEAR_TODAY_ATTENDANCE=true di .env).
 # Default TIDAK menghapus, agar update di jam sekolah aman.
