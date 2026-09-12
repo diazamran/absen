@@ -412,21 +412,18 @@ export async function authRoutes(app: FastifyInstance) {
 
       if (!user.isActive) return reply.redirect(`${APP_URL}/login?error=sso_inactive`);
 
-      // Buat access token lokal absen
-      const authLib    = await import('../services/auth.js');
-      const cryptoLib2 = await import('../lib/crypto.js');
-      const userRoles  = [user.role.key, ...((user.additionalRoles as string[]) || [])];
-      const accessToken = cryptoLib2.signToken(
-        { sub: user.id, role: user.role.key, roles: userRoles, name: user.fullName, typ: 'access' },
-        config.jwtSecret,
-        authLib.accessTtlSeconds(),
-        `sso_${Date.now()}`,
-      );
+      // Terbitkan access + refresh token via issueTokens agar sesi persisten
+      // (refresh token disimpan di DB — user tidak perlu login ulang tiap sesi)
+      const authLib = await import('../services/auth.js');
+      const tokens  = await authLib.issueTokens(user.id, { request });
 
       app.log.info(`[SSO] ✅ ${user.role.key} login via SSO: ${user.fullName}`);
 
-      // Redirect ke /sso di frontend React dengan token di URL fragment
-      return reply.redirect(`${APP_URL}/sso#access=${accessToken}&role=${user.role.key}`);
+      // Redirect ke /sso di frontend React dengan KEDUA token di URL fragment
+      // SsoCallback.tsx akan simpan access ke presensiku_access, refresh ke presensiku_refresh
+      return reply.redirect(
+        `${APP_URL}/sso#access=${tokens.accessToken}&refresh=${tokens.refreshToken}&role=${user.role.key}`,
+      );
 
     } catch (err: any) {
       app.log.warn(`[SSO] Error: ${err.message}`);

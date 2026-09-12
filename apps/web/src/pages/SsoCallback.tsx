@@ -28,18 +28,26 @@ export default function SsoCallback() {
     // Ambil token dari URL fragment
     const hash   = window.location.hash.substring(1);
     const params = new URLSearchParams(hash);
-    const access = params.get('access');
-    const role   = params.get('role');
+    const access  = params.get('access');
+    const refresh = params.get('refresh');
+    const role    = params.get('role');
 
     if (!access) {
       setError('Token tidak ditemukan. Silakan buka kembali dari SDMS.');
       return;
     }
 
-    // Simpan access token di KEDUA key agar AuthProvider mau panggil /auth/me
-    // AuthProvider cek: jika refresh token ada → U0() return true → fetch /auth/me
+    // Simpan access token dan refresh token secara terpisah.
+    // refresh token dipakai oleh restoreSession() → tryRefresh() saat sesi dipulihkan.
+    // Kalau refresh token tidak ada di fragment (fallback), pakai access token saja
+    // tapi sesi tidak akan persisten (habis saat tab ditutup).
     localStorage.setItem(TOKEN_KEY, access);
-    localStorage.setItem(REFRESH_KEY, access);
+    if (refresh) {
+      localStorage.setItem(REFRESH_KEY, refresh);
+    } else {
+      // Fallback: hapus refresh lama agar tidak ada token tidak valid yang tersimpan
+      localStorage.removeItem(REFRESH_KEY);
+    }
 
     // Tentukan halaman tujuan berdasarkan role
     let dest: string;
@@ -49,8 +57,10 @@ export default function SsoCallback() {
       dest = '/app/home';         // Orang tua → beranda
     } else if (role === 'ADMIN') {
       dest = '/app/dashboard';    // Admin → dashboard admin
+    } else if (role === 'TEACHER' || role === 'STAFF') {
+      dest = '/app/home';         // Guru / Staff → beranda
     } else {
-      dest = '/app/home';         // Guru, Staff, dll → beranda
+      dest = '/app/home';         // Fallback
     }
 
     // Hard reload ke halaman tujuan agar React app mount ulang
