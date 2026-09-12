@@ -18,10 +18,22 @@ if [[ ! -f .env ]]; then
 fi
 
 # Export isi .env ke semua proses anak (prisma CLI, npm, pm2 membutuhkannya,
-# terutama DATABASE_URL untuk prisma migrate deploy)
-set -a
-source .env
-set +a
+# terutama DATABASE_URL untuk prisma migrate deploy).
+# TIDAK memakai `source .env` — .env berisi nilai ber-spasi tanpa kutip
+# (mis. SCHOOL_NAME=SMKN 1 Kras) yang akan dieksekusi bash sebagai perintah.
+while IFS= read -r line || [[ -n "$line" ]]; do
+  line="${line%$'\r'}"                                                # buang CR (file Windows)
+  [[ -z "${line//[[:space:]]/}" ]] && continue                        # baris kosong
+  [[ "$line" =~ ^[[:space:]]*# ]] && continue                        # komentar
+  [[ "$line" != *=* ]] && continue                                   # bukan pasangan KEY=VALUE
+  key="${line%%=*}"; value="${line#*=}"
+  key="$(echo "$key" | tr -d '[:space:]')"
+  value="${value%\"}"; value="${value#\"}"                          # buang kutip ganda
+  value="${value%\'}"; value="${value#\'}"                           # buang kutip tunggal
+  [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue               # hanya nama variabel valid
+  [[ -z "$key" ]] && continue
+  export "$key=$value"
+done < .env
 
 echo "➜ Menarik pembaruan dari GitHub..."
 git fetch origin
