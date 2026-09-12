@@ -51,17 +51,27 @@ done
 
 echo "➜ Build backend..."
 cd "$ROOT/apps/api"
-npm ci --no-audit --no-fund --loglevel=error
-npx prisma generate
-npx tsc -p tsconfig.json
-if ! npx prisma migrate deploy; then
+# PENTING: .env berisi NODE_ENV=production yang membuat npm MELEWATKAN devDependencies
+# (typescript!) sehingga npx tsc mem-beli paket 'tsc' palsu dari npm. Selalu paksa --include=dev.
+npm ci --include=dev --no-audit --no-fund --loglevel=error
+if [[ ! -x node_modules/.bin/prisma || ! -x node_modules/.bin/tsc ]]; then
+  echo "❌ prisma/tsc tidak ditemukan di node_modules — npm ci gagal. Cek koneksi/output di atas." >&2
+  exit 1
+fi
+./node_modules/.bin/prisma generate
+./node_modules/.bin/tsc -p tsconfig.json
+if ! ./node_modules/.bin/prisma migrate deploy; then
   echo "⚠ Migrate deploy gagal (periksa DATABASE_URL di .env) — dilanjutkan, bukan dihentikan." >&2
 fi
 
 echo "➜ Build frontend..."
 cd "$ROOT/apps/web"
-npm ci --no-audit --no-fund --loglevel=error
-npx vite build || { echo "❌ Frontend build gagal — update dihentikan. Perbaiki error di atas lalu jalankan ulang." >&2; exit 1; }
+npm ci --include=dev --no-audit --no-fund --loglevel=error
+if [[ ! -x node_modules/.bin/vite ]]; then
+  echo "❌ vite tidak ditemukan di node_modules — npm ci gagal." >&2
+  exit 1
+fi
+./node_modules/.bin/vite build || { echo "❌ Frontend build gagal — update dihentikan. Perbaiki error di atas lalu jalankan ulang." >&2; exit 1; }
 
 # Restart backend via PM2 (mulai baru bila belum terdaftar)
 echo "➜ Restart backend via PM2..."
