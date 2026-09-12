@@ -120,33 +120,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   }, { prefix: '/api' });
 
   // SSO callback dari SDMS — /sso/callback?token=xxx
-  // Proses langsung di sini tanpa redirect internal, agar mobile browser tidak kehilangan token
+  // Forward ke handler backend, lalu redirect ke frontend React /sso
   app.get('/sso/callback', async (request, reply) => {
     const qs = (request.url.includes('?') ? request.url.slice(request.url.indexOf('?')) : '');
-    const params = new URLSearchParams(qs.startsWith('?') ? qs.slice(1) : qs);
-    const token  = params.get('token');
-    const APP_URL = config.appUrl;
-
-    if (!token) return reply.redirect(`${APP_URL}/login?error=sso_no_token`);
-
-    // Teruskan ke handler /api/auth/sso-callback dengan inject query
-    // Gunakan Fastify inject untuk memanggil route internal tanpa HTTP round-trip
-    const res = await app.inject({
-      method: 'GET',
-      url: `/api/auth/sso-callback${qs}`,
-      headers: {
-        host:              (request.headers.host as string) || 'localhost',
-        'x-forwarded-for': request.ip,
-        'x-forwarded-proto': (request.headers['x-forwarded-proto'] as string) || 'https',
-      },
-    });
-
-    // Teruskan redirect dari handler internal ke browser
-    const location = res.headers['location'] as string | undefined;
-    if (location) {
-      return reply.redirect(res.statusCode === 307 ? 302 : res.statusCode, location);
-    }
-    return reply.redirect(`${APP_URL}/login?error=sso_error`);
+    return reply.redirect(307, `/api/auth/sso-callback${qs}`);
   });
 
   // 404 API
