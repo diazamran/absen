@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Camera, CheckCircle2, Clock, Loader2, RefreshCw, ScanFace, ShieldCheck } from 'lucide-react';
+import { Camera, CheckCircle2, Clock, Loader2, RefreshCw, ScanFace, ShieldCheck, Wrench } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
 import { Button, Card, EmptyState } from '../../lib/ui';
 import { startCamera, stopCamera, captureFrame } from '../../lib/camera';
-import { detectFaceDescriptor, initFaceModels, isFaceModelReady } from '../../lib/face';
+import { detectFaceDescriptor, initFaceModels, isFaceModelReady, resetFaceModelCaches } from '../../lib/face';
 
 interface FaceStatus {
   registered: boolean;
@@ -36,6 +36,7 @@ export default function FaceMe() {
   const [justSubmitted, setJustSubmitted] = useState(false);
   const [reEnroll, setReEnroll] = useState(false);
   const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelError, setModelError] = useState(false);
 
   const { data: status, isLoading } = useQuery({
     queryKey: ['face-status', user?.id],
@@ -73,10 +74,36 @@ export default function FaceMe() {
     };
   }, [needsCamera]);
 
+  const repairModels = async () => {
+    setModelsLoading(true);
+    setModelError(false);
+    await resetFaceModelCaches();
+    try {
+      await initFaceModels();
+      toast('success', 'Model wajah berhasil diperbaiki. Lanjutkan pengambilan sampel.');
+    } catch {
+      setModelError(true);
+      toast('error', 'Gagal memperbaiki model. Periksa koneksi internet lalu coba lagi.');
+    } finally {
+      setModelsLoading(false);
+    }
+  };
+
   const capture = async () => {
     const video = videoRef.current;
     if (!video || descriptors.length >= MAX_SAMPLES || modelsLoading) return;
-    if (!isFaceModelReady()) setModelsLoading(true);
+    if (!isFaceModelReady()) {
+      setModelsLoading(true);
+      try {
+        await initFaceModels();
+      } catch {
+        setModelError(true);
+        toast('error', 'Model wajah gagal dimuat di perangkat ini. Ketuk "Perbaiki Model" lalu ulangi.');
+        return;
+      } finally {
+        setModelsLoading(false);
+      }
+    }
     try {
       // Deteksi wajah & ekstrak descriptor (diproses di HP, bukan dikirim ke server)
       const descriptor = await detectFaceDescriptor(video);
@@ -89,7 +116,12 @@ export default function FaceMe() {
       if (frame) setPreviews((p) => [...p, frame]);
       toast('success', `Sampel ${descriptors.length + 1} diambil.`);
     } catch {
-      toast('error', 'Gagal memproses wajah. Coba lagi.');
+      if (!isFaceModelReady()) {
+        setModelError(true);
+        toast('error', 'Model wajah gagal dimuat. Ketuk "Perbaiki Model Wajah" lalu ulangi.');
+      } else {
+        toast('error', 'Gagal memproses wajah. Coba lagi.');
+      }
     } finally {
       setModelsLoading(false);
     }
@@ -197,7 +229,19 @@ export default function FaceMe() {
                     ? 'Menyiapkan model wajah…'
                     : `Ambil Sampel (${descriptors.length}/${MAX_SAMPLES})`}
                 </Button>
-                {!isFaceModelReady() && !modelsLoading && (
+                {modelError ? (
+                  <Button variant="outline" className="mt-3 w-full border-red-300 text-red-600" onClick={() => void repairModels()} disabled={modelsLoading}>
+                    {modelsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />} Perbaiki Model Wajah
+                  </Button>
+                ) : (
+                  <Button className="mt-3 w-full" onClick={capture} disabled={!ready || descriptors.length >= MAX_SAMPLES || modelsLoading}>
+                    {modelsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                    {modelsLoading
+                      ? 'Menyiapkan model wajah…'
+                      : `Ambil Sampel (${descriptors.length}/${MAX_SAMPLES})`}
+                  </Button>
+                )}
+                {!isFaceModelReady() && !modelsLoading && !modelError && (
                   <p className="mt-2 text-center text-[11px] text-muted">
                     Sampel pertama memuat model wajah (±5 MB, sekali saja).
                   </p>

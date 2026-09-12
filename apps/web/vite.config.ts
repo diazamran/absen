@@ -64,9 +64,12 @@ export default defineConfig({
             options: { cacheName: 'api-cache', expiration: { maxEntries: 20, maxAgeSeconds: 300 } },
           },
           {
-            // Model wajah (face-api): muat sekali, cache agar scan berikutnya instan
+            // Model wajah (face-api): muat instan dari cache, segarkan di latar belakang.
+            // StaleWhileRevalidate dipilih alih-alih CacheFirst supaya file model yang korup
+            // (unduhan terputus) ikut tergantikan otomatis pada kunjungan berikutnya —
+            // penyebab umum "wajah tidak terdeteksi" terus-menerus di satu HP.
             urlPattern: /\/models\/.*\.(bin|json)$/,
-            handler: 'CacheFirst',
+            handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'face-models',
               cacheableResponse: { statuses: [0, 200] },

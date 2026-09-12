@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, XCircle, Loader2, Camera, RefreshCw, Zap, ZapOff } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, Loader2, Camera, RefreshCw, Zap, ZapOff, Wrench } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { useAuth } from '../../lib/auth';
 import { startCamera, stopCamera, captureFrame } from '../../lib/camera';
-import { detectFaceDescriptor, framesHaveMotion, initFaceModels, isFaceModelReady } from '../../lib/face';
+import { detectFaceDescriptor, framesHaveMotion, initFaceModels, isFaceModelReady, resetFaceModelCaches } from '../../lib/face';
 import { getBestEffortPosition, invalidateGpsCache, warmUpGps } from '../../lib/geo';
 import { feedbackSuccess, feedbackInfo, feedbackError } from '../../lib/feedback';
 import { Segmented, Badge, Button } from '../../lib/ui';
@@ -23,6 +23,7 @@ interface ScanResult {
   status?: string;
   lateMinutes?: number;
   earlyLeave?: boolean;
+  modelError?: boolean;
 }
 
 export default function FaceScan() {
@@ -41,6 +42,8 @@ export default function FaceScan() {
   const [error, setError] = useState('');
   const [scanning, setScanning] = useState(false);
   const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelError, setModelError] = useState(false);
+  const [repairing, setRepairing] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState('');
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -119,8 +122,17 @@ export default function FaceScan() {
       setScanning(true);
       setResult(null);
       setHint('');
-      if (!isFaceModelReady()) setModelsLoading(true);
+      setModelError(false);
       try {
+        // Pastikan model wajah benar-benar siap SEBELUM scan. Kegagalan muat (paling sering
+        // karena file model korup di cache HP) diberi penanganan khusus, bukan pesan
+        // "wajah tidak dikenali" yang menyesatkan.
+        if (!isFaceModelReady()) {
+          setModelsLoading(true);
+          await initFaceModels();
+          setModelsLoading(false);
+        }
+
         // Liveness ringan: coba sampai 2 pasang frame; satu saja ada pergerakan → lolos
         let motion = false;
         for (let attempt = 0; attempt < 2 && !motion; attempt++) {
@@ -197,6 +209,17 @@ export default function FaceScan() {
           feedbackSuccess();
         }
       } catch (e) {
+        // Kegagalan memuat model wajah (mis. file .bin korup di cache HP) —
+        // tawarkan perbaikan, bukan pesan "wajah tidak dikenali".
+        if (!isFaceModelReady()) {
+          setModelError(true);
+          if (manual) {
+            setResult({ ok: false, modelError: true, message: 'Model wajah gagal dimuat di perangkat ini. Ketuk "Perbaiki" untuk mengunduh ulang.' });
+          } else {
+            setHint('Model wajah bermasalah — ketuk Perbaiki di bawah');
+          }
+          return;
+        }
         if (e instanceof ApiError && e.code === 'ALREADY_ATTENDANCE') {
           setResult({ ok: false, already: true, message: e.message });
           doneRef.current = true;
@@ -231,6 +254,26 @@ export default function FaceScan() {
     },
     [type, toast, rules],
   );
+
+  /**
+   * Perbaiki model wajah di perangkat: hapus cache model yang korup lalu unduh ulang.
+   * Dipakai saat "wajah tidak terdeteksi" terus-menerus di satu HP padahal HP lain normal.
+   */
+  const repairModels = useCallback(async () => {
+    setRepairing(true);
+    setModelError(false);
+    setResult(null);
+    await resetFaceModelCaches();
+    try {
+      await initFaceModels();
+      toast('success', 'Model wajah berhasil diperbaiki. Silakan coba absen lagi.');
+    } catch {
+      setModelError(true);
+      toast('error', 'Gagal memperbaiki model. Periksa koneksi internet, lalu ketuk Perbaiki lagi.');
+    } finally {
+      setRepairing(false);
+    }
+  }, [toast]);
 
   // Mode otomatis: scan berulang tanpa sentuh layar, berhenti setelah berhasil
   useEffect(() => {
@@ -339,6 +382,17 @@ export default function FaceScan() {
 
       {/* Tombol scan + toggle otomatis */}
       <div className="flex items-center justify-center gap-4 bg-black py-5">
+        {modelError && (
+          <button
+            onClick={() => void repairModels()}
+            disabled={repairing}
+            className="flex items-center gap-1.5 rounded-full bg-red-500/20 px-3 py-2 text-xs font-bold text-red-300 transition disabled:opacity-50"
+            title="Unduh ulang model wajah yang korup di perangkat ini"
+          >
+            {repairing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+            Perbaiki
+          </button>
+        )}
         <button
           onClick={() => setAuto((a) => !a)}
           className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold transition ${auto ? 'bg-primary/20 text-primary' : 'bg-white/10 text-white/60'}`}
@@ -402,9 +456,15 @@ export default function FaceScan() {
               <p className="text-lg font-bold text-ink">{result.message}</p>
               <p className="mt-1 text-sm text-muted">Silakan coba lagi dengan pencahayaan yang cukup.</p>
               <div className="mt-4 flex flex-col gap-2">
-                <Button variant="outline" onClick={() => { setResult(null); navigate('/app/face-me'); }}>
-                  <RefreshCw className="h-4 w-4" /> Perbarui Data Wajah
-                </Button>
+                {result.modelError ? (
+                  <Button onClick={() => void repairModels()} disabled={repairing}>
+                    {repairing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />} Perbaiki Model Wajah
+                  </Button>
+                ) : (
+                  <Button variant="outline" onClick={() => { setResult(null); navigate('/app/face-me'); }}>
+                    <RefreshCw className="h-4 w-4" /> Perbarui Data Wajah
+                  </Button>
+                )}
                 <Button onClick={() => setResult(null)}>Coba Lagi</Button>
               </div>
             </div>

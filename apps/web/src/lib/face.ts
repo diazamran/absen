@@ -51,6 +51,29 @@ export function isFaceModelReady(): boolean {
 }
 
 /**
+ * Hapus cache model wajah di perangkat lalu izinkan init ulang.
+ * Dipakai bila model gagal dimuat — penyebab paling umum adalah file .bin
+ * yang KORUP di cache service worker (CacheFirst, tanpa pemeriksaan integritas),
+ * sehingga deteksi wajah gagal terus-menerus di satu HP padahal server normal.
+ */
+export async function resetFaceModelCaches(): Promise<void> {
+  modelsReady = false;
+  loadingPromise = null;
+  try {
+    if (typeof caches !== 'undefined') {
+      const names = await caches.keys();
+      await Promise.all(
+        names
+          .filter((n) => n.includes('face-models') || n.includes('workbox-precache'))
+          .map((n) => caches.delete(n)),
+      );
+    }
+  } catch {
+    // Cache API tidak tersedia (mis. mode privat) — biarkan init ulang tetap dicoba.
+  }
+}
+
+/**
  * Deteksi satu wajah dari video/canvas/gambar → descriptor 128-d.
  * Mengembalikan null bila wajah tidak terdeteksi dengan cukup yakin.
  */
