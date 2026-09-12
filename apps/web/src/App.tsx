@@ -89,6 +89,9 @@ export default function App() {
           </RequireAuth>
         }
       >
+        {/* Index redirect — /app → /app/home atau /app/dashboard sesuai role */}
+        <Route index element={<RootAppRedirect />} />
+
         {/* Admin */}
         <Route path="dashboard" element={<Page><AdminDashboard /></Page>} />
         <Route path="attendance" element={<Page><AttendanceList /></Page>} />
@@ -168,5 +171,18 @@ function RootRedirect() {
   const roles = user.roles || [user.roleKey];
   if (roles.includes('ADMIN') || roles.includes('SUPER_ADMIN')) return <Navigate to="/app/dashboard" replace />;
   if (roles.includes('PARENT')) return <Navigate to="/app/home" replace />;
+  return <Navigate to="/app/home" replace />;
+}
+
+// Redirect dari /app (tanpa sub-route) ke halaman yang sesuai
+function RootAppRedirect() {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  const roles = user.roles || [user.roleKey];
+  if (roles.includes('ADMIN') || roles.includes('SUPER_ADMIN')) return <Navigate to="/app/dashboard" replace />;
+  if (roles.includes('STUDENT')) return <Navigate to="/app/absent" replace />;
+  if (roles.includes('PARENT')) return <Navigate to="/app/home" replace />;
+  // TEACHER, STAFF, dll → beranda
   return <Navigate to="/app/home" replace />;
 }

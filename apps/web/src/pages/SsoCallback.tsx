@@ -41,11 +41,20 @@ export default function SsoCallback() {
     localStorage.setItem(TOKEN_KEY, access);
     localStorage.setItem(REFRESH_KEY, access);
 
+    // Tentukan halaman tujuan berdasarkan role
+    let dest: string;
+    if (role === 'STUDENT') {
+      dest = '/app/absent';       // Siswa → langsung ke halaman absensi
+    } else if (role === 'PARENT') {
+      dest = '/app/home';         // Orang tua → beranda
+    } else if (role === 'ADMIN') {
+      dest = '/app/dashboard';    // Admin → dashboard admin
+    } else {
+      dest = '/app/home';         // Guru, Staff, dll → beranda
+    }
+
     // Hard reload ke halaman tujuan agar React app mount ulang
     // sehingga AuthProvider membaca token baru dari localStorage
-    const dest = role === 'STUDENT' ? '/app/absent'
-               : role === 'PARENT'  ? '/app/home'
-               : '/app';
     window.location.replace(dest);
   }, []);
 

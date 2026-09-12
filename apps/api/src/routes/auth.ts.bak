@@ -1,9 +1,8 @@
-import crypto from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { verifyPassword, hashPassword, signToken } from '../lib/crypto.js';
-import { issueTokens, refreshTokens, logout, accessTtlSeconds } from '../services/auth.js';
+import { verifyPassword, hashPassword } from '../lib/crypto.js';
+import { issueTokens, refreshTokens, logout } from '../services/auth.js';
 import { requestOtp, verifyOtp, maskPhone } from '../services/otp.js';
 import { ApiError } from '../utils/errors.js';
 import { validate } from '../utils/validate.js';
@@ -328,140 +327,116 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // ===== SSO Callback dari SDMS =====
-  // GET /api/auth/sso-callback?token=<jwt_dari_sdms>&from=sdms
-  //
-  // Flow:
-  //   SDMS App Hub → redirect ke https://absen.smkn1kras.sch.id/sso/callback?token=xxx
-  //   → Nginx proxy /sso/callback ke /api/auth/sso-callback
-  //   → verifikasi JWT dengan SSO_SECRET (sama dengan SSO_SECRET_ABSEN di SDMS)
-  //   → cari/buat user di DB presensiku
-  //   → redirect ke /sso#access=<token>&role=<role>  (ditangani SsoCallback.tsx)
+  // GET /api/auth/sso-callback?token=<jwt_dari_sdms>
   app.get('/auth/sso-callback', async (request, reply) => {
-    const { token } = request.query as { token?: string; from?: string };
+    const { token } = request.query as { token?: string };
     const SSO_SECRET = process.env.SSO_SECRET || 'sso_secret_absen_smkn1kras_2026';
     const APP_URL    = config.appUrl;
 
-    if (!token) {
-      app.log.warn('[SSO] Request tanpa token');
-      return reply.redirect(`${APP_URL}/login?error=sso_no_token`);
-    }
+    if (!token) return reply.redirect(`${APP_URL}/login?error=sso_no_token`);
 
     try {
-      // ── 1. Verifikasi JWT dari SDMS (jsonwebtoken HS256, base64url) ──────
+      // SDMS menggunakan jsonwebtoken (HS256) — verifikasi manual
+      // jsonwebtoken menggunakan base64url untuk header & payload, HMAC-SHA256 untuk signature
       const parts = token.split('.');
       if (parts.length !== 3) throw new Error('INVALID_TOKEN');
 
+      // Verifikasi signature: HMAC-SHA256(header.payload, secret) dalam base64url
+      const crypto = await import('node:crypto');
       const signingInput = `${parts[0]}.${parts[1]}`;
-      const expectedSig  = crypto.createHmac('sha256', SSO_SECRET)
+      const expectedSig  = crypto.default
+        .createHmac('sha256', SSO_SECRET)
         .update(signingInput)
-        .digest('base64url');
+        .digest('base64url');   // jsonwebtoken juga pakai base64url
 
-      // constant-time comparison untuk cegah timing attack
-      const sigBuf = Buffer.from(parts[2]);
-      const expBuf = Buffer.from(expectedSig);
-      const sigMatch =
-        sigBuf.length === expBuf.length &&
-        crypto.timingSafeEqual(sigBuf, expBuf);
+      if (expectedSig !== parts[2]) throw new Error('INVALID_SIGNATURE');
 
-      if (!sigMatch) throw new Error('INVALID_SIGNATURE');
-
-      // ── 2. Decode & validasi payload ──────────────────────────────────────
-      const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf8');
-      const sdms = JSON.parse(payloadJson) as {
-        sub:         string;
-        username:    string;
-        full_name:   string;
-        role:        string;
-        extra_roles?: string[];
-        aud:         string;
-        iss:         string;
-        exp:         number;
+      // Decode payload
+      const payloadJson  = Buffer.from(parts[1], 'base64url').toString('utf8');
+      const sdmsPayload  = JSON.parse(payloadJson) as {
+        sub: string; username: string; full_name: string; role: string;
+        extra_roles?: string[]; aud: string; iss: string; exp: number;
       };
 
-      if (sdms.exp * 1000 < Date.now())           throw new Error('TOKEN_EXPIRED');
-      if (sdms.aud !== 'absen')                   throw new Error('INVALID_AUDIENCE');
-      if (sdms.iss !== 'sdms-core')               throw new Error('INVALID_ISSUER');
-      if (!sdms.username?.trim())                 throw new Error('INVALID_TOKEN');
+      // Cek expiry
+      if (sdmsPayload.exp * 1000 < Date.now()) throw new Error('TOKEN_EXPIRED');
 
-      // ── 3. Petakan role SDMS → role presensiku ────────────────────────────
-      const ROLE_MAP: Record<string, string> = {
+      // Cek audience & issuer
+      if (sdmsPayload.aud !== 'absen' || sdmsPayload.iss !== 'sdms-core') {
+        throw new Error('INVALID_AUDIENCE');
+      }
+
+      // Petakan role SDMS → role key di absen
+      const roleMap: Record<string, string> = {
         super_admin:    'ADMIN',
         admin:          'ADMIN',
         kepala_sekolah: 'ADMIN',
-        operator:       'STAFF',
-        pegawai:        'STAFF',
         guru:           'TEACHER',
         wali_kelas:     'TEACHER',
+        pegawai:        'STAFF',
+        operator:       'STAFF',
         petugas_piket:  'TEACHER',
-        bk:             'TEACHER',
         siswa:          'STUDENT',
       };
-      const targetRoleKey = ROLE_MAP[sdms.role?.toLowerCase()] || 'TEACHER';
+      const targetRoleKey = roleMap[sdmsPayload.role] || 'TEACHER';
 
-      // ── 4. Cari atau buat user ────────────────────────────────────────────
+      // Cari atau buat user
       let user = await prisma.user.findUnique({
-        where:   { username: sdms.username.trim() },
+        where: { username: sdmsPayload.username },
         include: { role: true },
       });
 
       if (!user) {
         const roleRow = await prisma.role.findFirst({ where: { key: targetRoleKey } });
-        if (!roleRow) throw new Error(`Role '${targetRoleKey}' tidak ditemukan di DB`);
+        if (!roleRow) throw new Error(`Role ${targetRoleKey} tidak ditemukan`);
 
+        const cryptoLib = await import('../lib/crypto.js');
+        const randomLib = await import('node:crypto');
         user = await prisma.user.create({
           data: {
-            username:     sdms.username.trim(),
-            fullName:     sdms.full_name || sdms.username,
-            passwordHash: await hashPassword(crypto.randomBytes(24).toString('hex')),
+            username:     sdmsPayload.username,
+            fullName:     sdmsPayload.full_name || sdmsPayload.username,
+            passwordHash: await cryptoLib.hashPassword(randomLib.default.randomBytes(16).toString('hex')),
             roleId:       roleRow.id,
             isActive:     true,
           },
           include: { role: true },
         });
-        app.log.info(`[SSO] ✨ User baru dibuat: ${sdms.username} (${targetRoleKey})`);
+        app.log.info(`[SSO] User baru: ${sdmsPayload.username} (${targetRoleKey})`);
       } else {
-        // Sinkronisasi nama jika berubah di SDMS
-        const updates: Record<string, unknown> = {};
-        if (sdms.full_name && sdms.full_name !== user.fullName) {
-          updates.fullName = sdms.full_name;
-        }
-        if (Object.keys(updates).length > 0) {
-          await prisma.user.update({ where: { id: user.id }, data: updates });
-          user = { ...user, ...updates } as typeof user;
+        // Update nama jika berubah di SDMS
+        if (sdmsPayload.full_name && sdmsPayload.full_name !== user.fullName) {
+          await prisma.user.update({ where: { id: user.id }, data: { fullName: sdmsPayload.full_name } });
         }
       }
 
-      if (!user.isActive) {
-        app.log.warn(`[SSO] Akun tidak aktif: ${user.username}`);
-        return reply.redirect(`${APP_URL}/login?error=sso_inactive`);
-      }
+      if (!user.isActive) return reply.redirect(`${APP_URL}/login?error=sso_inactive`);
 
-      // ── 5. Buat access token presensiku ───────────────────────────────────
-      const userRoles   = [user.role.key, ...((user.additionalRoles as string[]) || [])];
-      const accessToken = signToken(
+      // Buat access token lokal absen
+      const authLib    = await import('../services/auth.js');
+      const cryptoLib2 = await import('../lib/crypto.js');
+      const userRoles  = [user.role.key, ...((user.additionalRoles as string[]) || [])];
+      const accessToken = cryptoLib2.signToken(
         { sub: user.id, role: user.role.key, roles: userRoles, name: user.fullName, typ: 'access' },
         config.jwtSecret,
-        accessTtlSeconds(),
+        authLib.accessTtlSeconds(),
         `sso_${Date.now()}`,
       );
 
-      app.log.info(`[SSO] ✅ Login berhasil: ${user.fullName} (${user.role.key})`);
+      app.log.info(`[SSO] ✅ ${user.role.key} login via SSO: ${user.fullName}`);
 
-      // ── 6. Redirect ke SsoCallback.tsx di frontend ────────────────────────
-      // Fragment (#) tidak dikirim ke server — aman dari log server
+      // Redirect ke /sso di frontend React dengan token di URL fragment
       return reply.redirect(`${APP_URL}/sso#access=${accessToken}&role=${user.role.key}`);
 
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'UNKNOWN';
-      app.log.warn(`[SSO] ❌ Error: ${message}`);
+    } catch (err: any) {
+      app.log.warn(`[SSO] Error: ${err.message}`);
       const errMap: Record<string, string> = {
         TOKEN_EXPIRED:     'sso_expired',
         INVALID_SIGNATURE: 'sso_invalid',
         INVALID_AUDIENCE:  'sso_invalid',
-        INVALID_ISSUER:    'sso_invalid',
         INVALID_TOKEN:     'sso_invalid',
       };
-      return reply.redirect(`${APP_URL}/login?error=${errMap[message] || 'sso_error'}`);
+      return reply.redirect(`${APP_URL}/login?error=${errMap[err.message] || 'sso_error'}`);
     }
   });
 }

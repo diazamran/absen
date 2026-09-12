@@ -233,11 +233,20 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
       }
     }
     const dist = haversineMeters(input.latitude, input.longitude, refLat, refLng);
-    if (dist > refRadius) {
-      throw ApiError.badRequest('OUTSIDE_LOCATION', `Anda berada di luar area absensi ${locationLabel} (${Math.round(dist)} m dari ${locationLabel}).`);
+    // Kompensasi akurasi perangkat: HP di dalam gedung sering melaporkan akurasi 30–150 m.
+    // Jarak dibandingkan terhadap radius DITAMBAH akurasi yang dilaporkan perangkat (dibatasi
+    // maksimal +100 m) supaya siswa di area sekolah tidak ditolak hanya karena sinyal GPS
+    // dalam ruangan lemah. (Diuji juga di tests/attendance.test.ts — OUTSIDE_LOCATION tetap
+    // ditolak bila benar-benar jauh dari lokasi.)
+    const accuracyAllowance = input.accuracy !== undefined ? Math.min(Math.max(0, input.accuracy), 100) : 0;
+    const effectiveRadius = refRadius + accuracyAllowance;
+    if (dist > effectiveRadius) {
+      throw ApiError.badRequest('OUTSIDE_LOCATION', `Anda berada di luar area absensi ${locationLabel} (${Math.round(dist)} m dari ${locationLabel}). Coba dekati ${locationLabel} lalu absen lagi.`);
     }
-    if (input.accuracy !== undefined && input.accuracy > 200) {
-      throw ApiError.badRequest('LOCATION_INACCURATE', 'Lokasi belum akurat. Aktifkan GPS dan tunggu beberapa detik.');
+    // Akurasi sangat buruk (>1 km) hampir pasti lokasi palsu/tidak berguna → tolak.
+    // Sebelumnya batas 200 m menolak banyak fix indoor yang sah.
+    if (input.accuracy !== undefined && input.accuracy > 1000) {
+      throw ApiError.badRequest('LOCATION_INACCURATE', 'Sinyal GPS terlalu lemah untuk memverifikasi lokasi. Dekati jendela atau area terbuka, tunggu beberapa detik, lalu coba lagi.');
     }
     locationVerified = true;
   }

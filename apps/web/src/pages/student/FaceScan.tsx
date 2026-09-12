@@ -6,7 +6,7 @@ import { useToast } from '../../lib/toast';
 import { useAuth } from '../../lib/auth';
 import { startCamera, stopCamera, captureFrame } from '../../lib/camera';
 import { detectFaceDescriptor, framesHaveMotion, initFaceModels, isFaceModelReady } from '../../lib/face';
-import { getCurrentPosition } from '../../lib/geo';
+import { getBestEffortPosition, invalidateGpsCache, warmUpGps } from '../../lib/geo';
 import { feedbackSuccess, feedbackInfo, feedbackError } from '../../lib/feedback';
 import { Segmented, Badge, Button } from '../../lib/ui';
 import { STATUS_LABELS } from '../../lib/format';
@@ -42,6 +42,7 @@ export default function FaceScan() {
   const [scanning, setScanning] = useState(false);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsError, setGpsError] = useState('');
   const [result, setResult] = useState<ScanResult | null>(null);
   const [hint, setHint] = useState('');
   const [rules, setRules] = useState<Record<string, unknown> | null>(null);
@@ -74,6 +75,9 @@ export default function FaceScan() {
     initFaceModels().catch(() => {
       // tidak fatal; runScan akan mencoba lagi
     });
+    // Panaskan GPS lebih awal supaya scan pertama tidak menunggu cold start —
+    // sekaligus memicu dialog izin lokasi SEBELUM siswa mulai absen.
+    void warmUpGps();
     // Muat aturan absensi untuk tentukan tab mana yang aktif
     fetch('/api/settings/public')
       .then((r) => r.json())
@@ -146,18 +150,25 @@ export default function FaceScan() {
           return;
         }
 
-        // Ambil GPS sebelum kirim — diperlukan bila pengaturan lokasi aktif
+        // Ambil GPS — best-effort: satu-satunya kegagalan total adalah izin ditolak.
+        // Jika pengaturan lokasi TIDAK aktif, absen tetap jalan meski GPS gagal.
         setGpsLoading(true);
-        const gps = await getCurrentPosition();
+        const geo = await getBestEffortPosition();
         setGpsLoading(false);
-        if (!gps) {
-          if (manual) {
-            setResult({ ok: false, message: 'GPS tidak aktif. Aktifkan GPS di HP Anda lalu coba lagi.' });
-          } else {
-            setHint('GPS belum aktif — Aktifkan GPS di HP');
+        setGpsError(geo.position ? '' : geo.message);
+        if (!geo.position) {
+          const locationRequired = rules ? rules.locationEnabled === true : true;
+          if (locationRequired) {
+            if (manual) {
+              setResult({ ok: false, message: geo.message });
+              feedbackError();
+            } else {
+              setHint('GPS belum siap — aktifkan Lokasi di HP');
+            }
+            return;
           }
-          return;
         }
+        const gps = geo.position;
 
         const res = await api<{
           success: boolean;
@@ -194,9 +205,14 @@ export default function FaceScan() {
           setResult({ ok: false, message: 'Wajah tidak dikenali. Coba lagi.' });
           feedbackInfo();
         } else if (e instanceof ApiError && (e.code === 'LOCATION_REQUIRED' || e.code === 'LOCATION_INACCURATE')) {
+          // Lokasi ditolak server → buang cache GPS supaya fix berikutnya segar
+          invalidateGpsCache();
+          void warmUpGps();
           setResult({ ok: false, message: e.message });
           feedbackError();
         } else if (e instanceof ApiError && e.code === 'OUTSIDE_LOCATION') {
+          invalidateGpsCache();
+          void warmUpGps();
           setResult({ ok: false, message: e.message });
           feedbackError();
         } else {
@@ -213,7 +229,7 @@ export default function FaceScan() {
         }
       }
     },
-    [type, toast],
+    [type, toast, rules],
   );
 
   // Mode otomatis: scan berulang tanpa sentuh layar, berhenti setelah berhasil
@@ -299,6 +315,8 @@ export default function FaceScan() {
             <p className="absolute inset-x-0 bottom-4 px-4 text-center text-sm text-white/90">
               {hint ? (
                 <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-amber-300">{hint}</span>
+              ) : gpsError ? (
+                <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-red-300">📍 {gpsError}</span>
               ) : !canCheckIn && type === 'CHECK_IN' ? (
                 <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-amber-300">Absen datang sudah ditutup. Tunggu waktu absen pulang.</span>
               ) : !canCheckOut && type === 'CHECK_OUT' ? (

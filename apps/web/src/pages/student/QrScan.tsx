@@ -6,7 +6,7 @@ import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
 import { startCamera, stopCamera, decodeQrFromVideo } from '../../lib/camera';
-import { getCurrentPosition } from '../../lib/geo';
+import { getBestEffortPosition, warmUpGps } from '../../lib/geo';
 import { Segmented, Badge } from '../../lib/ui';
 import { STATUS_LABELS } from '../../lib/format';
 
@@ -28,6 +28,7 @@ export default function QrScan() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [myQr, setMyQr] = useState('');
+  const [rules, setRules] = useState<Record<string, unknown> | null>(null);
   const [result, setResult] = useState<{ ok: boolean; already?: boolean; message: string; fullName?: string; className?: string; time?: string; status?: string } | null>(null);
 
   useEffect(() => {
@@ -47,6 +48,15 @@ export default function QrScan() {
       stopCamera(streamRef.current);
     };
   }, [mode]);
+
+  // Panaskan GPS di awal + muat aturan absensi (lokasi hanya wajib bila diaktifkan sekolah)
+  useEffect(() => {
+    void warmUpGps();
+    fetch('/api/settings/public')
+      .then((r) => r.json())
+      .then((d) => setRules(d?.data?.rules ?? null))
+      .catch(() => {});
+  }, []);
 
   // Muat QR sendiri (untuk mode show / ditunjukkan ke gerbang)
   useEffect(() => {
@@ -74,8 +84,15 @@ export default function QrScan() {
           if (token) {
             busyRef.current = true;
             try {
-              // Ambil GPS sebelum kirim — diperlukan bila pengaturan lokasi aktif
-              const gps = await getCurrentPosition();
+              // GPS best-effort — hanya wajib bila pengaturan lokasi sekolah aktif.
+              const locationRequired = rules ? rules.locationEnabled === true : true;
+              const geo = locationRequired ? await getBestEffortPosition() : { position: null, code: null, message: '' };
+              const gps = geo.position;
+              if (locationRequired && !gps) {
+                setResult({ ok: false, message: geo.message || 'GPS tidak aktif. Aktifkan Lokasi di HP lalu coba lagi.' });
+                setTimeout(loop, 1200);
+                return;
+              }
               const res = await api<{ success: boolean; message: string; data: { fullName: string; className: string; time: string; status: string; alreadyExists?: boolean } }>('/attendance/qr', {
                 method: 'POST',
                 body: {
@@ -111,7 +128,7 @@ export default function QrScan() {
     return () => {
       alive = false;
     };
-  }, [ready, type, mode]);
+  }, [ready, type, mode, rules]);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black">

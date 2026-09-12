@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Camera, QrCode, CreditCard, ListChecks, ScanFace, Clock, RefreshCw } from 'lucide-react';
+import { Camera, QrCode, CreditCard, ListChecks, ScanFace, Clock, RefreshCw, MapPin } from 'lucide-react';
 import { Card, Button } from '../../lib/ui';
 import { useAuth } from '../../lib/auth';
 import { api } from '../../lib/api';
+import { warmUpGps } from '../../lib/geo';
 
 const METHODS = [
   { key: 'face', label: 'Absen Wajah', desc: 'Kamera depan + deteksi liveness', icon: <Camera className="h-7 w-7" />, to: '/app/absent/face', color: 'from-teal-500 to-emerald-500' },
@@ -31,6 +33,30 @@ export default function Absent() {
     queryFn: () => api<{ success: boolean; data: { registered: boolean; pending: boolean } }>(`/face/status/${user!.id}`).then((r) => r.data),
     enabled: isStudent,
   });
+
+  // Pra-pemeriksaan GPS: panaskan fix lebih awal & peringatkan siswa bila lokasi wajib
+  // namun belum siap — masalah izin lokasi ketahuan SEBELUM jam absen, bukan saat absen gagal.
+  const [gpsReady, setGpsReady] = useState<boolean | null>(null);
+  const [rules, setRules] = useState<Record<string, unknown> | null>(null);
+  useEffect(() => {
+    if (!isStudent) return;
+    let alive = true;
+    fetch('/api/settings/public')
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive) return;
+        const rls = (d?.data?.rules ?? null) as Record<string, unknown> | null;
+        setRules(rls);
+        // Panaskan GPS hanya bila sekolah mewajibkan lokasi — jangan buang izin pengguna.
+        if (rls?.locationEnabled === true) return warmUpGps().then((ok) => setGpsReady(ok));
+        return undefined;
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [isStudent]);
+  const locationRequired = rules ? rules.locationEnabled === true : false;
 
   return (
     <div className="space-y-5">
@@ -80,6 +106,21 @@ export default function Absent() {
               <p className="text-xs text-muted">Registrasi wajahmu sedang diproses oleh admin / TU.</p>
             </div>
             <Button variant="outline" onClick={() => navigate('/app/face-me')} className="shrink-0">Cek Status</Button>
+          </div>
+        </Card>
+      )}
+
+      {isStudent && locationRequired && gpsReady === false && (
+        <Card className="border-red-200 bg-red-50/60 dark:bg-red-500/10">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-100 text-red-600">
+              <MapPin className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-ink">Lokasi (GPS) belum aktif</p>
+              <p className="text-xs text-muted">Sekolah mewajibkan absen berbasis lokasi. Aktifkan izin Lokasi di pengaturan HP/browser ini sebelum absen.</p>
+            </div>
+            <Button variant="outline" onClick={() => { setGpsReady(null); warmUpGps().then(setGpsReady); }} className="shrink-0">Cek Lagi</Button>
           </div>
         </Card>
       )}

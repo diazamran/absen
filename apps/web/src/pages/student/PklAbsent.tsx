@@ -7,6 +7,7 @@ import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Badge } from '../../lib/ui';
 import { detectFaceDescriptor, initFaceModels, isFaceModelReady } from '../../lib/face';
+import { getBestEffortPosition, warmUpGps } from '../../lib/geo';
 import { feedbackSuccess, feedbackError } from '../../lib/feedback';
 import { STATUS_LABELS } from '../../lib/format';
 
@@ -70,22 +71,13 @@ export default function PklAbsent() {
 
   const assignment = assignments?.[0];
 
-  // Get GPS position
-  const getGeo = useCallback((): Promise<GeoPos | null> => {
-    return new Promise((resolve) => {
-      if (!navigator.geolocation) { resolve(null); return; }
-      setGeoLoading(true);
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const g = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy };
-          setGeo(g);
-          setGeoLoading(false);
-          resolve(g);
-        },
-        () => { setGeoLoading(false); resolve(null); },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
-      );
-    });
+  // Get GPS position — best-effort via modul geo bersama (fallback akurasi + cache)
+  const getGeo = useCallback(async (): Promise<GeoPos | null> => {
+    setGeoLoading(true);
+    const res = await getBestEffortPosition();
+    setGeoLoading(false);
+    setGeo(res.position);
+    return res.position;
   }, []);
 
   // Start camera
@@ -95,6 +87,7 @@ export default function PklAbsent() {
       try {
         setModelsLoading(true);
         initFaceModels().catch(() => {});
+        void warmUpGps();
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
         streamRef.current = stream;
         if (videoRef.current) {

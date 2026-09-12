@@ -176,6 +176,75 @@ describe('Mesin Absensi', () => {
     expect(rules.earlyLeaveBeforeMinute).toBe(rules.checkOutAfterMinute);
   });
 
+  it('validasi GPS: akurasi indoor dikompensasi, di luar radius & tanpa lokasi ditolak', async () => {
+    // Aktifkan wajib lokasi dengan radius 100 m
+    await prisma.schoolSetting.upsert({
+      where: { key: 'attendanceRules' },
+      update: { value: { locationEnabled: true, radiusMeters: 100 } },
+      create: { key: 'attendanceRules', value: { locationEnabled: true, radiusMeters: 100 } },
+    });
+    const { invalidateRulesCache } = await import('../src/services/settings.js');
+    invalidateRulesCache();
+    const role = await prisma.role.findUnique({ where: { key: 'STUDENT' } });
+    const user = await prisma.user.create({
+      data: { username: 'siswa_gps', passwordHash: await (await import('../src/lib/crypto.js')).hashPassword('siswa123'), fullName: 'Siswa GPS', roleId: role!.id },
+    });
+    await prisma.student.create({ data: { userId: user.id, nis: '999004' } });
+    const { recordAttendance } = await import('../src/services/attendance.js');
+
+    try {
+      // 1) Tanpa koordinat sama sekali → LOCATION_REQUIRED
+      await expect(
+        recordAttendance({
+          actor: { id: user.id, roleKey: 'STUDENT', request: { ip: '127.0.0.1' } as never },
+          type: 'CHECK_IN',
+          method: 'QR',
+          proof: { token: await issueQrToken(user.id, 'dynamic') },
+        }),
+      ).rejects.toMatchObject({ code: 'LOCATION_REQUIRED' });
+
+      // 2) Di area sekolah tapi akurasi indoor 60 m & titik geser ±140 m → DITERIMA
+      //    (jarak 140 m ≤ radius 100 m + toleransi akurasi 60 m)
+      const ok = await recordAttendance({
+        actor: { id: user.id, roleKey: 'STUDENT', request: { ip: '127.0.0.1' } as never },
+        type: 'CHECK_IN',
+        method: 'QR',
+        proof: { token: await issueQrToken(user.id, 'dynamic') },
+        latitude: -6.2088 + 0.00126, // ≈ 140 m dari titik sekolah
+        longitude: 106.8456,
+        accuracy: 60,
+      });
+      expect(ok.attendance.locationVerified).toBe(true);
+    } finally {
+      await prisma.schoolSetting.delete({ where: { key: 'attendanceRules' } }).catch(() => {});
+      invalidateRulesCache();
+    }
+
+    // 3) Jauh dari sekolah dengan lokasi TIDAK wajib → tetap berhasil (koordinat hanya dicatat).
+    //    Pulang-awal dinonaktifkan (batas 00:00) supaya tes tidak tergantung jam saat dijalankan.
+    await prisma.schoolSetting.upsert({
+      where: { key: 'attendanceRules' },
+      update: { value: { locationEnabled: false, earlyLeaveBeforeHour: 0, earlyLeaveBeforeMinute: 0 } },
+      create: { key: 'attendanceRules', value: { locationEnabled: false, earlyLeaveBeforeHour: 0, earlyLeaveBeforeMinute: 0 } },
+    });
+    invalidateRulesCache();
+    try {
+      const far = await recordAttendance({
+        actor: { id: user.id, roleKey: 'STUDENT', request: { ip: '127.0.0.1' } as never },
+        type: 'CHECK_OUT',
+        method: 'QR',
+        proof: { token: await issueQrToken(user.id, 'dynamic') },
+        latitude: -6.2288,
+        longitude: 106.8456,
+        accuracy: 30,
+      });
+      expect(far.attendance.locationVerified).toBe(false);
+    } finally {
+      await prisma.schoolSetting.delete({ where: { key: 'attendanceRules' } }).catch(() => {});
+      invalidateRulesCache();
+    }
+  }, 30_000);
+
   it('koreksi absen via PATCH mengubah status catatan yang sudah ada + audit log', async () => {
     // siswa sudah punya check-in dari tes pertama → ambil id-nya
     const existing = await prisma.attendance.findFirst({
