@@ -42,7 +42,7 @@ export async function qrRoutes(app: FastifyInstance) {
     if (actor?.role.key === 'HOMEROOM_TEACHER') {
       const myClass = actor.teacher
         ? await prisma.class.findFirst({
-            where: { homeroomTeacherId: actor.teacher.id, isActive: true, academicYear: { isActive: true } },
+            where: { homeroomTeacherId: actor.teacher.id, isActive: true },
             select: { id: true },
           })
         : null;

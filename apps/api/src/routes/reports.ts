@@ -29,7 +29,7 @@ async function scopedClassId(request: FastifyRequest, requested?: string): Promi
   if (user?.role.key !== 'HOMEROOM_TEACHER') return requested || undefined;
   const myClass = user.teacher
     ? await prisma.class.findFirst({
-        where: { homeroomTeacherId: user.teacher.id, isActive: true, academicYear: { isActive: true } },
+        where: { homeroomTeacherId: user.teacher.id, isActive: true },
         select: { id: true },
       })
     : null;
@@ -62,7 +62,7 @@ async function checkOutMap(
 /** Rekap per kelas: total siswa, hadir, terlambat, izin/sakit, dan tidak hadir pada rentang tanggal. */
 async function classRecap(start: Date, end: Date) {
   const classes = await prisma.class.findMany({
-    where: { isActive: true, academicYear: { isActive: true } },
+    where: { isActive: true },
     include: { students: { where: { isActive: true }, select: { id: true } } },
     orderBy: { name: 'asc' },
   });

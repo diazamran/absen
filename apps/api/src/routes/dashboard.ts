@@ -62,7 +62,7 @@ async function schoolStats(dayStart: Date, dayEnd: Date) {
   });
 
   const classCounts = await prisma.class.findMany({
-    where: { isActive: true, academicYear: { isActive: true } },
+    where: { isActive: true },
     select: {
       id: true,
       name: true,
@@ -216,7 +216,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
       case hasRole('HOMEROOM_TEACHER') && !hasRole('ADMIN') && !hasRole('SUPER_ADMIN'): {
         const teacher = await prisma.teacher.findUnique({ where: { userId } });
         const myClass = teacher ? await prisma.class.findFirst({
-          where: { homeroomTeacherId: teacher.id, isActive: true, academicYear: { isActive: true } },
+          where: { homeroomTeacherId: teacher.id, isActive: true },
           include: { students: { where: { isActive: true }, include: { user: true } } },
         }) : null;
 

@@ -493,7 +493,7 @@ async function assertCanManageAttendance(request: FastifyRequest, studentClassId
   if (!actorRoles.includes('HOMEROOM_TEACHER')) return;
   const myClass = actor.teacher
     ? await prisma.class.findFirst({
-        where: { homeroomTeacherId: actor.teacher.id, isActive: true, academicYear: { isActive: true } },
+        where: { homeroomTeacherId: actor.teacher.id, isActive: true },
         select: { id: true },
       })
     : null;

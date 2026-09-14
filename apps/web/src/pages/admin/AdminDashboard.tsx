@@ -155,6 +155,11 @@ export default function AdminDashboard() {
           <Segmented value={period} onChange={setPeriod} options={[{ value: 'today', label: 'Hari Ini' }, { value: 'class', label: 'Kelas' }]} />
         </div>
         <p className="mb-3 text-xs text-muted">Klik kartu kelas untuk membuka detail absensi.</p>
+        {data.classes.length === 0 && (
+          <p className="mb-3 rounded-xl border border-dashed border-line p-4 text-sm text-muted">
+            Belum ada kelas aktif. Tambahkan kelas & siswa lewat menu <b className="text-ink">Data Sekolah → Kelas</b>, lalu muat ulang halaman ini.
+          </p>
+        )}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data.classes.map((c) => {
             const pct = c.total ? Math.round((c.present / c.total) * 100) : 0;
