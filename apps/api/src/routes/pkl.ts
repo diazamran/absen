@@ -5,7 +5,8 @@ import { validate } from '../utils/validate.js';
 import { ApiError } from '../utils/errors.js';
 import { audit } from '../lib/audit.js';
 import { PERMISSION_KEYS } from '../rbac/permissions.js';
-import { localTime, todayStart, todayEnd, dateKey, monthRange, currentMonthKey } from '../lib/time.js';
+import { localTime, todayStart, todayEnd, dateKey, monthRange, currentMonthKey, localMinutesOf } from '../lib/time.js';
+import { getAttendanceRules } from '../services/settings.js';
 
 const locationSchema = z.object({
   name: z.string().min(1),
@@ -270,6 +271,16 @@ export async function pklRoutes(app: FastifyInstance) {
     const today = todayStart();
     const todayKey = today.toISOString().slice(0, 10);
 
+    // ===== Jadwal PKL (aturan khusus PKL; yang kosong mengikuti jam sekolah) =====
+    const rules = await getAttendanceRules();
+    const nowMinutes = localMinutesOf(new Date());
+    const lateH = rules.pklLateAfterHour ?? rules.lateAfterHour;
+    const lateM = rules.pklLateAfterHour !== null ? (rules.pklLateAfterMinute ?? 0) : rules.lateAfterMinute;
+    const inDeadlineH = rules.pklCheckInDeadlineHour ?? rules.checkInDeadlineHour;
+    const inDeadlineM = rules.pklCheckInDeadlineHour !== null ? (rules.pklCheckInDeadlineMinute ?? 0) : rules.checkInDeadlineMinute;
+    const earlyH = rules.pklEarlyLeaveBeforeHour ?? rules.earlyLeaveBeforeHour;
+    const earlyM = rules.pklEarlyLeaveBeforeHour !== null ? (rules.pklEarlyLeaveBeforeMinute ?? 0) : rules.earlyLeaveBeforeMinute;
+
     if (body.type === 'CHECK_IN') {
       // Cek apakah sudah ada check-in hari ini
       const existing = await prisma.attendance.findFirst({
@@ -279,16 +290,35 @@ export async function pklRoutes(app: FastifyInstance) {
         return reply.send({ success: true, message: 'Sudah absen PKL hari ini.', data: { id: existing.id, alreadyExists: true } });
       }
 
-      const status = locationVerified ? 'PRESENT' : 'ABSENT';
+      // Batas akhir absen datang PKL — setelah jam ini perlu koreksi petugas
+      const deadlineMinutes = inDeadlineH * 60 + inDeadlineM;
+      if (deadlineMinutes < 23 * 60 + 59 && nowMinutes > deadlineMinutes) {
+        throw ApiError.badRequest(
+          'CHECK_IN_CLOSED',
+          `Absen datang PKL sudah ditutup pukul ${String(inDeadlineH).padStart(2, '0')}:${String(inDeadlineM).padStart(2, '0')} (jadwal PKL). Hubungi guru pembimbing/admin untuk koreksi.`,
+        );
+      }
+
+      // Terlambat menurut batas terlambat PKL (bukan jam sekolah)
+      const pad2n = (n: number) => String(n).padStart(2, '0');
+      const lateThreshold = new Date(`${todayKey}T${pad2n(lateH)}:${pad2n(lateM)}:00+07:00`);
+      const nowDt = new Date();
+      const isLate = nowDt.getTime() > lateThreshold.getTime();
+      const lateMinutes = isLate ? Math.max(1, Math.round((nowDt.getTime() - lateThreshold.getTime()) / 60000)) : 0;
+
+      // GPS gagal/radius tidak cocok tetap mencatat kehadiran — status ke Lokasi terlihat
+      // di laporan; menandai ABSENT hanya karena GPS membuat laporan rancu.
+      const status = isLate ? 'LATE' : 'PRESENT';
       const att = await prisma.attendance.create({
         data: {
           userId: student.userId,
           studentId: student.id,
           date: today,
           type: 'CHECK_IN',
-          checkIn: new Date(),
+          checkIn: nowDt,
           status: status as never,
           method: body.method as never,
+          lateMinutes,
           pklLocationId: body.pklLocationId,
           latitude: body.latitude,
           longitude: body.longitude,
@@ -316,11 +346,25 @@ export async function pklRoutes(app: FastifyInstance) {
       });
       if (!existing) throw ApiError.badRequest('NOT_CHECKED_IN', 'Belum absen PKL hari ini.');
 
+      // Absen pulang PKL baru bisa dilakukan mulai jam "Pulang Awal PKL" —
+      // jadwal PKL berbeda dari sekolah, jadi tidak ikut blok sekolah.
+      const batasPulang = earlyH * 60 + earlyM;
+      if (nowMinutes < batasPulang) {
+        throw ApiError.badRequest(
+          'CHECK_OUT_NOT_OPEN',
+          `Absen pulang PKL baru bisa dilakukan mulai pukul ${String(earlyH).padStart(2, '0')}:${String(earlyM).padStart(2, '0')} (jadwal PKL).`,
+        );
+      }
+
+      const outH = rules.pklCheckOutAfterHour ?? rules.checkOutAfterHour;
+      const outM = rules.pklCheckOutAfterHour !== null ? (rules.pklCheckOutAfterMinute ?? 0) : rules.checkOutAfterMinute;
+      const pulangAwal = nowMinutes < outH * 60 + outM;
+
       const att = await prisma.attendance.update({
         where: { id: existing.id },
         data: {
           checkOut: new Date(),
-          earlyLeave: false,
+          earlyLeave: pulangAwal,
         },
       });
 
@@ -560,6 +604,9 @@ export async function pklRoutes(app: FastifyInstance) {
         rows: assignments.map((a) => {
           const att = a.student?.attendance[0];
           const out = outsByStudent.get(a.studentId);
+          // Dua jalur pulang: alur utama membuat catatan CHECK_OUT terpisah (out),
+          // sedangkan /pkl/attendance menulis checkOut di baris CHECK_IN (att).
+          const outTime = out?.checkOut ?? att?.checkOut ?? null;
           return {
             studentId: a.studentId,
             fullName: a.student?.user?.fullName ?? '-',
@@ -568,8 +615,8 @@ export async function pklRoutes(app: FastifyInstance) {
             locationName: a.pklLocation.name,
             supervisorName: a.supervisor?.user?.fullName ?? null,
             checkIn: att?.checkIn ? localTime(att.checkIn) : null,
-            checkOut: out?.checkOut ? localTime(out.checkOut) : null,
-            earlyLeave: out?.earlyLeave ?? false,
+            checkOut: outTime ? localTime(outTime) : null,
+            earlyLeave: out?.earlyLeave ?? att?.earlyLeave ?? false,
             status: att?.status ?? 'ABSENT',
             method: att?.method ?? null,
             lateMinutes: att?.lateMinutes ?? 0,

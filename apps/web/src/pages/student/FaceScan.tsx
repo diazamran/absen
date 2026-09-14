@@ -30,6 +30,8 @@ export default function FaceScan() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
+  // Siswa PKL memakai jadwal kerja PKL (bisa dibeda-bedakan admin di Pengaturan)
+  const isPklStudent = !!user?.student?.pklActive;
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const runningRef = useRef(false);
@@ -121,12 +123,15 @@ export default function FaceScan() {
   const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
   void nowTick;
   const canCheckIn = rules
-    ? nowMinutes <= (num(rules.checkInDeadlineHour, 23) * 60 + num(rules.checkInDeadlineMinute, 59))
+    ? nowMinutes <= (num(isPklStudent && rules.pklCheckInDeadlineHour != null ? rules.pklCheckInDeadlineHour : rules.checkInDeadlineHour, 23) * 60 +
+        num(isPklStudent && rules.pklCheckInDeadlineHour != null ? rules.pklCheckInDeadlineMinute : rules.checkInDeadlineMinute, 59))
     : true;
-  const pulangAwalMinutes = (num(rules?.earlyLeaveBeforeHour ?? rules?.checkOutAfterHour, 15)) * 60 + (num(rules?.earlyLeaveBeforeMinute ?? rules?.checkOutAfterMinute, 0));
+  const earlyH = num(isPklStudent && rules?.pklEarlyLeaveBeforeHour != null ? rules.pklEarlyLeaveBeforeHour : rules?.earlyLeaveBeforeHour ?? rules?.checkOutAfterHour, 15);
+  const earlyM = num(isPklStudent && rules?.pklEarlyLeaveBeforeHour != null ? rules.pklEarlyLeaveBeforeMinute : rules?.earlyLeaveBeforeMinute ?? rules?.checkOutAfterMinute, 0);
+  const pulangAwalMinutes = earlyH * 60 + earlyM;
   const canCheckOut = rules ? nowMinutes >= pulangAwalMinutes : true;
   const pad2 = (n: number) => String(n).padStart(2, '0');
-  const pulangOpenLabel = `${pad2(num(rules?.earlyLeaveBeforeHour ?? rules?.checkOutAfterHour, 15))}:${pad2(num(rules?.earlyLeaveBeforeMinute ?? rules?.checkOutAfterMinute, 0))}`;
+  const pulangOpenLabel = `${pad2(earlyH)}:${pad2(earlyM)}`;
 
   // Jika tab aktif tidak tersedia, pindah ke tab yang tersedia
   useEffect(() => {

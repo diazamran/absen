@@ -163,13 +163,39 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   }
   const nowMinutes = localMinutesOf(now);
 
+  // ===== Jadwal khusus PKL =====
+  // Siswa dengan penugasan PKL aktif dinilai dengan jam kerja PKL (bisa beda dari jam
+  // sekolah biasa) supaya tidak rancu. Nilai jadwal PKL yang tidak diisi di Pengaturan
+  // otomatis mengikuti jadwal sekolah.
+  const pklActive = await prisma.pklAssignment.findFirst({
+    where: { isActive: true, student: { userId: targetUserId } },
+    select: { id: true },
+  });
+  const isPklStudent = !!pklActive;
+  const lateRule =
+    isPklStudent && rules.pklLateAfterHour !== null
+      ? { h: rules.pklLateAfterHour, m: rules.pklLateAfterMinute ?? 0 }
+      : { h: rules.lateAfterHour, m: rules.lateAfterMinute };
+  const checkInDeadlineRule =
+    isPklStudent && rules.pklCheckInDeadlineHour !== null
+      ? { h: rules.pklCheckInDeadlineHour, m: rules.pklCheckInDeadlineMinute ?? 0 }
+      : { h: rules.checkInDeadlineHour, m: rules.checkInDeadlineMinute };
+  const earlyLeaveRule =
+    isPklStudent && rules.pklEarlyLeaveBeforeHour !== null
+      ? { h: rules.pklEarlyLeaveBeforeHour, m: rules.pklEarlyLeaveBeforeMinute ?? 0 }
+      : { h: rules.earlyLeaveBeforeHour, m: rules.earlyLeaveBeforeMinute };
+  const checkOutAfterRule =
+    isPklStudent && rules.pklCheckOutAfterHour !== null
+      ? { h: rules.pklCheckOutAfterHour, m: rules.pklCheckOutAfterMinute ?? 0 }
+      : { h: rules.checkOutAfterHour, m: rules.checkOutAfterMinute };
+
   // ===== Blokir CHECK_IN setelah batas akhir datang =====
   if (type === 'CHECK_IN') {
-    const deadlineMinutes = rules.checkInDeadlineHour * 60 + rules.checkInDeadlineMinute;
+    const deadlineMinutes = checkInDeadlineRule.h * 60 + checkInDeadlineRule.m;
     if (deadlineMinutes < 23 * 60 + 59 && nowMinutes > deadlineMinutes) {
       throw ApiError.badRequest(
         'CHECK_IN_CLOSED',
-        `Absen datang sudah ditutup pukul ${String(rules.checkInDeadlineHour).padStart(2, '0')}:${String(rules.checkInDeadlineMinute).padStart(2, '0')}. Hubungi petugas piket/administrator untuk koreksi.`,
+        `Absen datang sudah ditutup pukul ${String(checkInDeadlineRule.h).padStart(2, '0')}:${String(checkInDeadlineRule.m).padStart(2, '0')}${isPklStudent ? ' (jadwal PKL)' : ''}. Hubungi petugas piket/administrator untuk koreksi.`,
       );
     }
   }
@@ -182,15 +208,15 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
       throw ApiError.badRequest('NO_CHECK_IN', 'Absensi pulang hanya bisa dilakukan setelah absensi datang.');
     }
     // ===== Blokir CHECK_OUT sebelum jam "Mulai dihitung Pulang Awal" =====
-    const batasPulangAwal = rules.earlyLeaveBeforeHour * 60 + rules.earlyLeaveBeforeMinute;
+    const batasPulangAwal = earlyLeaveRule.h * 60 + earlyLeaveRule.m;
     if (nowMinutes < batasPulangAwal) {
       throw ApiError.badRequest(
         'CHECK_OUT_NOT_OPEN',
-        `Absen pulang baru bisa dilakukan mulai pukul ${String(rules.earlyLeaveBeforeHour).padStart(2, '0')}:${String(rules.earlyLeaveBeforeMinute).padStart(2, '0')}.`,
+        `Absen pulang baru bisa dilakukan mulai pukul ${String(earlyLeaveRule.h).padStart(2, '0')}:${String(earlyLeaveRule.m).padStart(2, '0')}${isPklStudent ? ' (jadwal PKL)' : ''}.`,
       );
     }
     // Pulang setelah jam pulang sekolah tapi sebelum batas → ditandai "pulang awal"
-    const batasPulangSekolah = rules.checkOutAfterHour * 60 + rules.checkOutAfterMinute;
+    const batasPulangSekolah = checkOutAfterRule.h * 60 + checkOutAfterRule.m;
     if (nowMinutes < batasPulangSekolah) {
       earlyLeave = true;
     }
@@ -357,18 +383,19 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   let lateMinutes = 0;
   if (type === 'CHECK_IN') {
     const pad = (n: number) => String(n).padStart(2, '0');
-    const threshold = localTimeToUtc(today, `${pad(rules.lateAfterHour)}:${pad(rules.lateAfterMinute)}`);
+    // Siswa PKL dinilai terlambat menurut batas terlambat PKL (bila diatur terpisah)
+    const threshold = localTimeToUtc(today, `${pad(lateRule.h)}:${pad(lateRule.m)}`);
     if (now.getTime() > threshold.getTime()) {
       status = 'LATE';
       lateMinutes = Math.max(1, Math.round((now.getTime() - threshold.getTime()) / 60000));
     }
     // Batas akhir absen datang — setelah jam ini siswa tidak bisa absen datang sendiri
     // (dianggap tidak hadir; koreksi manual oleh admin/piket/wali kelas tetap bisa)
-    const deadline = localTimeToUtc(today, `${pad(rules.checkInDeadlineHour)}:${pad(rules.checkInDeadlineMinute)}`);
+    const deadline = localTimeToUtc(today, `${pad(checkInDeadlineRule.h)}:${pad(checkInDeadlineRule.m)}`);
     if (now.getTime() > deadline.getTime()) {
       throw ApiError.badRequest(
         'CHECK_IN_DEADLINE_PASSED',
-        `Absen datang sudah ditutup pukul ${pad(rules.checkInDeadlineHour)}:${pad(rules.checkInDeadlineMinute)}. Hubungi petugas piket/administrator untuk koreksi.`,
+        `Absen datang sudah ditutup pukul ${pad(checkInDeadlineRule.h)}:${pad(checkInDeadlineRule.m)}${isPklStudent ? ' (jadwal PKL)' : ''}. Hubungi petugas piket/administrator untuk koreksi.`,
       );
     }
   } else {

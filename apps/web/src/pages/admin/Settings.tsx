@@ -44,6 +44,10 @@ export default function Settings() {
   const setR = (k: string, v: unknown) => setRules((prev) => ({ ...(prev ?? (settings?.attendanceRules as Record<string, unknown>) ?? {}), [k]: v }));
   const setS = (k: string, v: unknown) => setSchool((prev) => ({ ...(prev ?? (settings?.school as Record<string, unknown>) ?? {}), [k]: v }));
 
+  // Jadwal khusus PKL aktif bila salah satu jam PKL pernah diisi
+  const PKL_HOUR_KEYS = ['pklLateAfterHour', 'pklCheckInDeadlineHour', 'pklCheckOutAfterHour', 'pklEarlyLeaveBeforeHour'];
+  const pklScheduleOn = PKL_HOUR_KEYS.some((k) => r[k] !== undefined && r[k] !== null && r[k] !== '');
+
   const uploadLogo = async (file: File) => {
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       toast('error', 'Format logo harus JPG, PNG, atau WEBP.');
@@ -237,6 +241,49 @@ export default function Settings() {
               Cara ambil koordinat: buka Google Maps → klik kanan lokasi sekolah → salin angka dari kotak pencarian (contoh: <code>-7.965900, 111.992600</code>).
               Jika diaktifkan, siswa hanya bisa absen dalam radius ini dari titik sekolah.
             </p>
+          </div>
+
+          {/* Jadwal khusus PKL — jam kerja siswa PKL berbeda dari sekolah biasa */}
+          <div className="mt-4 rounded-2xl border border-line/70 bg-slate-50/60 p-3 dark:bg-slate-900/40">
+            <label className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <input
+                type="checkbox"
+                checked={pklScheduleOn}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    // Pre-isi dengan jadwal sekolah sebagai titik awal yang mudah diubah
+                    setR('pklLateAfterHour', r.lateAfterHour ?? 7); setR('pklLateAfterMinute', r.lateAfterMinute ?? 0);
+                    setR('pklCheckInDeadlineHour', r.checkInDeadlineHour ?? 23); setR('pklCheckInDeadlineMinute', r.checkInDeadlineMinute ?? 59);
+                    setR('pklCheckOutAfterHour', r.checkOutAfterHour ?? 15); setR('pklCheckOutAfterMinute', r.checkOutAfterMinute ?? 30);
+                    setR('pklEarlyLeaveBeforeHour', r.earlyLeaveBeforeHour ?? r.checkOutAfterHour ?? 15); setR('pklEarlyLeaveBeforeMinute', r.earlyLeaveBeforeMinute ?? r.checkOutAfterMinute ?? 30);
+                  } else {
+                    for (const k of [...PKL_HOUR_KEYS, 'pklLateAfterMinute', 'pklCheckInDeadlineMinute', 'pklCheckOutAfterMinute', 'pklEarlyLeaveBeforeMinute']) setR(k, null);
+                  }
+                }}
+                className="h-4 w-4 accent-teal-600"
+              />
+              Jadwal khusus PKL (jam kerja berbeda dari sekolah)
+            </label>
+            {pklScheduleOn ? (
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="PKL: batas terlambat" hint="Siswa PKL yang absen datang setelah jam ini dihitung Terlambat.">
+                  <TimeInput value={`${pad2(r.pklLateAfterHour ?? 7)}:${pad2(r.pklLateAfterMinute ?? 0)}`} onChange={(v) => { const [h, m] = v.split(':').map(Number); setR('pklLateAfterHour', h); setR('pklLateAfterMinute', m); }} />
+                </Field>
+                <Field label="PKL: batas akhir absen datang" hint="Setelah jam ini siswa PKL tidak bisa absen datang sendiri. 23:59 = tidak dibatasi.">
+                  <TimeInput value={`${pad2(r.pklCheckInDeadlineHour ?? 23)}:${pad2(r.pklCheckInDeadlineMinute ?? 59)}`} onChange={(v) => { const [h, m] = v.split(':').map(Number); setR('pklCheckInDeadlineHour', h); setR('pklCheckInDeadlineMinute', m); }} />
+                </Field>
+                <Field label="PKL: jam selesai kerja" hint='Acuan jam pulang PKL di laporan; pulang sebelum jam "Pulang Awal PKL" ditandai Pulang Awal.'>
+                  <TimeInput value={`${pad2(r.pklCheckOutAfterHour ?? 15)}:${pad2(r.pklCheckOutAfterMinute ?? 30)}`} onChange={(v) => { const [h, m] = v.split(':').map(Number); setR('pklCheckOutAfterHour', h); setR('pklCheckOutAfterMinute', m); }} />
+                </Field>
+                <Field label="PKL: mulai dihitung Pulang Awal" hint="Absen pulang PKL sebelum jam ini ditandai Pulang Awal — sekaligus jam absen pulang PKL dibuka.">
+                  <TimeInput value={`${pad2(r.pklEarlyLeaveBeforeHour ?? r.pklCheckOutAfterHour ?? 15)}:${pad2(r.pklEarlyLeaveBeforeMinute ?? r.pklCheckOutAfterMinute ?? 30)}`} onChange={(v) => { const [h, m] = v.split(':').map(Number); setR('pklEarlyLeaveBeforeHour', h); setR('pklEarlyLeaveBeforeMinute', m); }} />
+                </Field>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-muted">
+                Saat ini siswa PKL dinilai dengan jam sekolah biasa. Aktifkan untuk mengatur jam datang/pulang PKL tersendiri — siswa dengan penugasan PKL aktif otomatis memakai jadwal ini.
+              </p>
+            )}
           </div>
         </Card>
 

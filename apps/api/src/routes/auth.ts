@@ -249,6 +249,10 @@ export async function authRoutes(app: FastifyInstance) {
       },
     });
     if (!user) throw ApiError.notFound('Akun tidak ditemukan.');
+    // Status PKL aktif — dipakai halaman absen untuk memakai jadwal khusus PKL
+    const pklActive = user.student
+      ? (await prisma.pklAssignment.count({ where: { isActive: true, studentId: user.student.id } })) > 0
+      : false;
     return reply.send({
       success: true,
       data: {
@@ -269,6 +273,7 @@ export async function authRoutes(app: FastifyInstance) {
               className: user.student.class?.name ?? null,
               grade: user.student.class?.grade ?? null,
               major: user.student.major?.name ?? null,
+              pklActive,
             }
           : null,
         teacher: user.teacher ? { id: user.teacher.id, nip: user.teacher.nip, position: user.teacher.position, isPiket: user.teacher.isPiket } : null,

@@ -16,6 +16,17 @@ export interface AttendanceRules {
   schoolLatitude: number;
   schoolLongitude: number;
   checkOutAllowed: boolean;
+  // ===== Jadwal khusus PKL =====
+  // Siswa PKL bekerja dengan jam berbeda dari sekolah biasa. Semua nilai opsional —
+  // yang tidak diisi otomatis mengikuti jadwal sekolah supaya tidak rancu.
+  pklLateAfterHour: number | null; // batas terlambat PKL
+  pklLateAfterMinute: number | null;
+  pklCheckInDeadlineHour: number | null; // batas akhir absen datang PKL
+  pklCheckInDeadlineMinute: number | null;
+  pklCheckOutAfterHour: number | null; // jam selesai kerja PKL
+  pklCheckOutAfterMinute: number | null;
+  pklEarlyLeaveBeforeHour: number | null; // pulang sebelum jam ini = Pulang Awal PKL
+  pklEarlyLeaveBeforeMinute: number | null;
 }
 
 export interface LoginTexts {
@@ -51,6 +62,13 @@ function normMinute(v: unknown, fallback: number): number {
   return normTimePart(v, fallback, 59);
 }
 
+/** Normalisasi jam/menit opsional: null / kosong / tidak valid → null (ikut jadwal sekolah). */
+function normOptTime(v: unknown, max: number): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 && n <= max ? n : null;
+}
+
 let _rulesCache: AttendanceRules | null = null;
 let _rulesCacheTime = 0;
 
@@ -78,6 +96,15 @@ export async function getAttendanceRules(): Promise<AttendanceRules> {
     schoolLatitude: school?.latitude ?? config.schoolLatitude,
     schoolLongitude: school?.longitude ?? config.schoolLongitude,
     checkOutAllowed: v.checkOutAllowed !== false,
+    // Jadwal PKL — kosong = ikut jadwal sekolah (fallback ditentukan pemakai aturan)
+    pklLateAfterHour: normOptTime(v.pklLateAfterHour, 23),
+    pklLateAfterMinute: normOptTime(v.pklLateAfterMinute, 59),
+    pklCheckInDeadlineHour: normOptTime(v.pklCheckInDeadlineHour, 23),
+    pklCheckInDeadlineMinute: normOptTime(v.pklCheckInDeadlineMinute, 59),
+    pklCheckOutAfterHour: normOptTime(v.pklCheckOutAfterHour, 23),
+    pklCheckOutAfterMinute: normOptTime(v.pklCheckOutAfterMinute, 59),
+    pklEarlyLeaveBeforeHour: normOptTime(v.pklEarlyLeaveBeforeHour, 23),
+    pklEarlyLeaveBeforeMinute: normOptTime(v.pklEarlyLeaveBeforeMinute, 59),
   };
   _rulesCache = rules;
   _rulesCacheTime = Date.now();
