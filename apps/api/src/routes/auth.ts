@@ -410,7 +410,12 @@ export async function authRoutes(app: FastifyInstance) {
         app.log.info(`[SSO] User baru: ${sdmsPayload.username} (${targetRoleKey})`);
       } else {
         // Update nama DAN role agar selalu sinkron dengan SDMS
-        const roleRow = await prisma.role.findFirst({ where: { key: targetRoleKey } });
+        // PENGECUALIAN: akun lokal yang punya role SUPER_ADMIN tidak boleh diturunkan
+        // gradenya oleh SSO — kalau tidak, tombol hapus riwayat & akses penuh hilang
+        // diam-diam setiap admin super login lewat SDMS.
+        const isLocalSuperAdmin =
+          user.role.key === 'SUPER_ADMIN' || ((user.additionalRoles as string[]) || []).includes('SUPER_ADMIN');
+        const roleRow = isLocalSuperAdmin ? null : await prisma.role.findFirst({ where: { key: targetRoleKey } });
         const updateData: Record<string, unknown> = {};
         if (sdmsPayload.full_name && sdmsPayload.full_name !== user.fullName) {
           updateData.fullName = sdmsPayload.full_name;

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { History as HistoryIcon, Trash2 } from 'lucide-react';
+import { History as HistoryIcon, Search, Trash2 } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
@@ -55,6 +55,12 @@ export default function History() {
 
   const studentId = isParent ? childId : undefined;
 
+  // Pencarian nama siswa/guru pada riwayat yang sudah termuat
+  const [search, setSearch] = useState('');
+  // Riwayat dibatasi 10 catatan teratas — tombol "Tampilkan semua" untuk melihat selebihnya
+  const [showAll, setShowAll] = useState(false);
+  const LIMIT = 10;
+
   const { data: rows } = useQuery({
     queryKey: ['attendance-history', month, studentId, classId],
     queryFn: async () => {
@@ -96,6 +102,13 @@ export default function History() {
     return acc;
   }, {});
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const base = rows || [];
+    const matched = q ? base.filter((r) => `${r.name || ''} ${r.nis || ''} ${r.className || ''}`.toLowerCase().includes(q)) : base;
+    return { matched, visible: showAll ? matched : matched.slice(0, LIMIT) };
+  }, [rows, search, showAll]);
+
   return (
     <div>
       <PageHeader
@@ -116,11 +129,20 @@ export default function History() {
       )}
 
       {canFilterClass && (
-        <div className="mb-4">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row">
           <Select value={classId} onChange={(e) => setClassId(e.target.value)} className="w-full sm:w-64">
             <option value="">Semua kelas</option>
             {classes?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </Select>
+          <div className="relative w-full sm:w-72">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Cari nama / NIS / kelas…"
+              className="w-full rounded-xl border border-line bg-white py-2 pl-9 pr-3 text-sm text-ink dark:bg-slate-900"
+            />
+          </div>
         </div>
       )}
 
@@ -137,7 +159,7 @@ export default function History() {
           </div>
 
           <div className="space-y-2">
-            {rows?.map((r) => {
+            {filtered.visible.map((r) => {
               const delId = canDelete ? r.id : undefined;
               return (
                 <Card key={r.id || `${r.date}-${r.nis || r.name || 0}`} className="flex items-center gap-3 p-3.5">
@@ -170,7 +192,23 @@ export default function History() {
                 </Card>
               );
             })}
-            {rows?.length === 0 && <EmptyState icon={HistoryIcon} title="Belum ada riwayat" description="Belum ada data absensi pada bulan ini." />}
+            {filtered.visible.length === 0 && (
+              <EmptyState
+                icon={HistoryIcon}
+                title={search ? 'Tidak ditemukan' : 'Belum ada riwayat'}
+                description={search ? `Tidak ada catatan yang cocok dengan "${search}".` : 'Belum ada data absensi pada bulan ini.'}
+              />
+            )}
+            {!search && (rows?.length || 0) > LIMIT && (
+              <div className="pt-1 text-center">
+                <button
+                  onClick={() => setShowAll((v) => !v)}
+                  className="rounded-xl border border-line bg-white px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800"
+                >
+                  {showAll ? `Tampilkan lebih sedikit (${filtered.matched.length})` : `Tampilkan semua (${filtered.matched.length} catatan)`}
+                </button>
+              </div>
+            )}
           </div>
         </>
       ) : (
