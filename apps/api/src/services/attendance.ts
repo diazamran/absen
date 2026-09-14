@@ -62,6 +62,8 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   nis?: string | null;
   className?: string | null;
   alreadyExists?: boolean;
+  /** Info jarak GPS (bila validasi lokasi aktif) — dipakai aplikasi menampilkan indikator. */
+  location?: { distance: number; allowedRadius: number; verified: boolean } | null;
 }> {
   const { actor, type, method } = input;
   const rules = await getAttendanceRules();
@@ -226,6 +228,9 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   // Jika siswa aktif di PKL, gunakan koordinat DUDU (lokasi PKL) sebagai referensi GPS.
   // Jika tidak PKL, gunakan koordinat sekolah.
   let locationVerified = false;
+  // Info jarak untuk indikator di aplikasi siswa (di luar blok if supaya selalu terisi)
+  let locDistance: number | null = null;
+  let locAllowed: number | null = null;
   if (rules.locationEnabled) {
     if (input.latitude === undefined || input.longitude === undefined) {
       throw ApiError.badRequest('LOCATION_REQUIRED', 'Lokasi belum akurat. Aktifkan GPS dan tunggu beberapa detik.');
@@ -259,20 +264,23 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
       }
     }
     const dist = haversineMeters(input.latitude, input.longitude, refLat, refLng);
-    // Kompensasi akurasi perangkat: HP di dalam gedung sering melaporkan akurasi 30–150 m.
+    locDistance = Math.round(dist);
+    // Kompensasi akurasi perangkat: HP di dalam gedung sering melaporkan akurasi 100–200 m.
     // Jarak dibandingkan terhadap radius DITAMBAH akurasi yang dilaporkan perangkat (dibatasi
-    // maksimal +100 m) supaya siswa di area sekolah tidak ditolak hanya karena sinyal GPS
-    // dalam ruangan lemah. (Diuji juga di tests/attendance.test.ts — OUTSIDE_LOCATION tetap
-    // ditolak bila benar-benar jauh dari lokasi.)
-    const accuracyAllowance = input.accuracy !== undefined ? Math.min(Math.max(0, input.accuracy), 100) : 0;
+    // +300 m) supaya siswa di area sekolah tidak ditolak hanya karena sinyal GPS ruangan
+    // lemah — pengalaman: mengaktifkan wajib GPS jangan sampai bikin absen jadi sulit.
+    // (Diuji di tests/attendance.test.ts — OUTSIDE_LOCATION tetap ditolak bila jauh.)
+    const accuracyAllowance = input.accuracy !== undefined ? Math.min(Math.max(0, input.accuracy), 300) : 0;
     const effectiveRadius = refRadius + accuracyAllowance;
+    locAllowed = Math.round(effectiveRadius);
     if (dist > effectiveRadius) {
       throw ApiError.badRequest('OUTSIDE_LOCATION', `Anda berada di luar area absensi ${locationLabel} (${Math.round(dist)} m dari ${locationLabel}). Coba dekati ${locationLabel} lalu absen lagi.`);
     }
-    // Akurasi sangat buruk (>1 km) hampir pasti lokasi palsu/tidak berguna → tolak.
-    // Sebelumnya batas 200 m menolak banyak fix indoor yang sah.
-    if (input.accuracy !== undefined && input.accuracy > 1000) {
-      throw ApiError.badRequest('LOCATION_INACCURATE', 'Sinyal GPS terlalu lemah untuk memverifikasi lokasi. Dekati jendela atau area terbuka, tunggu beberapa detik, lalu coba lagi.');
+    // Akurasi >2 km berarti fix tidak berguna (mode pesawat baru mati / mock location) → tolak.
+    // Dinaikkan lagi dari 1 km: tujuan wajib GPS adalah memastikan siswa di area yang benar,
+    // bukan mengukur kualitas sinyal — jangan sampai mengaktifkan GPS membuat absen sulit.
+    if (input.accuracy !== undefined && input.accuracy > 2000) {
+      throw ApiError.badRequest('LOCATION_INACCURATE', 'Sinyal GPS terlalu lemah untuk memverifikasi lokasi. Tunggu beberapa detik lalu coba lagi.');
     }
     locationVerified = true;
   }
@@ -298,6 +306,7 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
     nis?: string | null;
     className?: string | null;
     alreadyExists: true;
+    location?: { distance: number; allowedRadius: number; verified: boolean } | null;
   }> => {
     if (type === 'CHECK_IN') {
       return {
@@ -306,6 +315,7 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
         fullName: target.fullName,
         nis: target.student?.nis ?? null,
         className,
+        location: locDistance !== null && locAllowed !== null ? { distance: locDistance, allowedRadius: locAllowed, verified: locationVerified } : null,
       };
     }
     // CHECK_OUT — timpa catatan lama dengan jam pulang terbaru
@@ -370,6 +380,7 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
       fullName: target.fullName,
       nis: target.student?.nis ?? null,
       className,
+      location: locDistance !== null && locAllowed !== null ? { distance: locDistance, allowedRadius: locAllowed, verified: locationVerified } : null,
     };
   };
 
@@ -505,7 +516,7 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
     request: actor.request,
   });
 
-  return { attendance, fullName: target.fullName, nis: target.student?.nis ?? null, className };
+  return { attendance, fullName: target.fullName, nis: target.student?.nis ?? null, className, location: locDistance !== null && locAllowed !== null ? { distance: locDistance, allowedRadius: locAllowed, verified: locationVerified } : null };
 }
 
 /**

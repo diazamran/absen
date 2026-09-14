@@ -31,6 +31,16 @@ interface GeoPos {
   accuracy: number;
 }
 
+/** Jarak haversine (meter) — untuk indikator "berapa jauh dari titik PKL". */
+function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const a =
+    Math.sin(toRad(lat2 - lat1) / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(toRad(lon2 - lon1) / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
 interface CheckResult {
   ok: boolean;
   message: string;
@@ -182,6 +192,24 @@ export default function PklAbsent() {
         </span>
       </div>
 
+      {/* Indikator jarak ke titik PKL — hijau = dalam radius, merah = di luar radius */}
+      {geo && assignment.latitude != null && assignment.longitude != null && (
+        <div
+          className={`px-4 py-2 text-center text-xs font-semibold ${
+            haversineMeters(geo.latitude, geo.longitude, assignment.latitude, assignment.longitude) <= assignment.radiusMeter
+              ? 'bg-emerald-500/15 text-emerald-300'
+              : 'bg-red-500/15 text-red-300'
+          }`}
+        >
+          {(() => {
+            const d = Math.round(haversineMeters(geo.latitude, geo.longitude, assignment.latitude, assignment.longitude));
+            return d <= assignment.radiusMeter
+              ? `📍 ${d} m dari ${assignment.locationName} — dalam radius ${assignment.radiusMeter} m`
+              : `⚠️ ${d} m dari ${assignment.locationName} (radius ${assignment.radiusMeter} m) — dekati lokasi PKL dulu`;
+          })()}
+        </div>
+      )}
+
       {/* Type selector */}
       <div className="flex gap-2 bg-slate-900 px-4 py-2">
         {(['CHECK_IN', 'CHECK_OUT'] as const).map((t) => (
@@ -219,7 +247,13 @@ export default function PklAbsent() {
               {result.checkIn && <p className="mt-2 font-mono text-3xl font-extrabold text-ink">{result.checkIn}</p>}
               {result.checkOut && <p className="mt-2 font-mono text-3xl font-extrabold text-ink">{result.checkOut}</p>}
               {result.locationVerified !== undefined && (
-                <p className="mt-2 text-xs text-muted">{result.locationVerified ? '✅ Lokasi terverifikasi' : '⚠️ Di luar radius lokasi'}</p>
+                <p className="mt-2 text-xs font-semibold text-muted">
+                  {result.locationVerified
+                    ? geo && assignment.latitude != null && assignment.longitude != null
+                      ? `✅ Absen berhasil — ${Math.round(haversineMeters(geo.latitude, geo.longitude, assignment.latitude, assignment.longitude))} m dari titik PKL`
+                      : '✅ Absen berhasil — lokasi terverifikasi'
+                    : '⚠️ Absen tercatat, namun di luar radius lokasi PKL'}
+                </p>
               )}
             </div>
           ) : (

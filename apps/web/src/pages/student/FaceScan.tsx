@@ -24,6 +24,7 @@ interface ScanResult {
   lateMinutes?: number;
   earlyLeave?: boolean;
   modelError?: boolean;
+  location?: { distance: number; allowedRadius: number; verified: boolean } | null;
 }
 
 export default function FaceScan() {
@@ -58,6 +59,9 @@ export default function FaceScan() {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [hint, setHint] = useState('');
   const [rules, setRules] = useState<Record<string, unknown> | null>(null);
+  // Banner jarak GPS yang TETAP tampil (tidak hilang saat popup ditutup / scan berulang):
+  // hijau = dalam radius (berisi jarak), merah = di luar radius (tidak bisa absen).
+  const [locBanner, setLocBanner] = useState<{ kind: 'ok' | 'far'; text: string } | null>(null);
 
   // Nyalakan kamera — default langsung "Absen Datang" tanpa perlu menekan tombol.
   // Dipanggil otomatis saat halaman dibuka, atau lewat tombol "Mulai Kamera" bila gagal.
@@ -221,7 +225,7 @@ export default function FaceScan() {
         const res = await api<{
           success: boolean;
           message: string;
-          data: { fullName: string; className: string; time: string; status: string; lateMinutes: number; earlyLeave: boolean; alreadyExists?: boolean };
+          data: { fullName: string; className: string; time: string; status: string; lateMinutes: number; earlyLeave: boolean; alreadyExists?: boolean; location?: { distance: number; allowedRadius: number; verified: boolean } | null };
         }>('/attendance/face', {
           method: 'POST',
           body: {
@@ -245,6 +249,16 @@ export default function FaceScan() {
           doneRef.current = true;
           setDone(true);
           feedbackSuccess();
+          // Notif "absen berhasil" lengkap dengan jarak: titik acuan = titik PKL untuk
+          // siswa PKL, titik sekolah untuk siswa biasa.
+          if (res.data.location) {
+            setLocBanner({
+              kind: 'ok',
+              text: `📍 ${res.data.location.distance} m dari ${isPklStudent ? 'titik PKL' : 'titik sekolah'} — dalam radius ${res.data.location.allowedRadius} m`,
+            });
+          } else {
+            setLocBanner(null);
+          }
         }
       } catch (e) {
         // Kegagalan memuat model wajah (mis. file .bin korup di cache HP) —
@@ -275,6 +289,9 @@ export default function FaceScan() {
         } else if (e instanceof ApiError && e.code === 'OUTSIDE_LOCATION') {
           invalidateGpsCache();
           void warmUpGps();
+          // Banner merah TETAP terlihat (tidak hilang dalam 3 detik) sampai siswa
+          // benar-benar berhasil absen dari dalam radius — supaya jelas KENAPA absen gagal.
+          setLocBanner({ kind: 'far', text: `🚫 ${e.message}` });
           setResult({ ok: false, message: e.message });
           feedbackError();
         } else {
@@ -345,6 +362,19 @@ export default function FaceScan() {
         <div className="w-9" />
       </div>
 
+      {/* Banner jarak GPS — selalu terlihat setelah ada percobaan ber-GPS */}
+      {locBanner && (
+        <div className="flex justify-center px-4 pb-2">
+          <div
+            className={`max-w-full rounded-full px-4 py-1.5 text-center text-xs font-semibold ${
+              locBanner.kind === 'ok' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-200'
+            }`}
+          >
+            {locBanner.text}
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-center px-4 pb-3">
         <Segmented
           value={type}
@@ -354,6 +384,7 @@ export default function FaceScan() {
             setType(t);
             setResult(null);
             setHint('');
+            setLocBanner(null);
           }}
           options={[
             ...(canCheckIn ? [{ value: 'CHECK_IN' as Type, label: 'Absen Datang' }] : []),

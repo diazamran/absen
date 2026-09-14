@@ -71,6 +71,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         earlyLeave: result.attendance.earlyLeave,
         method: result.attendance.method,
         alreadyExists: result.alreadyExists ?? false,
+        location: result.location ?? null,
       },
     });
   });
@@ -97,6 +98,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         status: result.attendance.status,
         earlyLeave: result.attendance.earlyLeave,
         alreadyExists: result.alreadyExists ?? false,
+        location: result.location ?? null,
       },
     });
   });
@@ -140,6 +142,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         faceVerified: true,
         livenessVerified: true,
         alreadyExists: result.alreadyExists ?? false,
+        location: result.location ?? null,
       },
     });
   });
@@ -179,6 +182,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         earlyLeave: result.attendance.earlyLeave,
         qrVerified: true,
         alreadyExists: result.alreadyExists ?? false,
+        location: result.location ?? null,
       },
     });
   });
@@ -212,6 +216,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         earlyLeave: result.attendance.earlyLeave,
         cardVerified: true,
         alreadyExists: result.alreadyExists ?? false,
+        location: result.location ?? null,
       },
     });
   });
@@ -243,6 +248,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         earlyLeave: result.attendance.earlyLeave,
         method: result.attendance.method,
         alreadyExists: result.alreadyExists ?? false,
+        location: result.location ?? null,
       },
     });
   });
