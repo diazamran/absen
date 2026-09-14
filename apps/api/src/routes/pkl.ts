@@ -5,7 +5,7 @@ import { validate } from '../utils/validate.js';
 import { ApiError } from '../utils/errors.js';
 import { audit } from '../lib/audit.js';
 import { PERMISSION_KEYS } from '../rbac/permissions.js';
-import { localTime, todayStart, todayEnd } from '../lib/time.js';
+import { localTime, todayStart, todayEnd, dateKey, monthRange, currentMonthKey } from '../lib/time.js';
 
 const locationSchema = z.object({
   name: z.string().min(1),
@@ -398,8 +398,8 @@ export async function pklRoutes(app: FastifyInstance) {
     }
     const { month } = request.query as { month?: string };
 
-    const monthStart = month ? new Date(`${month}-01T00:00:00+07:00`) : new Date(`${new Date().toISOString().slice(0, 7)}-01T00:00:00+07:00`);
-    const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0, 23, 59, 59);
+    const monthKey = month || currentMonthKey();
+    const { start: monthStart, end: monthEnd } = monthRange(monthKey);
 
     const assignments = await prisma.pklAssignment.findMany({
       where: { supervisorId: teacherId, isActive: true },
@@ -409,7 +409,7 @@ export async function pklRoutes(app: FastifyInstance) {
             user: { select: { fullName: true } },
             class: { select: { name: true } },
             attendance: {
-              where: { date: { gte: monthStart, lte: monthEnd }, type: 'CHECK_IN' },
+              where: { date: { gte: monthStart, lt: monthEnd }, type: 'CHECK_IN' },
               orderBy: { date: 'asc' },
             },
           },
@@ -493,8 +493,13 @@ export async function pklRoutes(app: FastifyInstance) {
   // Laporan PKL harian — scoped by supervisor
   app.get('/pkl/report/daily', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
     const { date, locationId, classId } = request.query as { date?: string; locationId?: string; classId?: string };
-    const targetDate = date ? new Date(`${date}T00:00:00+07:00`) : todayStart();
-    const dayEnd = new Date(targetDate.getTime() + 24 * 3600_000);
+    // Kolom @db.Date menyimpan tanggal UTC = tanggal lokal MINUS satu hari (lihat
+    // localDateKeyOfStoredDate di lib/time.js — startOfLocalDay(14 Sep WIB) ter-truncate
+    // jadi 13 Sep UTC). Filter harus memakai nilai tersimpan itu, sementara label laporan
+    // menampilkan tanggal lokal yang diminta (dulu label memakai toISOString → tampil H-1).
+    const dateStr = date || dateKey();
+    const [yy, mm, dd] = dateStr.split('-').map(Number);
+    const dateOnly = new Date(Date.UTC(yy, mm - 1, dd - 1));
 
     const scope = await getPklScope(request.user!.id);
     const whereAssignment: Record<string, unknown> = { isActive: true };
@@ -513,7 +518,7 @@ export async function pklRoutes(app: FastifyInstance) {
             user: { select: { fullName: true } },
             class: { select: { name: true } },
             attendance: {
-              where: { date: targetDate, type: 'CHECK_IN' },
+              where: { date: dateOnly, type: 'CHECK_IN' },
               take: 1,
             },
           },
@@ -523,6 +528,17 @@ export async function pklRoutes(app: FastifyInstance) {
       },
       orderBy: { student: { user: { fullName: 'asc' } } },
     });
+
+    // Jam pulang disimpan sebagai catatan CHECK_OUT TERPISAH (bukan kolom baris CHECK_IN),
+    // jadi harus diambil lewat query kedua lalu dipasangkan per siswa — tanpa ini kolom
+    // Pulang di laporan selalu kosong walau siswa sudah absen pulang.
+    const outs = await prisma.attendance.findMany({
+      where: { type: 'CHECK_OUT', date: dateOnly, studentId: { in: assignments.map((a) => a.studentId) } },
+      select: { studentId: true, checkOut: true, earlyLeave: true },
+      orderBy: { checkOut: 'asc' },
+    });
+    const outsByStudent = new Map<string, (typeof outs)[number]>();
+    for (const o of outs) if (o.studentId) outsByStudent.set(o.studentId, o);
 
     // Stats
     const present = assignments.filter((a) => a.student?.attendance[0]?.status === 'PRESENT' || a.student?.attendance[0]?.status === 'LATE').length;
@@ -534,7 +550,7 @@ export async function pklRoutes(app: FastifyInstance) {
     return reply.send({
       success: true,
       data: {
-        date: targetDate.toISOString().slice(0, 10),
+        date: dateStr,
         total: assignments.length,
         present,
         late,
@@ -543,6 +559,7 @@ export async function pklRoutes(app: FastifyInstance) {
         absent,
         rows: assignments.map((a) => {
           const att = a.student?.attendance[0];
+          const out = outsByStudent.get(a.studentId);
           return {
             studentId: a.studentId,
             fullName: a.student?.user?.fullName ?? '-',
@@ -551,7 +568,8 @@ export async function pklRoutes(app: FastifyInstance) {
             locationName: a.pklLocation.name,
             supervisorName: a.supervisor?.user?.fullName ?? null,
             checkIn: att?.checkIn ? localTime(att.checkIn) : null,
-            checkOut: att?.checkOut ? localTime(att.checkOut) : null,
+            checkOut: out?.checkOut ? localTime(out.checkOut) : null,
+            earlyLeave: out?.earlyLeave ?? false,
             status: att?.status ?? 'ABSENT',
             method: att?.method ?? null,
             lateMinutes: att?.lateMinutes ?? 0,
@@ -564,8 +582,12 @@ export async function pklRoutes(app: FastifyInstance) {
   // Laporan PKL bulanan — scoped by supervisor
   app.get('/pkl/report/monthly', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
     const { month, locationId, classId } = request.query as { month?: string; locationId?: string; classId?: string };
-    const monthStart = month ? new Date(`${month}-01T00:00:00+07:00`) : new Date(`${new Date().toISOString().slice(0, 7)}-01T00:00:00+07:00`);
-    const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0, 23, 59, 59);
+    // Gunakan monthRange (konsisten dengan laporan absensi utama) — batasnya cocok dengan
+    // cara @db.Date menyimpan tanggal (tanggal UTC = tanggal lokal − 1).
+    const monthKey = month || currentMonthKey();
+    const { start: monthStart, end: monthEnd } = monthRange(monthKey);
+    const [my, mo] = monthKey.split('-').map(Number);
+    const daysInMonth = new Date(Date.UTC(my, mo, 0)).getUTCDate();
 
     const scope = await getPklScope(request.user!.id);
     const whereAssignment: Record<string, unknown> = { isActive: true };
@@ -584,7 +606,7 @@ export async function pklRoutes(app: FastifyInstance) {
             user: { select: { fullName: true } },
             class: { select: { name: true } },
             attendance: {
-              where: { date: { gte: monthStart, lte: monthEnd }, type: 'CHECK_IN' },
+              where: { date: { gte: monthStart, lt: monthEnd }, type: 'CHECK_IN' },
               orderBy: { date: 'asc' },
             },
           },
@@ -595,20 +617,23 @@ export async function pklRoutes(app: FastifyInstance) {
       orderBy: { student: { user: { fullName: 'asc' } } },
     });
 
-    // Hitung hari kerja dalam bulan (Senin-Jumat)
-    let schoolDays = 0;
-    const d = new Date(monthStart);
-    while (d <= monthEnd) {
-      const day = d.getDay();
-      if (day >= 1 && day <= 5) schoolDays++;
-      d.setDate(d.getDate() + 1);
+    // Hitung hari kerja dalam bulan (Senin–Jumat) dan hari kerja yang SUDAH BERLALU —
+    // siswa tidak boleh dihitung "Absen" untuk hari yang belum terjadi.
+    let elapsedSchoolDays = 0;
+    const todayParts = dateKey().split('-').map(Number);
+    for (let day = 1; day <= daysInMonth; day++) {
+      const wd = new Date(Date.UTC(my, mo - 1, day)).getUTCDay();
+      if (wd >= 1 && wd <= 5) {
+        const isPast = my < todayParts[0] || (my === todayParts[0] && (mo < todayParts[1] || (mo === todayParts[1] && day <= todayParts[2])));
+        if (isPast) elapsedSchoolDays++;
+      }
     }
 
     return reply.send({
       success: true,
       data: {
-        month: monthStart.toISOString().slice(0, 7),
-        schoolDays,
+        month: monthKey,
+        schoolDays: elapsedSchoolDays,
         totalStudents: assignments.length,
         rows: assignments.map((a) => {
           const atts = a.student?.attendance ?? [];
@@ -624,8 +649,8 @@ export async function pklRoutes(app: FastifyInstance) {
             late: atts.filter((at) => at.status === 'LATE').length,
             sick: atts.filter((at) => at.status === 'SICK').length,
             excused: atts.filter((at) => at.status === 'EXCUSED').length,
-            absent: Math.max(0, schoolDays - atts.length),
-            percentage: schoolDays > 0 ? Math.round((atts.filter((at) => at.status === 'PRESENT' || at.status === 'LATE').length / schoolDays) * 100) : 0,
+            absent: Math.max(0, elapsedSchoolDays - atts.length),
+            percentage: elapsedSchoolDays > 0 ? Math.round((atts.filter((at) => at.status === 'PRESENT' || at.status === 'LATE').length / elapsedSchoolDays) * 100) : 0,
           };
         }),
       },

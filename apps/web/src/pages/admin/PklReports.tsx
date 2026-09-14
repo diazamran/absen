@@ -5,7 +5,7 @@ import { api } from '../../lib/api';
 import { Card, Badge, Skeleton, Button, EmptyState } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
 import { Segmented } from '../../lib/ui';
-import { STATUS_LABELS } from '../../lib/format';
+import { STATUS_LABELS, todayJakartaKey, currentMonthKey } from '../../lib/format';
 
 interface DailyRow {
   studentId: string;
@@ -16,6 +16,7 @@ interface DailyRow {
   supervisorName: string | null;
   checkIn: string | null;
   checkOut: string | null;
+  earlyLeave?: boolean;
   status: string;
   method: string | null;
   lateMinutes: number;
@@ -64,7 +65,7 @@ function exportDailyToCSV(report: DailyReport) {
   const headers = ['No', 'Nama', 'NISN', 'Kelas', 'Lokasi', 'Guru Pembimbing', 'Jam Masuk', 'Jam Pulang', 'Status', 'Metode'];
   const rows = report.rows.map((r, i) => [
     i + 1, r.fullName, r.nis ?? '', r.className ?? '', r.locationName, r.supervisorName ?? '',
-    r.checkIn ?? '-', r.checkOut ?? '-', STATUS_LABELS[r.status as keyof typeof STATUS_LABELS] ?? r.status, r.method ?? '-',
+    r.checkIn ?? '-', r.checkOut ? r.checkOut + (r.earlyLeave ? ' (Pulang Awal)' : '') : '-', STATUS_LABELS[r.status as keyof typeof STATUS_LABELS] ?? r.status, r.method ?? '-',
   ]);
   const csv = [headers, ...rows].map((r) => r.join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
@@ -94,8 +95,10 @@ function exportMonthlyToCSV(report: MonthlyReport) {
 
 export default function PklReports() {
   const [tab, setTab] = useState<'daily' | 'monthly'>('daily');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  // Default tanggal/bulan memakai WIB — new Date().toISOString() memakai UTC sehingga
+  // sebelum jam 07:00 WIB laporan terbuka untuk tanggal kemarin.
+  const [date, setDate] = useState(todayJakartaKey());
+  const [month, setMonth] = useState(currentMonthKey());
   const [locationFilter, setLocationFilter] = useState('');
 
   const { data: locations } = useQuery({
@@ -217,7 +220,7 @@ export default function PklReports() {
                             <td className="px-3 py-2 text-muted">{r.locationName}</td>
                             <td className="px-3 py-2 text-muted">{r.supervisorName ?? '-'}</td>
                             <td className="px-3 py-2 font-mono text-ink">{r.checkIn ?? '-'}</td>
-                            <td className="px-3 py-2 font-mono text-ink">{r.checkOut ?? '-'}</td>
+                            <td className="px-3 py-2 font-mono text-ink">{r.checkOut ?? '-'}{r.earlyLeave && <span className="ml-1 text-[10px] font-semibold text-amber-500">(Awal)</span>}</td>
                             <td className="px-3 py-2"><Badge status={r.status as never} label={STATUS_LABELS[r.status as keyof typeof STATUS_LABELS] ?? r.status} /></td>
                           </tr>
                         ))}
