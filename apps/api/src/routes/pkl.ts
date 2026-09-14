@@ -400,8 +400,7 @@ export async function pklRoutes(app: FastifyInstance) {
             class: { select: { name: true } },
             attendance: {
               where: { date: today },
-              orderBy: { createdAt: 'desc' },
-              take: 2,
+              orderBy: { createdAt: 'asc' },
             },
           },
         },
@@ -411,24 +410,32 @@ export async function pklRoutes(app: FastifyInstance) {
 
     return reply.send({
       success: true,
-      data: assignments.map((a) => ({
-        assignmentId: a.id,
-        studentId: a.studentId,
-        fullName: a.student?.user?.fullName ?? '-',
-        nis: a.student?.nis ?? null,
-        className: a.student?.class?.name ?? null,
-        location: {
-          id: a.pklLocation.id,
-          name: a.pklLocation.name,
-          city: a.pklLocation.city,
-        },
-        todayAttendance: {
-          checkIn: a.student?.attendance[0]?.checkIn ? localTime(a.student.attendance[0].checkIn) : null,
-          checkOut: a.student?.attendance[0]?.checkOut ? localTime(a.student.attendance[0].checkOut) : null,
-          status: a.student?.attendance[0]?.status ?? 'NOT_YET',
-          method: a.student?.attendance[0]?.method ?? null,
-        },
-      })),
+      data: assignments.map((a) => {
+        // Baris datang & pulang adalah catatan TERPISAH (type CHECK_IN / CHECK_OUT) —
+        // jangan membaca attendance[0] saja karena bisa jadi baris CHECK_OUT sehingga
+        // siswa yang sudah absen datang salah tampil "Belum absen".
+        const atts = a.student?.attendance ?? [];
+        const inRow = atts.find((x) => x.type === 'CHECK_IN');
+        const outTime = atts.find((x) => x.type === 'CHECK_OUT')?.checkOut ?? inRow?.checkOut ?? null;
+        return {
+          assignmentId: a.id,
+          studentId: a.studentId,
+          fullName: a.student?.user?.fullName ?? '-',
+          nis: a.student?.nis ?? null,
+          className: a.student?.class?.name ?? null,
+          location: {
+            id: a.pklLocation.id,
+            name: a.pklLocation.name,
+            city: a.pklLocation.city,
+          },
+          todayAttendance: {
+            checkIn: inRow?.checkIn ? localTime(inRow.checkIn) : null,
+            checkOut: outTime ? localTime(outTime) : null,
+            status: inRow?.status ?? 'NOT_YET',
+            method: inRow?.method ?? null,
+          },
+        };
+      }),
     });
   });
 
