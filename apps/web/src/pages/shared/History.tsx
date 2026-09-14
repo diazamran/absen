@@ -68,7 +68,7 @@ export default function History() {
       const me = await api<{ success: boolean; data: { student?: { id: string } | null } }>('/auth/me');
       if (!me.data.student) {
         // guru/staff/wali/piket/admin: laporan bulanan (bisa difilter kelas)
-        const res = await api<{ success: boolean; data: { rows: { id?: string; name: string; nis?: string | null; className?: string | null; date: string; time?: string | null; status: string; method: string; lateMinutes: number }[] } }>(
+        const res = await api<{ success: boolean; data: { rows: { id?: string; name: string; nis?: string | null; className?: string | null; date: string; time?: string | null; checkOut?: string | null; earlyLeave?: boolean; status: string; method: string; lateMinutes: number }[] } }>(
           `/reports/monthly?month=${month}${classId ? `&classId=${classId}` : ''}`,
         );
         return res.data.rows.map((r, i) => ({
@@ -77,11 +77,11 @@ export default function History() {
           date: r.date,
           dayKey: r.date,
           checkIn: r.time ?? null,
-          checkOut: null,
+          checkOut: r.checkOut ?? null,
           status: r.status,
           method: r.method,
           lateMinutes: r.lateMinutes,
-          earlyLeave: false,
+          earlyLeave: r.earlyLeave ?? false,
           className: r.className ?? null,
           name: r.name,
         }));

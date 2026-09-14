@@ -46,6 +46,13 @@ export default function FaceScan() {
   const [repairing, setRepairing] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState('');
+  // Cermin state dari doneRef — ref tidak memicu re-render, jadi tombol scan butuh
+  // state ini supaya tidak "nyangkut" disabled setelah absen berhasil.
+  const [done, setDone] = useState(false);
+  // Detak jam: hitung ulang menit sekarang tiap 30 detik + saat halaman terlihat lagi,
+  // supaya tab Datang/Pulang berpindah otomatis tepat waktu walau halaman dibiarkan terbuka
+  // (sebelumnya jam "beku" diambil sekali saat halaman dibuka → absen pulang tak kunjung terbuka).
+  const [nowTick, setNowTick] = useState(0);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [hint, setHint] = useState('');
   const [rules, setRules] = useState<Record<string, unknown> | null>(null);
@@ -86,16 +93,40 @@ export default function FaceScan() {
       .then((r) => r.json())
       .then((d) => setRules(d?.data?.rules ?? null))
       .catch(() => {});
+    const tick = () => setNowTick((t) => t + 1);
+    const id = setInterval(tick, 30_000);
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      tick();
+      // Segarkan aturan (mis. admin mengubah jam pulang saat halaman terbuka)
+      fetch('/api/settings/public')
+        .then((r) => r.json())
+        .then((d) => setRules(d?.data?.rules ?? null))
+        .catch(() => {});
+      // Bolehkan scan lagi setelah kembali ke halaman — server tetap mencegah duplikat.
+      if (doneRef.current) {
+        doneRef.current = false;
+        setDone(false);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
-  // Hitung tab yang aktif berdasarkan waktu sekarang
+  // Hitung tab yang aktif berdasarkan waktu sekarang (dihitung ulang tiap nowTick)
   const num = (v: unknown, d: number) => (typeof v === 'number' ? v : d);
   const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+  void nowTick;
   const canCheckIn = rules
     ? nowMinutes <= (num(rules.checkInDeadlineHour, 23) * 60 + num(rules.checkInDeadlineMinute, 59))
     : true;
   const pulangAwalMinutes = (num(rules?.earlyLeaveBeforeHour ?? rules?.checkOutAfterHour, 15)) * 60 + (num(rules?.earlyLeaveBeforeMinute ?? rules?.checkOutAfterMinute, 0));
   const canCheckOut = rules ? nowMinutes >= pulangAwalMinutes : true;
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  const pulangOpenLabel = `${pad2(num(rules?.earlyLeaveBeforeHour ?? rules?.checkOutAfterHour, 15))}:${pad2(num(rules?.earlyLeaveBeforeMinute ?? rules?.checkOutAfterMinute, 0))}`;
 
   // Jika tab aktif tidak tersedia, pindah ke tab yang tersedia
   useEffect(() => {
@@ -201,11 +232,13 @@ export default function FaceScan() {
           setResult({ ok: false, already: true, message: res.message, fullName: res.data.fullName, className: res.data.className, time: res.data.time, status: res.data.status });
           setHint('');
           doneRef.current = true;
+          setDone(true);
           feedbackInfo();
         } else {
           setResult({ ok: true, message: 'ABSEN BERHASIL', ...res.data });
           setHint('');
           doneRef.current = true;
+          setDone(true);
           feedbackSuccess();
         }
       } catch (e) {
@@ -223,6 +256,7 @@ export default function FaceScan() {
         if (e instanceof ApiError && e.code === 'ALREADY_ATTENDANCE') {
           setResult({ ok: false, already: true, message: e.message });
           doneRef.current = true;
+          setDone(true);
           feedbackInfo();
         } else if (e instanceof ApiError && e.code === 'FACE_NOT_RECOGNIZED') {
           setResult({ ok: false, message: 'Wajah tidak dikenali. Coba lagi.' });
@@ -311,6 +345,7 @@ export default function FaceScan() {
           value={type}
           onChange={(t) => {
             doneRef.current = false;
+            setDone(false);
             setType(t);
             setResult(null);
             setHint('');
@@ -363,7 +398,7 @@ export default function FaceScan() {
               ) : !canCheckIn && type === 'CHECK_IN' ? (
                 <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-amber-300">Absen datang sudah ditutup. Tunggu waktu absen pulang.</span>
               ) : !canCheckOut && type === 'CHECK_OUT' ? (
-                <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-amber-300">Absen pulang belum dibuka. Kembali absen datang.</span>
+                <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-amber-300">Absen pulang dibuka pukul {pulangOpenLabel} — kembali lagi nanti atau absen datang dulu.</span>
               ) : gpsLoading ? (
                 'Mengambil lokasi GPS…'
               ) : scanning ? (
@@ -403,7 +438,7 @@ export default function FaceScan() {
         </button>
         <button
           onClick={() => void runScan(true)}
-          disabled={!ready || scanning || modelsLoading || doneRef.current}
+          disabled={!ready || scanning || modelsLoading || done}
           className="relative flex h-20 w-20 items-center justify-center rounded-full border-4 border-primary text-white transition-transform active:scale-95 disabled:opacity-50"
         >
           {scanning || modelsLoading ? <Loader2 className="h-9 w-9 animate-spin" /> : <Camera className="h-9 w-9" />}

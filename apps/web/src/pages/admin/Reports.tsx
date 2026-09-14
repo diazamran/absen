@@ -73,7 +73,7 @@ interface ClassSummaryRow { className: string; total: number; present: number; l
 interface ReportData {
   summary: Summary;
   classSummary?: ClassSummaryRow[];
-  rows: { name: string; nis?: string | null; className?: string | null; date?: string; time?: string | null; status: string; method: string; lateMinutes: number }[];
+  rows: { name: string; nis?: string | null; className?: string | null; date?: string; time?: string | null; checkOut?: string | null; earlyLeave?: boolean; status: string; method: string; lateMinutes: number }[];
 }
 
 const SUMMARY_KEYS: { key: keyof Summary; label: string }[] = [
@@ -408,7 +408,8 @@ export default function Reports() {
                     <th className="px-3 py-2">Nama</th>
                     <th className="px-3 py-2">Kelas</th>
                     {tab === 'monthly' && <th className="px-3 py-2">Tanggal</th>}
-                    <th className="px-3 py-2">Jam</th>
+                    <th className="px-3 py-2">Jam Datang</th>
+                    <th className="px-3 py-2">Jam Pulang</th>
                     <th className="px-3 py-2">Status</th>
                   </tr>
                 </thead>
@@ -419,6 +420,10 @@ export default function Reports() {
                       <td className="px-3 py-2 text-muted">{r.className}</td>
                       {tab === 'monthly' && <td className="px-3 py-2 text-muted">{r.date}</td>}
                       <td className="px-3 py-2 font-mono text-muted">{r.time || '—'}</td>
+                      <td className="px-3 py-2 font-mono text-muted">
+                        {r.checkOut || '—'}
+                        {r.earlyLeave && <span className="ml-1 text-[10px] font-semibold text-amber-500">(Pulang Awal)</span>}
+                      </td>
                       <td className="px-3 py-2">
                         <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: `${STATUS_COLORS[r.status]}1a`, color: STATUS_COLORS[r.status] }}>
                           {STATUS_LABELS[r.status]}{r.status === 'LATE' && r.lateMinutes ? ` (${r.lateMinutes}m)` : ''}
@@ -443,7 +448,7 @@ function ClassDetailModal({ className, date, tab, onClose }: { className: string
     queryKey: ['class-detail', className, date, tab],
     queryFn: async () => {
       if (tab === 'daily') {
-        const res = await api<{ success: boolean; data: { rows: { name: string; nis?: string | null; className?: string | null; time?: string | null; status: string; method: string; lateMinutes: number }[] } }>(
+        const res = await api<{ success: boolean; data: { rows: { name: string; nis?: string | null; className?: string | null; time?: string | null; checkOut?: string | null; earlyLeave?: boolean; status: string; method: string; lateMinutes: number }[] } }>(
           `/reports/daily?date=${date}`,
         );
         return res.data.rows.filter((r: any) => r.className === className);
@@ -498,7 +503,8 @@ function ClassDetailModal({ className, date, tab, onClose }: { className: string
                   <th className="px-3 py-2">No</th>
                   <th className="px-3 py-2">Nama</th>
                   <th className="px-3 py-2">NISN</th>
-                  <th className="px-3 py-2">Jam</th>
+                  <th className="px-3 py-2">Datang</th>
+                  <th className="px-3 py-2">Pulang</th>
                   <th className="px-3 py-2">Status</th>
                 </tr>
               </thead>
@@ -509,6 +515,7 @@ function ClassDetailModal({ className, date, tab, onClose }: { className: string
                     <td className="px-3 py-2 font-medium text-ink">{r.name}</td>
                     <td className="px-3 py-2 text-muted">{r.nis || '—'}</td>
                     <td className="px-3 py-2 font-mono text-muted">{r.time || '—'}</td>
+                    <td className="px-3 py-2 font-mono text-muted">{r.checkOut || '—'}</td>
                     <td className="px-3 py-2">
                       <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: `${STATUS_COLORS[r.status]}1a`, color: STATUS_COLORS[r.status] }}>
                         {STATUS_LABELS[r.status]}{r.status === 'LATE' && r.lateMinutes ? ` (${r.lateMinutes}m)` : ''}

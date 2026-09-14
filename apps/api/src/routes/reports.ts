@@ -37,6 +37,28 @@ async function scopedClassId(request: FastifyRequest, requested?: string): Promi
   return myClass?.id ?? '__none__';
 }
 
+/**
+ * Pasangan userId → jam pulang dari catatan CHECK_OUT pada rentang tanggal yang sama.
+ * Catatan pulang disimpan sebagai baris terpisah (type CHECK_OUT), jadi laporan harian/bulanan
+ * yang berbasis CHECK_IN harus menggabungkannya lewat query kedua ini.
+ */
+async function checkOutMap(
+  start: Date,
+  end: Date,
+  classId?: string,
+): Promise<Map<string, { time: string; earlyLeave: boolean; method: string }>> {
+  const outs = await prisma.attendance.findMany({
+    where: { type: 'CHECK_OUT', date: { gte: start, lt: end }, ...(classId ? { student: { classId } } : {}) },
+    select: { userId: true, checkOut: true, earlyLeave: true, method: true },
+    orderBy: { checkOut: 'asc' },
+  });
+  const m = new Map<string, { time: string; earlyLeave: boolean; method: string }>();
+  for (const o of outs) {
+    if (o.checkOut) m.set(o.userId, { time: localTime(o.checkOut), earlyLeave: o.earlyLeave, method: o.method });
+  }
+  return m;
+}
+
 /** Rekap per kelas: total siswa, hadir, terlambat, izin/sakit, dan tidak hadir pada rentang tanggal. */
 async function classRecap(start: Date, end: Date) {
   const classes = await prisma.class.findMany({
@@ -95,6 +117,8 @@ export async function reportRoutes(app: FastifyInstance) {
       },
       orderBy: { checkIn: 'asc' },
     });
+    // Gabungkan jam pulang dari catatan CHECK_OUT hari yang sama
+    const outs = await checkOutMap(dayStart, dayEnd, classId);
     const classSummary = classId ? [] : await classRecap(dayStart, dayEnd);
 
     const counts = statusCountsMap(rows);
@@ -118,6 +142,8 @@ export async function reportRoutes(app: FastifyInstance) {
           nis: r.student?.nis ?? null,
           className: r.student?.class?.name ?? null,
           time: r.checkIn ? localTime(r.checkIn) : null,
+          checkOut: outs.get(r.userId)?.time ?? null,
+          earlyLeave: outs.get(r.userId)?.earlyLeave ?? false,
           status: r.status,
           statusLabel: STATUS_LABELS[r.status],
           method: r.method,
@@ -147,6 +173,8 @@ export async function reportRoutes(app: FastifyInstance) {
       },
       orderBy: { date: 'asc' },
     });
+    // Gabungkan jam pulang dari catatan CHECK_OUT bulan yang sama
+    const outs = await checkOutMap(start, end, classId);
 
     const counts = statusCountsMap(rows);
     const classSummary = classId ? [] : await classRecap(start, end);
@@ -172,6 +200,8 @@ export async function reportRoutes(app: FastifyInstance) {
           className: r.student?.class?.name ?? null,
           date: localDateKeyOfStoredDate(r.date),
           time: r.checkIn ? localTime(r.checkIn) : null,
+          checkOut: outs.get(r.userId)?.time ?? null,
+          earlyLeave: outs.get(r.userId)?.earlyLeave ?? false,
           status: r.status,
           statusLabel: STATUS_LABELS[r.status],
           method: r.method,
@@ -431,13 +461,15 @@ export async function reportRoutes(app: FastifyInstance) {
         },
         orderBy: { date: 'asc' },
       });
+      // Jam pulang diambil dari catatan CHECK_OUT terpisah — bukan kolom baris CHECK_IN
+      const outs = await checkOutMap(start, end, classId);
       rows = atts.map((r) => ({
         Tanggal: localDateKeyOfStoredDate(r.date),
         Nama: r.user?.fullName ?? '-',
         NIS: r.student?.nis ?? '',
         Kelas: r.student?.class?.name ?? '',
         'Jam Datang': r.checkIn ? localTime(r.checkIn) : '',
-        'Jam Pulang': r.checkOut ? localTime(r.checkOut) : '',
+        'Jam Pulang': outs.get(r.userId)?.time ?? '',
         Status: STATUS_LABELS[r.status] ?? r.status,
         Metode: r.method,
         'Terlambat (menit)': r.lateMinutes,
@@ -449,10 +481,11 @@ export async function reportRoutes(app: FastifyInstance) {
         where: { userId: (await prisma.student.findUnique({ where: { id: q.studentId } }))?.userId, type: 'CHECK_IN', date: { gte: start, lt: end } },
         orderBy: { date: 'asc' },
       });
+      const outs = await checkOutMap(start, end);
       rows = atts.map((r) => ({
         Tanggal: localDateKeyOfStoredDate(r.date),
         'Jam Datang': r.checkIn ? localTime(r.checkIn) : '',
-        'Jam Pulang': r.checkOut ? localTime(r.checkOut) : '',
+        'Jam Pulang': outs.get(r.userId)?.time ?? '',
         Status: STATUS_LABELS[r.status] ?? r.status,
         Metode: r.method,
         'Terlambat (menit)': r.lateMinutes,

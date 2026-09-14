@@ -76,19 +76,32 @@ export async function resetFaceModelCaches(): Promise<void> {
 /**
  * Deteksi satu wajah dari video/canvas/gambar → descriptor 128-d.
  * Mengembalikan null bila wajah tidak terdeteksi dengan cukup yakin.
+ *
+ * Mencoba beberapa konfigurasi detektor (ukuran input & ambang skor berbeda)
+ * sebelum menyerah — kondisi pencahayaan sore/kerudung sering membuat satu
+ * konfigurasi tunggal gagal padahal wajah jelas terlihat. Ini membuat absen
+ * pulang (sering dilakukan sore, mata terkena cahaya dari belakang) lebih andal.
  */
+const DETECT_ATTEMPTS: { inputSize: number; scoreThreshold: number }[] = [
+  { inputSize: 416, scoreThreshold: 0.35 },
+  { inputSize: 608, scoreThreshold: 0.3 },
+  { inputSize: 320, scoreThreshold: 0.25 },
+];
+
 export async function detectFaceDescriptor(
   input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement,
 ): Promise<Float32Array | null> {
   await initFaceModels();
-  const detection = await faceapi
-    .detectSingleFace(input, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.35 }))
-    .withFaceLandmarks()
-    .withFaceDescriptor();
-  if (!detection || !detection.descriptor || detection.descriptor.length !== FACE_DESCRIPTOR_SIZE) {
-    return null;
+  for (const attempt of DETECT_ATTEMPTS) {
+    const detection = await faceapi
+      .detectSingleFace(input, new faceapi.TinyFaceDetectorOptions(attempt))
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+    if (detection?.descriptor && detection.descriptor.length === FACE_DESCRIPTOR_SIZE) {
+      return detection.descriptor;
+    }
   }
-  return detection.descriptor;
+  return null;
 }
 
 /**

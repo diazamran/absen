@@ -9,6 +9,8 @@ export interface ReportExportRow {
   className?: string | null;
   date?: string;
   time?: string | null;
+  checkOut?: string | null;
+  earlyLeave?: boolean;
   status: string;
   method: string;
   lateMinutes: number;
@@ -99,7 +101,7 @@ export function exportReportPdf(opts: ReportExportOptions): void {
 
   autoTable(doc, {
     startY: 37,
-    head: [['No', 'Nama', 'NIS', 'Kelas', 'Tanggal', 'Jam', 'Status', 'Metode']],
+    head: [['No', 'Nama', 'NIS', 'Kelas', 'Tanggal', 'Jam Datang', 'Jam Pulang', 'Status', 'Metode']],
     body: opts.rows.map((r, i) => [
       String(i + 1),
       r.name,
@@ -107,6 +109,7 @@ export function exportReportPdf(opts: ReportExportOptions): void {
       r.className ?? '',
       r.date ?? '',
       r.time ?? '',
+      (r.checkOut || '') + (r.earlyLeave ? ' *' : ''),
       r.status === 'LATE' && r.lateMinutes ? `Terlambat (${r.lateMinutes}m)` : statusLabel(r.status),
       r.method || '',
     ]),
@@ -185,7 +188,7 @@ export function exportReportExcel(opts: ReportExportOptions): void {
     [opts.schoolName],
     [opts.period],
     [],
-    ['No', 'Nama', 'NIS', 'Kelas', 'Tanggal', 'Jam', 'Status', 'Metode'],
+    ['No', 'Nama', 'NIS', 'Kelas', 'Tanggal', 'Jam Datang', 'Jam Pulang', 'Status', 'Metode'],
     ...opts.rows.map((r, i) => [
       i + 1,
       r.name,
@@ -193,6 +196,7 @@ export function exportReportExcel(opts: ReportExportOptions): void {
       r.className ?? '',
       r.date ?? '',
       r.time ?? '',
+      (r.checkOut || '') + (r.earlyLeave ? ' *' : ''),
       r.status === 'LATE' && r.lateMinutes ? `Terlambat (${r.lateMinutes}m)` : statusLabel(r.status),
       r.method || '',
     ]),
@@ -209,7 +213,7 @@ export function exportReportExcel(opts: ReportExportOptions): void {
   ];
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{ wch: 4 }, { wch: 26 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 10 }];
+  ws['!cols'] = [{ wch: 4 }, { wch: 26 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 16 }, { wch: 10 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Laporan');
   XLSX.writeFile(wb, opts.filename, { bookType: 'xlsx' });
