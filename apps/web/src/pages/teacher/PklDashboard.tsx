@@ -23,6 +23,8 @@ interface SupervisedStudent {
     checkOut: string | null;
     status: string;
     method: string | null;
+    lateMinutes?: number | null;
+    earlyLeave?: boolean;
   };
 }
 
@@ -91,8 +93,9 @@ export default function PklDashboard() {
     enabled: !!teacherId,
   });
 
-  const present = students?.filter((s) => s.todayAttendance.status === 'PRESENT' || s.todayAttendance.status === 'LATE').length ?? 0;
+  const present = students?.filter((s) => ['PRESENT', 'LATE', 'SICK', 'EXCUSED'].includes(s.todayAttendance.status)).length ?? 0;
   const notYet = students?.filter((s) => !['PRESENT', 'LATE', 'SICK', 'EXCUSED'].includes(s.todayAttendance.status)).length ?? 0;
+  const belumPulang = students?.filter((s) => s.todayAttendance.checkIn && !s.todayAttendance.checkOut).length ?? 0;
 
   // ===== Export helpers =====
   const exportBaseName = `monitor-pkl-${todayJakartaKey()}`;
@@ -113,7 +116,7 @@ export default function PklDashboard() {
         s.className ?? '',
         s.location.name,
         s.todayAttendance.checkIn ?? '',
-        s.todayAttendance.checkOut ?? '',
+        s.todayAttendance.checkOut || (s.todayAttendance.checkIn ? 'Belum pulang' : ''),
         statusText(s.todayAttendance.status),
         methodText(s.todayAttendance.method),
       ]),
@@ -166,7 +169,7 @@ export default function PklDashboard() {
         s.className ?? '',
         s.location.name,
         s.todayAttendance.checkIn ?? '-',
-        s.todayAttendance.checkOut ?? '-',
+        s.todayAttendance.checkOut ?? (s.todayAttendance.checkIn ? '(belum pulang)' : '-'),
         statusText(s.todayAttendance.status),
         methodText(s.todayAttendance.method),
       ]),
@@ -228,6 +231,12 @@ export default function PklDashboard() {
         </Card>
       </div>
 
+      {students && belumPulang > 0 && (
+        <p className="mb-4 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+          ⏰ {belumPulang} siswa sudah absen datang tetapi <b>belum absen pulang</b>.
+        </p>
+      )}
+
       {/* Today list */}
       <Card className="mb-4">
         <div className="mb-3 flex items-center justify-between gap-2">
@@ -268,9 +277,15 @@ export default function PklDashboard() {
                 {s.todayAttendance.checkIn ? (
                   <p className="mt-0.5 text-xs text-muted">
                     Datang <span className="font-bold text-ink">{s.todayAttendance.checkIn}</span>
-                    {s.todayAttendance.checkOut && <> · Pulang <span className="font-bold text-ink">{s.todayAttendance.checkOut}</span></>}
+                    {s.todayAttendance.status === 'LATE' && !!s.todayAttendance.lateMinutes && (
+                      <> (terlambat {s.todayAttendance.lateMinutes} menit)</>
+                    )}
+                    {s.todayAttendance.checkOut && <> · Pulang <span className="font-bold text-ink">{s.todayAttendance.checkOut}</span>{s.todayAttendance.earlyLeave && <span className="font-semibold text-amber-600"> (pulang awal)</span>}</>}
+                    {!s.todayAttendance.checkOut && <span className="font-semibold text-amber-600"> · Belum absen pulang</span>}
                     {methodText(s.todayAttendance.method) && <> · via {methodText(s.todayAttendance.method)}</>}
                   </p>
+                ) : ['SICK', 'EXCUSED'].includes(s.todayAttendance.status) ? (
+                  <p className="mt-0.5 text-xs text-muted">Tercatat manual (tanpa jam datang)</p>
                 ) : (
                   <p className="mt-0.5 text-xs font-semibold text-amber-500">Belum absen datang hari ini</p>
                 )}
@@ -288,13 +303,14 @@ export default function PklDashboard() {
           <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-xl border border-line bg-surface px-3 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
         </div>
         {/* Keterangan warna */}
-        <div className="mb-3 flex flex-wrap gap-2 text-xs text-muted">
+        <div className="mb-1 flex flex-wrap gap-2 text-xs text-muted">
           <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-bold text-emerald-600">Hadir</span>
           <span className="rounded-full bg-amber-50 px-2 py-0.5 font-bold text-amber-600">Terlambat</span>
           <span className="rounded-full bg-blue-50 px-2 py-0.5 font-bold text-blue-600">Sakit</span>
           <span className="rounded-full bg-purple-50 px-2 py-0.5 font-bold text-purple-600">Izin</span>
           <span className="rounded-full bg-red-50 px-2 py-0.5 font-bold text-red-600">Tidak Hadir</span>
         </div>
+        <p className="mb-3 text-[11px] text-muted">Angka "Hadir" sudah mencakup siswa yang datang terlambat.</p>
         {rekapLoading && <Skeleton className="h-24 w-full" />}
         {!rekapLoading && rekap && rekap.length === 0 && (
           <p className="py-4 text-center text-sm text-muted">Belum ada data rekap untuk bulan ini.</p>

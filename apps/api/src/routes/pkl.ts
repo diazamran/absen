@@ -433,6 +433,8 @@ export async function pklRoutes(app: FastifyInstance) {
             checkOut: outTime ? localTime(outTime) : null,
             status: inRow?.status ?? 'NOT_YET',
             method: inRow?.method ?? null,
+            lateMinutes: inRow?.lateMinutes ?? null,
+            earlyLeave: (atts.find((x) => x.type === 'CHECK_OUT')?.earlyLeave ?? inRow?.earlyLeave) ?? false,
           },
         };
       }),
@@ -480,7 +482,10 @@ export async function pklRoutes(app: FastifyInstance) {
           className: a.student?.class?.name ?? null,
           locationName: a.pklLocation.name,
           totalDays: atts.length,
-          present: atts.filter((at) => at.status === 'PRESENT').length,
+          // "Hadir" mencakup yang terlambat — hadir terlambat tetap hadir.
+          // Sebelumnya hanya status PRESENT yang dihitung sehingga siswa yang
+          // selalu terlambat tampil "Hadir: 0" padahal absen setiap hari.
+          present: atts.filter((at) => at.status === 'PRESENT' || at.status === 'LATE').length,
           late: atts.filter((at) => at.status === 'LATE').length,
           sick: atts.filter((at) => at.status === 'SICK').length,
           excused: atts.filter((at) => at.status === 'EXCUSED').length,
