@@ -229,16 +229,9 @@ export default function FaceMe() {
                     ? 'Menyiapkan model wajah…'
                     : `Ambil Sampel (${descriptors.length}/${MAX_SAMPLES})`}
                 </Button>
-                {modelError ? (
+                {modelError && (
                   <Button variant="outline" className="mt-3 w-full border-red-300 text-red-600" onClick={() => void repairModels()} disabled={modelsLoading}>
                     {modelsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />} Perbaiki Model Wajah
-                  </Button>
-                ) : (
-                  <Button className="mt-3 w-full" onClick={capture} disabled={!ready || descriptors.length >= MAX_SAMPLES || modelsLoading}>
-                    {modelsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-                    {modelsLoading
-                      ? 'Menyiapkan model wajah…'
-                      : `Ambil Sampel (${descriptors.length}/${MAX_SAMPLES})`}
                   </Button>
                 )}
                 {!isFaceModelReady() && !modelsLoading && !modelError && (
