@@ -41,10 +41,15 @@ export interface GeoResult {
 let cached: GeoPosition | null = null;
 let warmingPromise: Promise<boolean> | null = null;
 
-/** Umur cache yang masih dianggap "segar" untuk langsung dipakai. */
-const CACHE_FRESH_MS = 60_000;
+/**
+ * Umur cache yang masih dianggap "segar" untuk langsung dipakai.
+ * Dinaikkan ke 3 menit: siswa biasanya tidak berpindah lokasi selama sesi absen,
+ * dan meminta fix baru setiap 60 detik menyebabkan browser meminta lokasi berulang
+ * yang hasilnya justru lebih tidak akurat (GPS cold start ulang).
+ */
+const CACHE_FRESH_MS = 3 * 60_000;
 /** Umur maksimum cache boleh dipakai sebagai jaring pengaman. */
-const CACHE_MAX_MS = 5 * 60_000;
+const CACHE_MAX_MS = 10 * 60_000;
 
 export function isGeoSupported(): boolean {
   return typeof navigator !== 'undefined' && !!navigator.geolocation;
@@ -97,7 +102,9 @@ export function warmUpGps(): Promise<boolean> {
   if (!isGeoSupported()) return Promise.resolve(false);
   if (cached && Date.now() - cached.timestamp < CACHE_FRESH_MS) return Promise.resolve(true);
   if (warmingPromise) return warmingPromise;
-  warmingPromise = acquire({ enableHighAccuracy: true, timeout: 15_000, maximumAge: 15_000 })
+  // maximumAge dinaikkan ke 3 menit agar browser boleh memakai fix yang sudah ada di cache
+  // sistem operasi — ini justru lebih akurat daripada memaksa fresh fix yang butuh cold start.
+  warmingPromise = acquire({ enableHighAccuracy: true, timeout: 20_000, maximumAge: CACHE_FRESH_MS })
     .then((p) => {
       cached = p;
       return true;
@@ -130,18 +137,27 @@ function cacheStillUsable(maxAgeMs: number): GeoPosition | null {
 /**
  * Ambil posisi terbaik yang mungkin — TIDAK gagal total kecuali izin ditolak.
  * Strategi: cache segar → fix presisi tinggi → fix kasar (WiFi/seluler) → cache lama.
+ *
+ * @param forceRefresh  Bila true, lewati cache segar dan minta fix baru dari perangkat.
+ *                      Dipakai setelah server menolak lokasi (OUTSIDE_LOCATION / INACCURATE).
  */
-export async function getBestEffortPosition(): Promise<GeoResult> {
+export async function getBestEffortPosition(forceRefresh = false): Promise<GeoResult> {
   if (!isGeoSupported()) {
     return { position: null, code: 'UNSUPPORTED', message: failureMessage('UNSUPPORTED') };
   }
   // Scan berulang: pakai cache segar supaya absen tidak menunggu GPS lagi.
-  const fresh = cacheStillUsable(CACHE_FRESH_MS);
-  if (fresh) return { position: fresh, code: null, message: '' };
+  // Bila forceRefresh=true (setelah server tolak), cache segar diabaikan agar kita
+  // benar-benar meminta fix baru dari sistem operasi/perangkat.
+  if (!forceRefresh) {
+    const fresh = cacheStillUsable(CACHE_FRESH_MS);
+    if (fresh) return { position: fresh, code: null, message: '' };
+  }
 
   // 1) Fix presisi tinggi (GPS satelit).
+  // maximumAge disesuaikan dengan CACHE_FRESH_MS supaya OS boleh memberi fix dari
+  // cache internalnya — hasil ini umumnya lebih akurat daripada cold-start baru.
   try {
-    const p = await acquire({ enableHighAccuracy: true, timeout: 12_000, maximumAge: 15_000 });
+    const p = await acquire({ enableHighAccuracy: true, timeout: 15_000, maximumAge: CACHE_FRESH_MS });
     cached = p;
     return { position: p, code: null, message: '' };
   } catch (e) {
@@ -152,11 +168,11 @@ export async function getBestEffortPosition(): Promise<GeoResult> {
     }
     // 2) Fallback: fix kasar via WiFi/seluler — cepat walau akurasi rendah.
     try {
-      const p = await acquire({ enableHighAccuracy: false, timeout: 8_000, maximumAge: 60_000 });
+      const p = await acquire({ enableHighAccuracy: false, timeout: 10_000, maximumAge: CACHE_FRESH_MS });
       cached = p;
       return { position: p, code: null, message: '' };
     } catch {
-      // 3) Jaring pengaman: cache lama (≤5 menit) masih jauh lebih baik daripada tanpa lokasi.
+      // 3) Jaring pengaman: cache lama (≤10 menit) masih jauh lebih baik daripada tanpa lokasi.
       const old = cacheStillUsable(CACHE_MAX_MS);
       if (old) return { position: old, code: null, message: '' };
       return { position: null, code, message: failureMessage(code) };

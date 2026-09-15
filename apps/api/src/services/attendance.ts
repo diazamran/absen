@@ -263,24 +263,31 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
         locationLabel = dudu.name;
       }
     }
+    // ===== Cek akurasi SEBELUM menghitung jarak =====
+    // HP di dalam gedung sering melaporkan akurasi > 1000 m (WiFi/seluler only).
+    // Fix seperti ini tidak bisa dipercaya untuk menentukan posisi — tolak DULU sebelum
+    // menghitung jarak supaya siswa tidak melihat pesan "4722 m dari sekolah" padahal
+    // dia sedang berada di dalam kelas. Batas dinaikkan ke 5000 m (dari 2000 m) agar
+    // fallback seluler yg kualitasnya bervariasi tidak terlalu sering diblokir.
+    if (input.accuracy !== undefined && input.accuracy > 5000) {
+      throw ApiError.badRequest('LOCATION_INACCURATE', 'Sinyal GPS terlalu lemah untuk memverifikasi lokasi. Tunggu beberapa detik di tempat terbuka lalu coba lagi.');
+    }
+
     const dist = haversineMeters(input.latitude, input.longitude, refLat, refLng);
     locDistance = Math.round(dist);
-    // Kompensasi akurasi perangkat: HP di dalam gedung sering melaporkan akurasi 100–200 m.
+
+    // Kompensasi akurasi perangkat: HP di dalam gedung sering melaporkan akurasi 100–500 m.
     // Jarak dibandingkan terhadap radius DITAMBAH akurasi yang dilaporkan perangkat (dibatasi
-    // +300 m) supaya siswa di area sekolah tidak ditolak hanya karena sinyal GPS ruangan
-    // lemah — pengalaman: mengaktifkan wajib GPS jangan sampai bikin absen jadi sulit.
-    // (Diuji di tests/attendance.test.ts — OUTSIDE_LOCATION tetap ditolak bila jauh.)
-    const accuracyAllowance = input.accuracy !== undefined ? Math.min(Math.max(0, input.accuracy), 300) : 0;
+    // +500 m) supaya siswa di area sekolah tidak ditolak hanya karena sinyal GPS ruangan
+    // lemah. Bila accuracy tidak dikirim (undefined), pakai toleransi default 150 m supaya
+    // browser/WebView lama yang tidak melaporkan accuracy tetap bisa absen dari dalam gedung.
+    const accuracyAllowance = input.accuracy !== undefined
+      ? Math.min(Math.max(0, input.accuracy), 500)
+      : 150;
     const effectiveRadius = refRadius + accuracyAllowance;
     locAllowed = Math.round(effectiveRadius);
     if (dist > effectiveRadius) {
       throw ApiError.badRequest('OUTSIDE_LOCATION', `Anda berada di luar area absensi ${locationLabel} (${Math.round(dist)} m dari ${locationLabel}). Coba dekati ${locationLabel} lalu absen lagi.`);
-    }
-    // Akurasi >2 km berarti fix tidak berguna (mode pesawat baru mati / mock location) → tolak.
-    // Dinaikkan lagi dari 1 km: tujuan wajib GPS adalah memastikan siswa di area yang benar,
-    // bukan mengukur kualitas sinyal — jangan sampai mengaktifkan GPS membuat absen sulit.
-    if (input.accuracy !== undefined && input.accuracy > 2000) {
-      throw ApiError.badRequest('LOCATION_INACCURATE', 'Sinyal GPS terlalu lemah untuk memverifikasi lokasi. Tunggu beberapa detik lalu coba lagi.');
     }
     locationVerified = true;
   }

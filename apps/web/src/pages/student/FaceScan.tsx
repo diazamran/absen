@@ -6,7 +6,7 @@ import { useToast } from '../../lib/toast';
 import { useAuth } from '../../lib/auth';
 import { startCamera, stopCamera, captureFrame } from '../../lib/camera';
 import { detectFaceDescriptor, framesHaveMotion, initFaceModels, isFaceModelReady, resetFaceModelCaches } from '../../lib/face';
-import { getBestEffortPosition, invalidateGpsCache, warmUpGps } from '../../lib/geo';
+import { getBestEffortPosition, invalidateGpsCache, warmUpGps, type GeoPosition } from '../../lib/geo';
 import { feedbackSuccess, feedbackInfo, feedbackError } from '../../lib/feedback';
 import { Segmented, Badge, Button } from '../../lib/ui';
 import { STATUS_LABELS } from '../../lib/format';
@@ -37,6 +37,12 @@ export default function FaceScan() {
   const streamRef = useRef<MediaStream | null>(null);
   const runningRef = useRef(false);
   const doneRef = useRef(false);
+  // Saat server menolak lokasi, kita minta fix GPS baru (forceRefresh).
+  // Ref ini mencegah loop otomatis langsung scan lagi sebelum fix baru selesai.
+  const gpsRefreshingRef = useRef(false);
+  // Cache fix GPS terakhir yang berhasil diterima server — dipakai ulang selama masih segar
+  // supaya absen pulang tidak perlu menunggu GPS lagi setelah absen datang berhasil.
+  const lastGoodGpsRef = useRef<GeoPosition | null>(null);
 
   const [type, setType] = useState<Type>('CHECK_IN');
   const [auto, setAuto] = useState(true);
@@ -204,8 +210,22 @@ export default function FaceScan() {
 
         // Ambil GPS — best-effort: satu-satunya kegagalan total adalah izin ditolak.
         // Jika pengaturan lokasi TIDAK aktif, absen tetap jalan meski GPS gagal.
-        setGpsLoading(true);
-        const geo = await getBestEffortPosition();
+        // Bila gpsRefreshingRef aktif (pasca error lokasi), tunggu fix baru dari warmUpGps
+        // yang sudah dipicu di catch-block sebelumnya, baru lanjutkan scan.
+        if (gpsRefreshingRef.current) {
+          // Beri tahu loop otomatis untuk menunggu
+          setHint('Memperbarui lokasi GPS…');
+          return;
+        }
+        // Gunakan fix GPS yang terakhir diterima server bila masih segar (≤3 menit).
+        // Ini membuat absen pulang langsung kirim tanpa menunggu GPS cold-start lagi.
+        const GPS_REUSE_MS = 3 * 60_000;
+        const lastGood = lastGoodGpsRef.current;
+        const isLastGoodFresh = !!lastGood && Date.now() - lastGood.timestamp < GPS_REUSE_MS;
+        setGpsLoading(!isLastGoodFresh);
+        const geo = isLastGoodFresh && lastGood
+          ? ({ position: lastGood, code: null, message: '' } as const)
+          : await getBestEffortPosition();
         setGpsLoading(false);
         setGpsError(geo.position ? '' : geo.message);
         if (!geo.position) {
@@ -249,6 +269,9 @@ export default function FaceScan() {
           doneRef.current = true;
           setDone(true);
           feedbackSuccess();
+          // Simpan fix GPS yang diterima server supaya absen pulang bisa langsung pakai
+          // tanpa menunggu GPS cold start lagi.
+          if (gps) lastGoodGpsRef.current = gps;
           // Notif "absen berhasil" lengkap dengan jarak: titik acuan = titik PKL untuk
           // siswa PKL, titik sekolah untuk siswa biasa.
           if (res.data.location) {
@@ -281,17 +304,23 @@ export default function FaceScan() {
           setResult({ ok: false, message: 'Wajah tidak dikenali. Coba lagi.' });
           feedbackInfo();
         } else if (e instanceof ApiError && (e.code === 'LOCATION_REQUIRED' || e.code === 'LOCATION_INACCURATE')) {
-          // Lokasi ditolak server → buang cache GPS supaya fix berikutnya segar
+          // Lokasi ditolak server → buang cache GPS dan minta fix baru secara aktif.
+          // gpsRefreshingRef mencegah loop otomatis scan lagi sebelum fix selesai.
           invalidateGpsCache();
-          void warmUpGps();
+          gpsRefreshingRef.current = true;
+          setHint('Memperbarui lokasi GPS…');
+          warmUpGps().finally(() => { gpsRefreshingRef.current = false; });
           setResult({ ok: false, message: e.message });
           feedbackError();
         } else if (e instanceof ApiError && e.code === 'OUTSIDE_LOCATION') {
+          // Lokasi di luar radius → buang cache dan paksa fix baru (forceRefresh).
+          // Pesan server sudah jelas, tidak perlu tambahan prefix di banner.
           invalidateGpsCache();
-          void warmUpGps();
-          // Banner merah TETAP terlihat (tidak hilang dalam 3 detik) sampai siswa
-          // benar-benar berhasil absen dari dalam radius — supaya jelas KENAPA absen gagal.
-          setLocBanner({ kind: 'far', text: `🚫 ${e.message}` });
+          gpsRefreshingRef.current = true;
+          setHint('Memperbarui lokasi GPS…');
+          getBestEffortPosition(true).finally(() => { gpsRefreshingRef.current = false; });
+          // Banner merah TETAP terlihat sampai siswa berhasil absen dari dalam radius.
+          setLocBanner({ kind: 'far', text: e.message });
           setResult({ ok: false, message: e.message });
           feedbackError();
         } else {
@@ -340,6 +369,11 @@ export default function FaceScan() {
       // Jangan scan jika tab saat ini tidak tersedia
       if ((type === 'CHECK_IN' && !canCheckIn) || (type === 'CHECK_OUT' && !canCheckOut)) {
         setTimeout(loop, 1000);
+        return;
+      }
+      // Tunggu fix GPS baru selesai sebelum scan lagi (pasca error lokasi)
+      if (gpsRefreshingRef.current) {
+        setTimeout(loop, 500);
         return;
       }
       if (!runningRef.current) await runScan();

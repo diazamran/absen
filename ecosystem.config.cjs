@@ -3,7 +3,16 @@
  * Jalankan: pm2 start ecosystem.config.cjs
  * Reload  : pm2 reload presensiku-api --update-env
  */
-require('dotenv').config({ path: __dirname + '/.env' });
+// Baca .env manual tanpa dependency eksternal
+const fs = require('fs');
+const path = require('path');
+const envPath = path.resolve('/opt/presensiku/.env');
+if (fs.existsSync(envPath)) {
+  fs.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
+    const m = line.match(/^\s*([^#=\s]+)\s*=\s*"?([^"\r\n]*)"?\s*$/);
+    if (m) process.env[m[1]] = m[2];
+  });
+}
 
 module.exports = {
   apps: [
