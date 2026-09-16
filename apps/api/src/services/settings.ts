@@ -95,14 +95,25 @@ export async function getAttendanceRules(): Promise<AttendanceRules> {
     radiusMeters: Number(v.radiusMeters ?? config.locationRadiusMeters),
     // Koordinat sekolah: prioritas attendanceRules JSON (disimpan admin via form)
     // → fallback School table → fallback env var / config default.
-    // Ini memastikan koordinat yang baru saja disimpan admin langsung berlaku
-    // meski School table belum pernah di-update.
-    schoolLatitude: Number.isFinite(Number(v.schoolLatitude)) && Number(v.schoolLatitude) !== 0
-      ? Number(v.schoolLatitude)
-      : (school?.latitude ?? config.schoolLatitude),
-    schoolLongitude: Number.isFinite(Number(v.schoolLongitude)) && Number(v.schoolLongitude) !== 0
-      ? Number(v.schoolLongitude)
-      : (school?.longitude ?? config.schoolLongitude),
+    // parseFloat() dipakai (bukan Number()) supaya string seperti "111.957" tetap
+    // diparsing dengan benar. Validasi rentang membuang nilai rusak (mis. integer
+    // raksasa tanpa titik desimal yang masuk dari versi lama).
+    schoolLatitude: (() => {
+      const v2 = parseFloat(String(v.schoolLatitude ?? ''));
+      // Latitude valid: -90 s.d. 90
+      if (Number.isFinite(v2) && v2 >= -90 && v2 <= 90 && v2 !== 0) return v2;
+      const db = school?.latitude;
+      if (db != null && db >= -90 && db <= 90 && db !== 0) return db;
+      return config.schoolLatitude;
+    })(),
+    schoolLongitude: (() => {
+      const v2 = parseFloat(String(v.schoolLongitude ?? ''));
+      // Longitude valid: -180 s.d. 180
+      if (Number.isFinite(v2) && v2 >= -180 && v2 <= 180 && v2 !== 0) return v2;
+      const db = school?.longitude;
+      if (db != null && db >= -180 && db <= 180 && db !== 0) return db;
+      return config.schoolLongitude;
+    })(),
     checkOutAllowed: v.checkOutAllowed !== false,
     // Jadwal PKL — kosong = ikut jadwal sekolah (fallback ditentukan pemakai aturan)
     pklLateAfterHour: normOptTime(v.pklLateAfterHour, 23),

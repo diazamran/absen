@@ -73,20 +73,30 @@ export default function Settings() {
 
   const mutation = useMutation({
     mutationFn: () => {
-      const lat = s.latitude !== undefined && s.latitude !== '' ? Number(s.latitude) : undefined;
-      const lng = s.longitude !== undefined && s.longitude !== '' ? Number(s.longitude) : undefined;
-      const hasValidCoords = lat !== undefined && lng !== undefined && Number.isFinite(lat) && Number.isFinite(lng);
-      // Kirim attendanceRules sekaligus dengan koordinat supaya keduanya tersimpan
-      // dalam satu transaksi — koordinat masuk ke attendanceRules JSON AND School table.
-      const attendanceRulesPayload = hasValidCoords
-        ? { ...r, schoolLatitude: lat, schoolLongitude: lng }
-        : (rules ? { ...r } : undefined);
+      // Pakai parseFloat supaya "111.957297" tetap float, bukan integer
+      const lat = parseFloat(String(s.latitude ?? r.schoolLatitude ?? ''));
+      const lng = parseFloat(String(s.longitude ?? r.schoolLongitude ?? ''));
+      // Validasi rentang koordinat — latitude ±90, longitude ±180
+      const hasValidCoords =
+        Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
+        Number.isFinite(lng) && lng >= -180 && lng <= 180;
+      // Bersihkan r dari schoolLatitude/schoolLongitude lama sebelum spread
+      // supaya nilai rusak dari DB tidak ikut terkirim ulang.
+      const { schoolLatitude: _la, schoolLongitude: _lo, ...rClean } = r as Record<string, unknown>;
+      void _la; void _lo;
+      const attendanceRulesPayload = rules
+        ? hasValidCoords
+          ? { ...rClean, schoolLatitude: lat, schoolLongitude: lng }
+          : { ...rClean }
+        : hasValidCoords
+          ? { schoolLatitude: lat, schoolLongitude: lng }
+          : undefined;
       return api('/settings', {
         method: 'PUT',
         body: {
           branding: branding ? { ...b } : undefined,
           attendanceRules: attendanceRulesPayload,
-          school: school ? (hasValidCoords ? { latitude: lat, longitude: lng } : {}) : undefined,
+          school: hasValidCoords ? { latitude: lat, longitude: lng } : undefined,
         },
       });
     },
