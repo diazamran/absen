@@ -77,7 +77,8 @@ interface MonthlyRow {
   sick: number;
   excused: number;
   absent: number;
-  percentage: number;
+  percentage: number | null; // null = belum ada data absen sama sekali
+  hasData: boolean;
 }
 
 interface MonthlyReport {
@@ -168,7 +169,7 @@ function exportMonthlyToExcel(report: MonthlyReport) {
     r.sick,
     r.excused,
     r.absent,
-    r.percentage,
+    r.percentage !== null ? r.percentage : '-',
   ]);
 
   const aoa: (string | number)[][] = [
@@ -345,7 +346,7 @@ export default function PklReports() {
           {monthlyLoading && <Skeleton className="h-32 w-full" />}
           {!monthlyLoading && monthly && (
             <>
-              {/* Stats */}
+              {/* Stats — hanya hitung dari siswa yang punya data attendance */}
               <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Card className="p-3 text-center">
                   <p className="text-2xl font-extrabold text-ink">{monthly.totalStudents}</p>
@@ -356,10 +357,20 @@ export default function PklReports() {
                   <p className="text-xs text-muted">Hari Kerja</p>
                 </Card>
                 <Card className="p-3 text-center">
-                  <p className="text-2xl font-extrabold text-emerald-500">
-                    {monthly.rows.length > 0 ? Math.round(monthly.rows.reduce((a, r) => a + r.percentage, 0) / monthly.rows.length) : 0}%
-                  </p>
-                  <p className="text-xs text-muted">Rata-rata Kehadiran</p>
+                  {(() => {
+                    const withData = monthly.rows.filter((r) => r.hasData);
+                    const avg = withData.length > 0
+                      ? Math.round(withData.reduce((a, r) => a + (r.percentage ?? 0), 0) / withData.length)
+                      : null;
+                    return (
+                      <>
+                        <p className="text-2xl font-extrabold text-emerald-500">
+                          {avg !== null ? `${avg}%` : '—'}
+                        </p>
+                        <p className="text-xs text-muted">Rata-rata Kehadiran</p>
+                      </>
+                    );
+                  })()}
                 </Card>
                 <Card className="p-3 text-center">
                   <p className="text-2xl font-extrabold text-red-500">
@@ -410,9 +421,13 @@ export default function PklReports() {
                             <td className="px-3 py-2 text-center font-bold text-purple-600">{r.excused}</td>
                             <td className="px-3 py-2 text-center font-bold text-red-600">{r.absent}</td>
                             <td className="px-3 py-2 text-center">
-                              <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${r.percentage >= 90 ? 'bg-emerald-100 text-emerald-700' : r.percentage >= 75 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
-                                {r.percentage}%
-                              </span>
+                              {r.percentage === null ? (
+                                <span className="text-xs text-muted">—</span>
+                              ) : (
+                                <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${r.percentage >= 90 ? 'bg-emerald-100 text-emerald-700' : r.percentage >= 75 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                                  {r.percentage}%
+                                </span>
+                              )}
                             </td>
                           </tr>
                         ))}

@@ -723,6 +723,16 @@ export async function pklRoutes(app: FastifyInstance) {
         totalStudents: assignments.length,
         rows: assignments.map((a) => {
           const atts = a.student?.attendance ?? [];
+          // Hanya hitung absent bila siswa punya minimal 1 catatan di bulan ini.
+          // Jika tidak ada catatan sama sekali (mis. history dihapus atau siswa baru
+          // bergabung pertengahan bulan), absent ditampilkan 0 dan % ditampilkan '-'
+          // agar laporan tidak menyesatkan dengan angka besar dari hari berlalu.
+          const hasData = atts.length > 0;
+          const presentCount = atts.filter((at) => at.status === 'PRESENT' || at.status === 'LATE').length;
+          const absent = hasData ? Math.max(0, elapsedSchoolDays - atts.length) : 0;
+          const percentage = hasData && elapsedSchoolDays > 0
+            ? Math.round((presentCount / elapsedSchoolDays) * 100)
+            : null; // null = belum ada data
           return {
             studentId: a.studentId,
             fullName: a.student?.user?.fullName ?? '-',
@@ -735,8 +745,9 @@ export async function pklRoutes(app: FastifyInstance) {
             late: atts.filter((at) => at.status === 'LATE').length,
             sick: atts.filter((at) => at.status === 'SICK').length,
             excused: atts.filter((at) => at.status === 'EXCUSED').length,
-            absent: Math.max(0, elapsedSchoolDays - atts.length),
-            percentage: elapsedSchoolDays > 0 ? Math.round((atts.filter((at) => at.status === 'PRESENT' || at.status === 'LATE').length / elapsedSchoolDays) * 100) : 0,
+            absent,
+            percentage,
+            hasData,
           };
         }),
       },
