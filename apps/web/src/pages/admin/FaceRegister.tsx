@@ -147,8 +147,9 @@ export default function FaceRegister() {
   });
 
   const bulkResetRegistered = useMutation({
-    mutationFn: async () => {
-      for (const userId of registeredSelected) {
+    mutationFn: async (idsOverride?: Set<string> | void) => {
+      const targets = (idsOverride instanceof Set ? idsOverride : null) ?? registeredSelected;
+      for (const userId of targets) {
         await api(`/face/${userId}`, { method: 'DELETE' });
       }
     },
@@ -248,14 +249,34 @@ export default function FaceRegister() {
 
   const resetMutation = useMutation({
     mutationFn: (userId: string) => api(`/face/${userId}`, { method: 'DELETE' }),
-    onSuccess: () => {
+    onSuccess: (_, userId) => {
       toast('success', 'Data wajah telah dihapus.');
       qc.invalidateQueries({ queryKey: ['face-status'] });
       qc.invalidateQueries({ queryKey: ['face-pending'] });
+      qc.invalidateQueries({ queryKey: ['face-registered'] });
       qc.invalidateQueries({ queryKey: ['students'] });
+      // Jika siswa yang dihapus sedang dipilih di panel kanan, refresh statusnya
+      if (selected?.userId === userId) {
+        setDescriptors([]);
+        setPreviews([]);
+        setConsent(false);
+      }
     },
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus data wajah.'),
   });
+
+  // Track userId yang sedang dalam proses reset (agar hanya tombol itu yang disabled)
+  const [resettingId, setResettingId] = useState<string | null>(null);
+
+  const resetSingle = async (userId: string, name: string) => {
+    if (!window.confirm(`Reset wajah ${name}?\n\nData wajah akan dihapus permanen dan siswa harus mendaftar ulang.`)) return;
+    setResettingId(userId);
+    try {
+      await resetMutation.mutateAsync(userId);
+    } finally {
+      setResettingId(null);
+    }
+  };
 
   const pick = (s: StudentRow) => {
     setSelected(s);
@@ -310,10 +331,8 @@ export default function FaceRegister() {
                   <p className="text-xs text-muted">{p.nis ?? '-'} · {p.className ?? '-'} · {p.samples} sampel</p>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" className="!px-3 !py-1.5 text-xs" onClick={() => {
-                    if (window.confirm(`Hapus data wajah ${p.fullName}? Siswa harus mendaftar ulang.`)) resetMutation.mutate(p.userId);
-                  }} disabled={resetMutation.isPending}>
-                    <Trash2 className="h-3.5 w-3.5" /> Reset
+                  <Button variant="outline" className="!px-3 !py-1.5 text-xs" onClick={() => resetSingle(p.userId, p.fullName)} disabled={resettingId === p.userId}>
+                    {resettingId === p.userId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Reset
                   </Button>
                   <Button className="!px-3 !py-1.5 text-xs" onClick={() => approveMutation.mutate(p.userId)} disabled={approveMutation.isPending}>
                     <CheckCircle2 className="h-3.5 w-3.5" /> Setujui
@@ -379,8 +398,10 @@ export default function FaceRegister() {
             <div className="mb-3">
               <Button variant="danger" className="!px-3 !py-1.5 text-xs" onClick={() => {
                 if (window.confirm(`Hapus SEMUA data wajah di kelas ${regClassFilter} (${filteredRegistered.length} siswa)?`)) {
-                  setRegisteredSelected(new Set(filteredRegistered.map((r) => r.userId)));
-                  setTimeout(() => bulkResetRegistered.mutate(), 100);
+                  const ids = new Set(filteredRegistered.map((r) => r.userId));
+                  // Set selected lalu langsung jalankan mutasi dengan nilai lokal (bukan state)
+                  setRegisteredSelected(ids);
+                  bulkResetRegistered.mutate(ids);
                 }
               }} disabled={bulkResetRegistered.isPending}>
                 {bulkResetRegistered.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
@@ -398,13 +419,14 @@ export default function FaceRegister() {
                 </div>
                 <Badge status="APPROVED" label="Aktif" />
                 <button
-                  onClick={() => {
-                    if (window.confirm(`Reset wajah ${r.fullName}? Siswa harus mendaftar ulang.`)) resetMutation.mutate(r.userId);
-                  }}
-                  className="rounded-lg p-1.5 text-muted hover:bg-red-50 hover:text-red-500"
-                  title="Reset wajah"
+                  onClick={() => resetSingle(r.userId, r.fullName)}
+                  disabled={resettingId === r.userId}
+                  className="shrink-0 rounded-lg p-1.5 text-muted hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
+                  title="Reset wajah siswa ini"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  {resettingId === r.userId
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : <Trash2 className="h-4 w-4" />}
                 </button>
               </div>
             ))}
@@ -489,12 +511,10 @@ export default function FaceRegister() {
                 {faceStatus.pending && (
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      if (window.confirm('Hapus data wajah siswa ini? Siswa harus mendaftar ulang.')) resetMutation.mutate(selected.userId);
-                    }}
-                    disabled={resetMutation.isPending}
+                    onClick={() => resetSingle(selected.userId, selected.fullName)}
+                    disabled={resettingId === selected.userId}
                   >
-                    <Trash2 className="h-4 w-4" /> Reset
+                    {resettingId === selected.userId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Reset
                   </Button>
                 )}
                 {faceStatus.pending ? (
@@ -505,14 +525,10 @@ export default function FaceRegister() {
                 ) : (
                   <Button
                     variant="danger"
-                    onClick={() => {
-                      if (window.confirm('Hapus seluruh data wajah siswa ini? Siswa harus mendaftar ulang untuk absen wajah.')) {
-                        resetMutation.mutate(selected.userId);
-                      }
-                    }}
-                    disabled={resetMutation.isPending}
+                    onClick={() => resetSingle(selected.userId, selected.fullName)}
+                    disabled={resettingId === selected.userId}
                   >
-                    {resetMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    {resettingId === selected.userId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                     Reset Data Wajah
                   </Button>
                 )}
