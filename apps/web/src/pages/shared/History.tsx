@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { History as HistoryIcon, Search, Trash2 } from 'lucide-react';
+import { History as HistoryIcon, Search, Trash2, CheckSquare, Square, X, AlertTriangle } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
-import { Card, Badge, EmptyState, Select } from '../../lib/ui';
+import { Card, Badge, EmptyState, Select, Button } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
 import { STATUS_LABELS, STATUS_COLORS, currentMonthKey, timeLabel } from '../../lib/format';
 
@@ -24,8 +24,12 @@ export default function History() {
   const qc = useQueryClient();
   const [month, setMonth] = useState(currentMonthKey());
 
-  // Hanya Super Admin bisa menghapus bersih catatan absensi siswa
-  const canDelete = user?.roles?.includes('SUPER_ADMIN') || user?.roleKey === 'SUPER_ADMIN';
+  // Hanya Super Admin & Admin bisa menghapus bersih catatan absensi siswa
+  const canDelete = (user?.roles || [user?.roleKey || '']).some((r) =>
+    ['SUPER_ADMIN', 'ADMIN'].includes(r)
+  );
+
+  // ===== Hapus satu =====
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api(`/attendance/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
@@ -34,6 +38,37 @@ export default function History() {
     },
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus catatan.'),
   });
+
+  // ===== Hapus massal =====
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      api('/attendance/bulk-delete', { method: 'POST', body: { ids } }),
+    onSuccess: (_, ids) => {
+      toast('success', `${ids.length} catatan absensi dihapus.`);
+      setSelected(new Set());
+      setSelectMode(false);
+      qc.invalidateQueries({ queryKey: ['attendance-history'] });
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menghapus catatan.'),
+  });
+
+  // ===== Mode seleksi =====
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const toggleSelectMode = () => {
+    setSelectMode((v) => !v);
+    setSelected(new Set());
+  };
+  const toggleOne = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  const toggleAll = (ids: string[]) =>
+    setSelected((prev) => (prev.size === ids.length ? new Set() : new Set(ids)));
 
   // Orang tua melihat riwayat anak
   const isParent = user?.roles?.includes('PARENT') || user?.roleKey === 'PARENT';
@@ -44,8 +79,10 @@ export default function History() {
   });
   const [childId, setChildId] = useState('');
 
-  // Filter kelas: wali kelas / piket / admin bisa melihat semua kelas atau per kelas
-  const canFilterClass = !isParent && (user?.roles || [user?.roleKey || '']).some((r) => ['ADMIN', 'SUPER_ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'PIKET'].includes(r));
+  // Filter kelas
+  const canFilterClass = !isParent && (user?.roles || [user?.roleKey || '']).some((r) =>
+    ['ADMIN', 'SUPER_ADMIN', 'HEADMASTER', 'HOMEROOM_TEACHER', 'PIKET'].includes(r)
+  );
   const { data: classes } = useQuery({
     queryKey: ['classes'],
     queryFn: () => api<{ success: boolean; data: { id: string; name: string }[] }>('/classes').then((r) => r.data),
@@ -54,10 +91,7 @@ export default function History() {
   const [classId, setClassId] = useState('');
 
   const studentId = isParent ? childId : undefined;
-
-  // Pencarian nama siswa/guru pada riwayat yang sudah termuat
   const [search, setSearch] = useState('');
-  // Riwayat dibatasi 10 catatan teratas — tombol "Tampilkan semua" untuk melihat selebihnya
   const [showAll, setShowAll] = useState(false);
   const LIMIT = 10;
 
@@ -66,14 +100,11 @@ export default function History() {
     queryFn: async () => {
       if (isParent && !studentId) return [];
       if (isParent) {
-        // riwayat per anak via endpoint siswa
         const res = await api<{ success: boolean; data: AttRow[] }>(`/attendance/student/${studentId}?month=${month}`);
         return res.data;
       }
-      // diri sendiri: cari id siswa dari me
       const me = await api<{ success: boolean; data: { student?: { id: string } | null } }>('/auth/me');
       if (!me.data.student) {
-        // guru/staff/wali/piket/admin: laporan bulanan (bisa difilter kelas)
         const res = await api<{ success: boolean; data: { rows: { id?: string; name: string; nis?: string | null; className?: string | null; date: string; time?: string | null; checkOut?: string | null; earlyLeave?: boolean; status: string; method: string; lateMinutes: number }[] } }>(
           `/reports/monthly?month=${month}${classId ? `&classId=${classId}` : ''}`,
         );
@@ -109,13 +140,49 @@ export default function History() {
     return { matched, visible: showAll ? matched : matched.slice(0, LIMIT) };
   }, [rows, search, showAll]);
 
+  // ID yang bisa dihapus dari yang tampil (harus punya id valid)
+  const selectableIds = useMemo(
+    () => filtered.visible.filter((r) => r.id && !r.id.includes('-')).map((r) => r.id as string),
+    [filtered.visible],
+  );
+
+  const handleBulkDelete = () => {
+    if (selected.size === 0) return;
+    setConfirmOpen(true);
+  };
+
   return (
     <div>
       <PageHeader
         title="Riwayat Absensi"
         subtitle={month.replace('-', ' ')}
         action={
-          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink dark:bg-slate-900" />
+          <div className="flex items-center gap-2">
+            {canDelete && !selectMode && (
+              <Button
+                variant="outline"
+                onClick={toggleSelectMode}
+                className="text-sm"
+              >
+                <CheckSquare className="h-4 w-4" /> Pilih
+              </Button>
+            )}
+            {canDelete && selectMode && (
+              <Button
+                variant="outline"
+                onClick={toggleSelectMode}
+                className="text-sm"
+              >
+                <X className="h-4 w-4" /> Batal
+              </Button>
+            )}
+            <input
+              type="month"
+              value={month}
+              onChange={(e) => { setMonth(e.target.value); setSelected(new Set()); setSelectMode(false); }}
+              className="rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink dark:bg-slate-900"
+            />
+          </div>
         }
       />
 
@@ -158,18 +225,69 @@ export default function History() {
             ))}
           </div>
 
+          {/* ===== Toolbar seleksi ===== */}
+          {canDelete && selectMode && (
+            <div className="mb-3 flex items-center justify-between rounded-2xl border border-primary/30 bg-primary-soft/30 px-4 py-2.5">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => toggleAll(selectableIds)}
+                  className="flex items-center gap-1.5 text-sm font-semibold text-primary"
+                >
+                  {selected.size === selectableIds.length && selectableIds.length > 0
+                    ? <CheckSquare className="h-4 w-4" />
+                    : <Square className="h-4 w-4" />}
+                  {selected.size === selectableIds.length && selectableIds.length > 0
+                    ? 'Batal Pilih Semua'
+                    : 'Pilih Semua'}
+                </button>
+                {selected.size > 0 && (
+                  <span className="text-sm text-muted">{selected.size} dipilih</span>
+                )}
+              </div>
+              <Button
+                onClick={handleBulkDelete}
+                disabled={selected.size === 0 || bulkDeleteMutation.isPending}
+                className="!bg-red-500 !text-white hover:!bg-red-600 disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                Hapus {selected.size > 0 ? `(${selected.size})` : ''}
+              </Button>
+            </div>
+          )}
+
           <div className="space-y-2">
             {filtered.visible.map((r) => {
-              const delId = canDelete ? r.id : undefined;
+              const delId = canDelete && r.id && !r.id.includes('-') ? r.id : undefined;
+              const isSelected = delId ? selected.has(delId) : false;
+
               return (
-                <Card key={r.id || `${r.date}-${r.nis || r.name || 0}`} className="flex items-center gap-3 p-3.5">
+                <Card
+                  key={r.id || `${r.date}-${r.nis || r.name || 0}`}
+                  className={`flex items-center gap-3 p-3.5 transition-colors ${selectMode && delId ? 'cursor-pointer' : ''} ${isSelected ? 'border-primary/50 bg-primary-soft/20' : ''}`}
+                  onClick={selectMode && delId ? () => toggleOne(delId) : undefined}
+                >
+                  {/* Checkbox di mode seleksi */}
+                  {canDelete && selectMode && (
+                    <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {delId ? (
+                        <button
+                          onClick={() => toggleOne(delId)}
+                          className={`flex h-5 w-5 items-center justify-center rounded ${isSelected ? 'text-primary' : 'text-muted'}`}
+                        >
+                          {isSelected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
+                        </button>
+                      ) : (
+                        <div className="h-5 w-5" />
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex flex-col items-center rounded-xl bg-slate-50 px-3 py-1.5 dark:bg-slate-900">
-                    {/* dayKey bisa tidak ada pada laporan bulanan guru/staff — fallback ke date */}
                     <span className="text-sm font-bold text-ink">{(r.dayKey || r.date || '').slice(8)}</span>
                     <span className="text-[10px] uppercase text-muted">{(r.dayKey || r.date || '').slice(5, 7)}</span>
                   </div>
-                  <div className="flex-1">
-                    {r.name && <p className="text-sm font-bold text-ink">{r.name}</p>}
+                  <div className="flex-1 min-w-0">
+                    {r.name && <p className="truncate text-sm font-bold text-ink">{r.name}</p>}
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-sm font-semibold text-ink">Masuk {timeStr(r.checkIn)}</span>
                       {r.checkOut && <span className="text-xs text-muted">Pulang {timeStr(r.checkOut)}</span>}
@@ -178,12 +296,17 @@ export default function History() {
                     <p className="text-xs text-muted">{r.className ? `Kelas ${r.className} · ` : ''}Metode: {r.method}</p>
                   </div>
                   <Badge status={r.status} label={r.status === 'LATE' && r.lateMinutes ? `Terlambat ${r.lateMinutes}m` : STATUS_LABELS[r.status]} />
-                  {delId && (
+
+                  {/* Tombol hapus per-item (hanya di luar mode seleksi) */}
+                  {!selectMode && delId && (
                     <button
-                      onClick={() => {
-                        if (window.confirm(`Hapus PERMANEN catatan absen ${r.name || ''} (${(r.dayKey || r.date || '').slice(8)}/${(r.dayKey || r.date || '').slice(5, 7)}, Masuk ${timeStr(r.checkIn)})? Data akan terhapus bersih dari database dan tidak bisa dikembalikan.`)) deleteMutation.mutate(delId);
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm(`Hapus PERMANEN catatan absen ${r.name || ''} (${(r.dayKey || r.date || '').slice(8)}/${(r.dayKey || r.date || '').slice(5, 7)}, Masuk ${timeStr(r.checkIn)})?\n\nData tidak bisa dikembalikan.`)) {
+                          deleteMutation.mutate(delId);
+                        }
                       }}
-                      className="rounded-xl p-2 text-muted transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
+                      className="shrink-0 rounded-xl p-2 text-muted transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
                       title="Hapus catatan absen"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -205,7 +328,9 @@ export default function History() {
                   onClick={() => setShowAll((v) => !v)}
                   className="rounded-xl border border-line bg-white px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800"
                 >
-                  {showAll ? `Tampilkan lebih sedikit (${filtered.matched.length})` : `Tampilkan semua (${filtered.matched.length} catatan)`}
+                  {showAll
+                    ? `Tampilkan lebih sedikit (${filtered.matched.length})`
+                    : `Tampilkan semua (${filtered.matched.length} catatan)`}
                 </button>
               </div>
             )}
@@ -213,6 +338,40 @@ export default function History() {
         </>
       ) : (
         <EmptyState icon={HistoryIcon} title="Pilih anak" description="Pilih anak Anda untuk melihat riwayat kehadiran." />
+      )}
+
+      {/* ===== Konfirmasi hapus massal ===== */}
+      {confirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setConfirmOpen(false)}>
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-800" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-red-500 mx-auto">
+              <AlertTriangle className="h-7 w-7" />
+            </div>
+            <h3 className="text-center text-lg font-bold text-ink">Hapus {selected.size} Catatan?</h3>
+            <p className="mt-2 text-center text-sm text-muted">
+              {selected.size} catatan absensi akan dihapus permanen dari database.
+              <br /><strong>Tindakan ini tidak bisa dibatalkan.</strong>
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => setConfirmOpen(false)}
+                className="flex-1 rounded-2xl border border-line py-2.5 text-sm font-semibold text-ink hover:bg-slate-50 dark:hover:bg-slate-700"
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => {
+                  setConfirmOpen(false);
+                  bulkDeleteMutation.mutate([...selected]);
+                }}
+                disabled={bulkDeleteMutation.isPending}
+                className="flex-1 rounded-2xl bg-red-500 py-2.5 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-60"
+              >
+                {bulkDeleteMutation.isPending ? 'Menghapus…' : `Ya, Hapus ${selected.size}`}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -8,6 +8,7 @@ import { ApiError } from '../utils/errors.js';
 import { todayStart, todayEnd, dateKey, localTime, startOfLocalDay, localDateKeyOfStoredDate } from '../lib/time.js';
 import { PERMISSION_KEYS, roleHasPermission } from '../rbac/permissions.js';
 import { getAttendanceRules } from '../services/settings.js';
+import { audit } from '../lib/audit.js';
 
 const proofSchema = z.object({
   descriptor: z.array(z.number()).optional(),
@@ -291,6 +292,27 @@ export async function attendanceRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const result = await deleteAttendance({ actor: { id: request.user!.id, request }, attendanceId: id });
     return reply.send({ success: true, message: 'Catatan absensi dihapus.', data: result });
+  });
+
+  // ===== Hapus massal catatan absensi =====
+  app.post('/attendance/bulk-delete', { preHandler: app.requirePermission(PERMISSION_KEYS.attendanceManage) }, async (request, reply) => {
+    const { ids } = request.body as { ids: string[] };
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      throw ApiError.badRequest('VALIDATION_ERROR', 'Array ids wajib diisi.');
+    }
+    if (ids.length > 500) {
+      throw ApiError.badRequest('VALIDATION_ERROR', 'Maksimal 500 catatan per sekali hapus.');
+    }
+    // Verifikasi semua id milik user yang punya akses (attendanceManage sudah cukup)
+    const deleted = await prisma.attendance.deleteMany({ where: { id: { in: ids } } });
+    await audit({
+      userId: request.user!.id,
+      action: 'ATTENDANCE_BULK_DELETED',
+      entity: 'Attendance',
+      newValue: { ids, count: deleted.count },
+      request,
+    });
+    return reply.send({ success: true, message: `${deleted.count} catatan absensi dihapus.`, data: { count: deleted.count } });
   });
 
   // ===== Daftar absensi hari ini =====
