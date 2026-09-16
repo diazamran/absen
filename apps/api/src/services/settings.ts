@@ -93,8 +93,16 @@ export async function getAttendanceRules(): Promise<AttendanceRules> {
     duplicatePrevention: v.duplicatePrevention !== false,
     locationEnabled: v.locationEnabled === true || (v.locationEnabled === undefined && config.locationEnabled),
     radiusMeters: Number(v.radiusMeters ?? config.locationRadiusMeters),
-    schoolLatitude: school?.latitude ?? config.schoolLatitude,
-    schoolLongitude: school?.longitude ?? config.schoolLongitude,
+    // Koordinat sekolah: prioritas attendanceRules JSON (disimpan admin via form)
+    // → fallback School table → fallback env var / config default.
+    // Ini memastikan koordinat yang baru saja disimpan admin langsung berlaku
+    // meski School table belum pernah di-update.
+    schoolLatitude: Number.isFinite(Number(v.schoolLatitude)) && Number(v.schoolLatitude) !== 0
+      ? Number(v.schoolLatitude)
+      : (school?.latitude ?? config.schoolLatitude),
+    schoolLongitude: Number.isFinite(Number(v.schoolLongitude)) && Number(v.schoolLongitude) !== 0
+      ? Number(v.schoolLongitude)
+      : (school?.longitude ?? config.schoolLongitude),
     checkOutAllowed: v.checkOutAllowed !== false,
     // Jadwal PKL — kosong = ikut jadwal sekolah (fallback ditentukan pemakai aturan)
     pklLateAfterHour: normOptTime(v.pklLateAfterHour, 23),

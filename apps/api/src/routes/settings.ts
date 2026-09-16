@@ -63,14 +63,31 @@ export async function settingRoutes(app: FastifyInstance) {
     }
     if (body.school) {
       const schoolData = body.school as Record<string, unknown>;
-      // Hanya update koordinat yang terisi valid — jangan timpa nilai yang ada dengan null/NaN
-      const updateData: { latitude?: number; longitude?: number; updatedAt: Date } = { updatedAt: new Date() };
       const lat = Number(schoolData.latitude);
       const lng = Number(schoolData.longitude);
-      if (Number.isFinite(lat) && lat !== 0) updateData.latitude = lat;
-      if (Number.isFinite(lng) && lng !== 0) updateData.longitude = lng;
+
+      // 1) Simpan ke School table (sumber data sekolah umum)
+      const updateData: { latitude?: number; longitude?: number; updatedAt: Date } = { updatedAt: new Date() };
+      if (Number.isFinite(lat)) updateData.latitude = lat;
+      if (Number.isFinite(lng)) updateData.longitude = lng;
       await prisma.school.updateMany({ data: updateData });
+
+      // 2) JUGA simpan ke attendanceRules JSON supaya getAttendanceRules() langsung
+      //    membacanya tanpa bergantung pada School table yang mungkin kosong.
+      //    Ini menghilangkan ketergantungan pada dua sumber data yang berbeda.
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        const existingRules = await prisma.schoolSetting.findUnique({ where: { key: 'attendanceRules' } });
+        const existingVal = (existingRules?.value as Record<string, unknown>) || {};
+        await prisma.schoolSetting.upsert({
+          where: { key: 'attendanceRules' },
+          update: { value: { ...existingVal, schoolLatitude: lat, schoolLongitude: lng }, updatedById: request.user!.id },
+          create: { key: 'attendanceRules', value: { ...existingVal, schoolLatitude: lat, schoolLongitude: lng }, updatedById: request.user!.id },
+        });
+      }
+
       updated.push('school');
+      // Invalidate cache agar koordinat baru langsung berlaku
+      invalidateRulesCache();
     }
 
     await audit({

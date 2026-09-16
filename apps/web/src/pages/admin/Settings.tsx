@@ -75,12 +75,17 @@ export default function Settings() {
     mutationFn: () => {
       const lat = s.latitude !== undefined && s.latitude !== '' ? Number(s.latitude) : undefined;
       const lng = s.longitude !== undefined && s.longitude !== '' ? Number(s.longitude) : undefined;
-      const hasValidCoords = lat !== undefined && lng !== undefined && Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
+      const hasValidCoords = lat !== undefined && lng !== undefined && Number.isFinite(lat) && Number.isFinite(lng);
+      // Kirim attendanceRules sekaligus dengan koordinat supaya keduanya tersimpan
+      // dalam satu transaksi — koordinat masuk ke attendanceRules JSON AND School table.
+      const attendanceRulesPayload = hasValidCoords
+        ? { ...r, schoolLatitude: lat, schoolLongitude: lng }
+        : (rules ? { ...r } : undefined);
       return api('/settings', {
         method: 'PUT',
         body: {
           branding: branding ? { ...b } : undefined,
-          attendanceRules: rules ? { ...r } : undefined,
+          attendanceRules: attendanceRulesPayload,
           school: school ? (hasValidCoords ? { latitude: lat, longitude: lng } : {}) : undefined,
         },
       });
@@ -232,13 +237,19 @@ export default function Settings() {
           </p>
           <div className="mt-4 rounded-2xl border border-line/70 bg-slate-50/60 p-3 dark:bg-slate-900/40">
             <p className="mb-2 text-sm font-semibold text-ink">📍 Titik Absensi (GPS)</p>
+            {/* Tampilkan koordinat yang sedang AKTIF di server (dari attendanceRules yang tersimpan) */}
+            {(!!r.schoolLatitude || !!r.schoolLongitude) && (
+              <div className="mb-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                ✅ Koordinat aktif di server: <b>{String(r.schoolLatitude ?? '')}</b>, <b>{String(r.schoolLongitude ?? '')}</b>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <Field label="Latitude">
                 <Input
                   type="number"
                   step="any"
-                  value={s.latitude !== undefined && s.latitude !== null && s.latitude !== '' ? String(s.latitude) : ''}
-                  onChange={(e) => setS('latitude', e.target.value)}
+                  value={s.latitude !== undefined && s.latitude !== null && s.latitude !== '' ? String(s.latitude) : (r.schoolLatitude ? String(r.schoolLatitude) : '')}
+                  onChange={(e) => { setS('latitude', e.target.value); setR('schoolLatitude', e.target.value); }}
                   placeholder="-7.9891495273718744"
                 />
               </Field>
@@ -246,8 +257,8 @@ export default function Settings() {
                 <Input
                   type="number"
                   step="any"
-                  value={s.longitude !== undefined && s.longitude !== null && s.longitude !== '' ? String(s.longitude) : ''}
-                  onChange={(e) => setS('longitude', e.target.value)}
+                  value={s.longitude !== undefined && s.longitude !== null && s.longitude !== '' ? String(s.longitude) : (r.schoolLongitude ? String(r.schoolLongitude) : '')}
+                  onChange={(e) => { setS('longitude', e.target.value); setR('schoolLongitude', e.target.value); }}
                   placeholder="111.95729774418646"
                 />
               </Field>
@@ -257,9 +268,9 @@ export default function Settings() {
                 Wajib GPS di area sekolah
               </label>
             </div>
-            {r.locationEnabled === true && (!s.latitude || !s.longitude || Number(s.latitude) === 0 || Number(s.longitude) === 0) && (
+            {r.locationEnabled === true && !r.schoolLatitude && !r.schoolLongitude && !s.latitude && !s.longitude && (
               <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-medium text-red-600 dark:bg-red-500/10 dark:text-red-400">
-                ⚠️ GPS wajib diaktifkan tapi koordinat sekolah belum diisi — siswa tidak akan bisa absen. Isi Latitude dan Longitude lalu simpan.
+                ⚠️ GPS wajib diaktifkan tapi koordinat sekolah belum diisi — siswa tidak akan bisa absen. Isi Latitude dan Longitude lalu klik Simpan Perubahan.
               </p>
             )}
             <p className="mt-2 text-xs leading-relaxed text-muted">
