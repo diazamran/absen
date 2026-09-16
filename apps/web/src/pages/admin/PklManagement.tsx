@@ -62,8 +62,18 @@ function LocationForm({ initial, onClose }: { initial?: PklLocation; onClose: ()
     name: initial?.name ?? '',
     address: initial?.address ?? '',
     city: initial?.city ?? '',
-    latitude: initial?.latitude ?? '',
-    longitude: initial?.longitude ?? '',
+    // Jika koordinat dari DB rusak (integer raksasa tanpa desimal), tampilkan kosong
+    // agar admin tahu harus mengisi ulang — lebih baik kosong daripada angka salah.
+    latitude: (() => {
+      const v = initial?.latitude;
+      if (v == null) return '';
+      return (Number.isFinite(v) && v >= -90 && v <= 90) ? v : '';
+    })(),
+    longitude: (() => {
+      const v = initial?.longitude;
+      if (v == null) return '';
+      return (Number.isFinite(v) && v >= -180 && v <= 180) ? v : '';
+    })(),
     radiusMeter: initial?.radiusMeter ?? 100,
     phone: initial?.phone ?? '',
     contactName: initial?.contactName ?? '',
@@ -71,10 +81,16 @@ function LocationForm({ initial, onClose }: { initial?: PklLocation; onClose: ()
 
   const save = useMutation({
     mutationFn: () => {
+      // parseFloat memastikan "111.963068" tetap float, bukan integer.
+      // Validasi rentang menolak nilai yang jelas salah (integer raksasa tanpa desimal).
+      const lat = parseFloat(String(form.latitude));
+      const lng = parseFloat(String(form.longitude));
+      const validLat = Number.isFinite(lat) && lat >= -90 && lat <= 90;
+      const validLng = Number.isFinite(lng) && lng >= -180 && lng <= 180;
       const body = {
         ...form,
-        latitude: form.latitude ? Number(form.latitude) : undefined,
-        longitude: form.longitude ? Number(form.longitude) : undefined,
+        latitude: validLat ? lat : undefined,
+        longitude: validLng ? lng : undefined,
         radiusMeter: Number(form.radiusMeter),
       };
       return initial

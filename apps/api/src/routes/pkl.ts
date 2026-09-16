@@ -13,9 +13,11 @@ const locationSchema = z.object({
   name: z.string().min(1),
   address: z.string().optional(),
   city: z.string().optional(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
-  radiusMeter: z.number().int().min(10).max(1000).default(100),
+  // Validasi rentang koordinat — latitude ±90, longitude ±180.
+  // Menolak nilai integer raksasa (mis. 111963068) yang terjadi saat titik desimal hilang.
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  radiusMeter: z.number().int().min(10).max(5000).default(100),
   phone: z.string().optional(),
   contactName: z.string().optional(),
 });
@@ -258,15 +260,19 @@ export async function pklRoutes(app: FastifyInstance) {
     if (!location) throw ApiError.notFound('Lokasi PKL tidak ditemukan.');
 
     let locationVerified = false;
-    if (body.latitude && body.longitude && location.latitude && location.longitude) {
-      const R = 6371e3;
-      const φ1 = (body.latitude * Math.PI) / 180;
-      const φ2 = (location.latitude * Math.PI) / 180;
-      const Δφ = ((location.latitude - body.latitude) * Math.PI) / 180;
-      const Δλ = ((location.longitude - body.longitude) * Math.PI) / 180;
-      const a = Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
-      const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      locationVerified = dist <= location.radiusMeter;
+    if (body.latitude != null && body.longitude != null) {
+      const locLat = location.latitude;
+      const locLng = location.longitude;
+      // Validasi koordinat DB dalam rentang valid (cegah koordinat rusak seperti 111963068)
+      const dbCoordsValid = locLat != null && locLng != null
+        && locLat >= -90 && locLat <= 90
+        && locLng >= -180 && locLng <= 180;
+      if (dbCoordsValid) {
+        const dist = haversineMeters(body.latitude, body.longitude, locLat!, locLng!);
+        // Kompensasi akurasi GPS: siswa di dalam gedung sering dapat fix ±50-100m
+        const accuracyAllowance = 150;
+        locationVerified = dist <= (location.radiusMeter + accuracyAllowance);
+      }
     }
 
     const today = todayStart();

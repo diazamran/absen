@@ -256,12 +256,17 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
     });
     if (targetForLocation?.student?.pklAssignments?.[0]?.pklLocation) {
       const dudu = targetForLocation.student.pklAssignments[0].pklLocation;
-      if (dudu.latitude != null && dudu.longitude != null) {
-        refLat = dudu.latitude;
-        refLng = dudu.longitude;
+      // Validasi rentang koordinat PKL — tolak nilai integer rusak (mis. 111963068)
+      // yang terjadi saat titik desimal hilang saat input form.
+      const latValid = dudu.latitude != null && dudu.latitude >= -90 && dudu.latitude <= 90;
+      const lngValid = dudu.longitude != null && dudu.longitude >= -180 && dudu.longitude <= 180;
+      if (latValid && lngValid) {
+        refLat = dudu.latitude!;
+        refLng = dudu.longitude!;
         refRadius = dudu.radiusMeter;
         locationLabel = dudu.name;
       }
+      // Bila koordinat PKL rusak/tidak valid, tetap pakai koordinat sekolah sebagai fallback.
     }
     // ===== Cek akurasi SEBELUM menghitung jarak =====
     // HP di dalam gedung sering melaporkan akurasi > 1000 m (WiFi/seluler only).
