@@ -7,6 +7,7 @@ import { audit } from '../lib/audit.js';
 import { PERMISSION_KEYS } from '../rbac/permissions.js';
 import { localTime, todayStart, todayEnd, dateKey, monthRange, currentMonthKey, localMinutesOf } from '../lib/time.js';
 import { getAttendanceRules } from '../services/settings.js';
+import { haversineMeters } from '../services/attendance.js';
 
 const locationSchema = z.object({
   name: z.string().min(1),
@@ -590,7 +591,7 @@ export async function pklRoutes(app: FastifyInstance) {
     // Pulang di laporan selalu kosong walau siswa sudah absen pulang.
     const outs = await prisma.attendance.findMany({
       where: { type: 'CHECK_OUT', date: dateOnly, studentId: { in: assignments.map((a) => a.studentId) } },
-      select: { studentId: true, checkOut: true, earlyLeave: true },
+      select: { studentId: true, checkOut: true, earlyLeave: true, latitude: true, longitude: true, locationVerified: true },
       orderBy: { checkOut: 'asc' },
     });
     const outsByStudent = new Map<string, (typeof outs)[number]>();
@@ -619,6 +620,24 @@ export async function pklRoutes(app: FastifyInstance) {
           // Dua jalur pulang: alur utama membuat catatan CHECK_OUT terpisah (out),
           // sedangkan /pkl/attendance menulis checkOut di baris CHECK_IN (att).
           const outTime = out?.checkOut ?? att?.checkOut ?? null;
+
+          // Hitung jarak dari titik PKL
+          const locLat = a.pklLocation.latitude;
+          const locLng = a.pklLocation.longitude;
+          const buildLoc = (lat: number | null, lng: number | null, verified: boolean) => {
+            if (lat == null || lng == null) return null;
+            const dist = (locLat != null && locLng != null)
+              ? Math.round(haversineMeters(lat, lng, locLat, locLng))
+              : null;
+            return {
+              latitude: lat,
+              longitude: lng,
+              distanceMeters: dist,
+              locationVerified: verified,
+              mapsUrl: `https://maps.google.com/?q=${lat},${lng}`,
+            };
+          };
+
           return {
             studentId: a.studentId,
             fullName: a.student?.user?.fullName ?? '-',
@@ -632,6 +651,8 @@ export async function pklRoutes(app: FastifyInstance) {
             status: att?.status ?? 'ABSENT',
             method: att?.method ?? null,
             lateMinutes: att?.lateMinutes ?? 0,
+            checkInLocation: buildLoc(att?.latitude ?? null, att?.longitude ?? null, att?.locationVerified ?? false),
+            checkOutLocation: buildLoc(out?.latitude ?? null, out?.longitude ?? null, out?.locationVerified ?? false),
           };
         }),
       },

@@ -7,6 +7,7 @@ import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Badge } from '../../lib/ui';
 import { detectFaceDescriptor, initFaceModels, isFaceModelReady } from '../../lib/face';
+import { startCamera, stopCamera, captureFrame } from '../../lib/camera';
 import { getBestEffortPosition, warmUpGps } from '../../lib/geo';
 import { feedbackSuccess, feedbackError } from '../../lib/feedback';
 import { STATUS_LABELS } from '../../lib/format';
@@ -90,7 +91,10 @@ export default function PklAbsent() {
     return res.position;
   }, []);
 
-  // Start camera
+  // Start camera — pakai startCamera() dari lib/camera.ts supaya koreksi rotasi
+  // (captureFrame) dan mirror preview (CSS .camera-view) berlaku konsisten dengan
+  // FaceScan.tsx. Sebelumnya kamera dibuka manual → frame tidak dikoreksi orientasinya
+  // → face-api.js gagal mendeteksi wajah yang miring di Android.
   useEffect(() => {
     let cancelled = false;
     const init = async () => {
@@ -98,12 +102,8 @@ export default function PklAbsent() {
         setModelsLoading(true);
         initFaceModels().catch(() => {});
         void warmUpGps();
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+        const stream = await startCamera(videoRef.current!, 'user');
         streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          try { await videoRef.current.play(); } catch { /* retry on gesture */ }
-        }
         if (!cancelled) setReady(true);
       } catch {
         if (!cancelled) setError('Kamera tidak dapat diakses.');
@@ -112,10 +112,17 @@ export default function PklAbsent() {
       }
     };
     init();
-    return () => { cancelled = true; if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop()); };
+    return () => {
+      cancelled = true;
+      stopCamera(streamRef.current);
+      streamRef.current = null;
+    };
   }, []);
 
   // Scan loop: face auto-detect
+  // Pakai captureFrame() → canvas yang sudah dikoreksi orientasinya → detectFaceDescriptor
+  // dari canvas. Sebelumnya detectFaceDescriptor(video) langsung, tanpa koreksi rotasi
+  // → wajah miring di Android tidak terdeteksi.
   useEffect(() => {
     if (!ready || !assignment) return;
     let alive = true;
@@ -124,35 +131,43 @@ export default function PklAbsent() {
       const video = videoRef.current;
       if (video && video.readyState >= 2) {
         try {
-          const descriptor = await detectFaceDescriptor(video);
-          if (descriptor && !busyRef.current) {
-            busyRef.current = true;
-            const gps = await getGeo();
-            try {
-              const res = await api<{ success: boolean; message: string; data: CheckResult }>('/pkl/attendance', {
-                method: 'POST',
-                body: {
-                  type,
-                  pklLocationId: assignment.locationId,
-                  method: 'FACE',
-                  descriptor: Array.from(descriptor),
-                  ...(gps ? { latitude: gps.latitude, longitude: gps.longitude } : {}),
-                },
-              });
-              const d = res.data as CheckResult;
-              setResult({ ok: true, message: res.message, status: d.status, checkIn: d.checkIn, checkOut: d.checkOut, locationVerified: d.locationVerified });
-              feedbackSuccess();
-              qc.invalidateQueries({ queryKey: ['dashboard'] });
-            } catch (e) {
-              if (e instanceof ApiError && e.code === 'ALREADY_ATTENDANCE') {
-                setResult({ ok: true, message: e.message });
-              } else {
-                setResult({ ok: false, message: e instanceof ApiError ? e.message : 'Gagal absen.' });
-                feedbackError();
+          // Ambil frame lewat captureFrame agar koreksi rotasi diterapkan
+          const frameDataUrl = captureFrame(video);
+          if (frameDataUrl && !busyRef.current) {
+            // Buat HTMLImageElement dari frame yang sudah dikoreksi orientasinya
+            const img = new Image();
+            img.src = frameDataUrl;
+            await img.decode();
+            const descriptor = await detectFaceDescriptor(img);
+            if (descriptor && !busyRef.current) {
+              busyRef.current = true;
+              const gps = await getGeo();
+              try {
+                const res = await api<{ success: boolean; message: string; data: CheckResult }>('/pkl/attendance', {
+                  method: 'POST',
+                  body: {
+                    type,
+                    pklLocationId: assignment.locationId,
+                    method: 'FACE',
+                    descriptor: Array.from(descriptor),
+                    ...(gps ? { latitude: gps.latitude, longitude: gps.longitude } : {}),
+                  },
+                });
+                const d = res.data as CheckResult;
+                setResult({ ok: true, message: res.message, status: d.status, checkIn: d.checkIn, checkOut: d.checkOut, locationVerified: d.locationVerified });
+                feedbackSuccess();
+                qc.invalidateQueries({ queryKey: ['dashboard'] });
+              } catch (e) {
+                if (e instanceof ApiError && e.code === 'ALREADY_ATTENDANCE') {
+                  setResult({ ok: true, message: e.message });
+                } else {
+                  setResult({ ok: false, message: e instanceof ApiError ? e.message : 'Gagal absen.' });
+                  feedbackError();
+                }
+              } finally {
+                busyRef.current = false;
+                setTimeout(() => setResult(null), 4000);
               }
-            } finally {
-              busyRef.current = false;
-              setTimeout(() => setResult(null), 4000);
             }
           }
         } catch { /* skip frame */ }
@@ -221,7 +236,7 @@ export default function PklAbsent() {
 
       {/* Camera */}
       <div className="relative flex-1 overflow-hidden bg-black">
-        <video ref={videoRef} className="h-full w-full object-cover" muted playsInline />
+        <video ref={videoRef} className="camera-view h-full w-full" muted playsInline />
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div className="relative h-52 w-52">
             <div className="absolute inset-0 rounded-[2rem] border-2 border-white/40" />

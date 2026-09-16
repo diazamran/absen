@@ -1,11 +1,19 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Calendar, MapPin, Download, Loader2, BarChart3 } from 'lucide-react';
+import { Calendar, MapPin, MapPinOff, Download, Loader2, BarChart3 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { Card, Badge, Skeleton, Button, EmptyState } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
 import { Segmented } from '../../lib/ui';
 import { STATUS_LABELS, todayJakartaKey, currentMonthKey } from '../../lib/format';
+
+interface LocationInfo {
+  latitude: number;
+  longitude: number;
+  distanceMeters: number | null;
+  locationVerified: boolean;
+  mapsUrl: string;
+}
 
 interface DailyRow {
   studentId: string;
@@ -20,6 +28,28 @@ interface DailyRow {
   status: string;
   method: string | null;
   lateMinutes: number;
+  checkInLocation?: LocationInfo | null;
+  checkOutLocation?: LocationInfo | null;
+}
+
+/** Badge lokasi absen: jarak dari titik PKL + link Google Maps */
+function PklLocationCell({ loc }: { loc: LocationInfo | null | undefined }) {
+  if (!loc) return <span className="text-xs text-muted">—</span>;
+  const ok = loc.locationVerified;
+  const Icon = ok ? MapPin : MapPinOff;
+  const color = ok ? 'text-emerald-600' : 'text-amber-500';
+  return (
+    <a
+      href={loc.mapsUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}`}
+      className={`inline-flex items-center gap-1 text-xs font-semibold hover:underline ${color}`}
+    >
+      <Icon className="h-3 w-3 shrink-0" />
+      {loc.distanceMeters != null ? `${loc.distanceMeters} m` : 'Lihat'}
+    </a>
+  );
 }
 
 interface DailyReport {
@@ -204,7 +234,9 @@ export default function PklReports() {
                           <th className="px-3 py-2">Lokasi</th>
                           <th className="px-3 py-2">Pembimbing</th>
                           <th className="px-3 py-2">Masuk</th>
+                          <th className="px-3 py-2">Titik Masuk</th>
                           <th className="px-3 py-2">Pulang</th>
+                          <th className="px-3 py-2">Titik Pulang</th>
                           <th className="px-3 py-2">Status</th>
                         </tr>
                       </thead>
@@ -220,7 +252,9 @@ export default function PklReports() {
                             <td className="px-3 py-2 text-muted">{r.locationName}</td>
                             <td className="px-3 py-2 text-muted">{r.supervisorName ?? '-'}</td>
                             <td className="px-3 py-2 font-mono text-ink">{r.checkIn ?? '-'}</td>
+                            <td className="px-3 py-2"><PklLocationCell loc={r.checkInLocation} /></td>
                             <td className="px-3 py-2 font-mono text-ink">{r.checkOut ?? '-'}{r.earlyLeave && <span className="ml-1 text-[10px] font-semibold text-amber-500">(Awal)</span>}</td>
+                            <td className="px-3 py-2"><PklLocationCell loc={r.checkOutLocation} /></td>
                             <td className="px-3 py-2"><Badge status={r.status as never} label={STATUS_LABELS[r.status as keyof typeof STATUS_LABELS] ?? r.status} /></td>
                           </tr>
                         ))}
