@@ -5,6 +5,8 @@ import { startOfLocalDay, monthRange, dateKey, localTime, todayStart, todayEnd, 
 import { ApiError } from '../utils/errors.js';
 import { audit } from '../lib/audit.js';
 import { PERMISSION_KEYS } from '../rbac/permissions.js';
+import { haversineMeters } from '../services/attendance.js';
+import { getAttendanceRules } from '../services/settings.js';
 
 const STATUS_LABELS: Record<string, string> = {
   PRESENT: 'Hadir',
@@ -39,22 +41,28 @@ async function scopedClassId(request: FastifyRequest, requested?: string): Promi
 
 /**
  * Pasangan userId → jam pulang dari catatan CHECK_OUT pada rentang tanggal yang sama.
- * Catatan pulang disimpan sebagai baris terpisah (type CHECK_OUT), jadi laporan harian/bulanan
- * yang berbasis CHECK_IN harus menggabungkannya lewat query kedua ini.
  */
 async function checkOutMap(
   start: Date,
   end: Date,
   classId?: string,
-): Promise<Map<string, { time: string; earlyLeave: boolean; method: string }>> {
+): Promise<Map<string, { time: string; earlyLeave: boolean; method: string; latitude: number | null; longitude: number | null; accuracy: number | null; locationVerified: boolean }>> {
   const outs = await prisma.attendance.findMany({
     where: { type: 'CHECK_OUT', date: { gte: start, lt: end }, ...(classId ? { student: { classId } } : {}) },
-    select: { userId: true, checkOut: true, earlyLeave: true, method: true },
+    select: { userId: true, checkOut: true, earlyLeave: true, method: true, latitude: true, longitude: true, accuracy: true, locationVerified: true },
     orderBy: { checkOut: 'asc' },
   });
-  const m = new Map<string, { time: string; earlyLeave: boolean; method: string }>();
+  const m = new Map<string, { time: string; earlyLeave: boolean; method: string; latitude: number | null; longitude: number | null; accuracy: number | null; locationVerified: boolean }>();
   for (const o of outs) {
-    if (o.checkOut) m.set(o.userId, { time: localTime(o.checkOut), earlyLeave: o.earlyLeave, method: o.method });
+    if (o.checkOut) m.set(o.userId, {
+      time: localTime(o.checkOut),
+      earlyLeave: o.earlyLeave,
+      method: o.method,
+      latitude: o.latitude,
+      longitude: o.longitude,
+      accuracy: o.accuracy,
+      locationVerified: o.locationVerified,
+    });
   }
   return m;
 }
@@ -121,6 +129,23 @@ export async function reportRoutes(app: FastifyInstance) {
     const outs = await checkOutMap(dayStart, dayEnd, classId);
     const classSummary = classId ? [] : await classRecap(dayStart, dayEnd);
 
+    // Koordinat sekolah untuk hitung jarak
+    const rules = await getAttendanceRules();
+    const refLat = rules.schoolLatitude;
+    const refLng = rules.schoolLongitude;
+
+    const buildLoc = (lat: number | null, lng: number | null, acc: number | null, verified: boolean) => {
+      if (lat == null || lng == null) return null;
+      return {
+        latitude: lat,
+        longitude: lng,
+        accuracy: acc,
+        distanceMeters: Math.round(haversineMeters(lat, lng, refLat, refLng)),
+        locationVerified: verified,
+        mapsUrl: `https://maps.google.com/?q=${lat},${lng}`,
+      };
+    };
+
     const counts = statusCountsMap(rows);
     const total = rows.length;
     return reply.send({
@@ -137,18 +162,23 @@ export async function reportRoutes(app: FastifyInstance) {
           DISPENSATION: counts.DISPENSATION || 0,
           ABSENT: counts.ABSENT || 0,
         },
-        rows: rows.map((r) => ({
-          name: r.user?.fullName ?? '-',
-          nis: r.student?.nis ?? null,
-          className: r.student?.class?.name ?? null,
-          time: r.checkIn ? localTime(r.checkIn) : null,
-          checkOut: outs.get(r.userId)?.time ?? null,
-          earlyLeave: outs.get(r.userId)?.earlyLeave ?? false,
-          status: r.status,
-          statusLabel: STATUS_LABELS[r.status],
-          method: r.method,
-          lateMinutes: r.lateMinutes,
-        })),
+        rows: rows.map((r) => {
+          const out = outs.get(r.userId);
+          return {
+            name: r.user?.fullName ?? '-',
+            nis: r.student?.nis ?? null,
+            className: r.student?.class?.name ?? null,
+            time: r.checkIn ? localTime(r.checkIn) : null,
+            checkOut: out?.time ?? null,
+            earlyLeave: out?.earlyLeave ?? false,
+            status: r.status,
+            statusLabel: STATUS_LABELS[r.status],
+            method: r.method,
+            lateMinutes: r.lateMinutes,
+            checkInLocation: buildLoc(r.latitude, r.longitude, r.accuracy, r.locationVerified),
+            checkOutLocation: out ? buildLoc(out.latitude, out.longitude, out.accuracy, out.locationVerified) : null,
+          };
+        }),
         classSummary,
       },
     });

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
-import { FileText, FileSpreadsheet, BarChart3, Table, X } from 'lucide-react';
+import { FileText, FileSpreadsheet, BarChart3, Table, X, MapPin, MapPinOff } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { useAuth } from '../../lib/auth';
@@ -443,6 +443,25 @@ export default function Reports() {
   );
 }
 
+/** Tampilkan info lokasi absen: jarak + ikon verifikasi + link Maps */
+function LocationCell({ loc }: { loc: { latitude: number; longitude: number; accuracy: number | null; distanceMeters: number; locationVerified: boolean; mapsUrl: string } | null }) {
+  if (!loc) return <span className="text-xs text-muted">—</span>;
+  const color = loc.locationVerified ? 'text-emerald-600' : 'text-amber-500';
+  const Icon = loc.locationVerified ? MapPin : MapPinOff;
+  return (
+    <a
+      href={loc.mapsUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`${loc.latitude}, ${loc.longitude}${loc.accuracy != null ? ` · akurasi ±${Math.round(loc.accuracy)}m` : ''}`}
+      className={`inline-flex items-center gap-1 text-xs font-semibold hover:underline ${color}`}
+    >
+      <Icon className="h-3 w-3 shrink-0" />
+      {loc.distanceMeters} m
+    </a>
+  );
+}
+
 function ClassDetailModal({ className, date, tab, onClose }: { className: string; date: string; tab: string; onClose: () => void }) {
   const { data, isLoading } = useQuery({
     queryKey: ['class-detail', className, date, tab],
@@ -504,7 +523,9 @@ function ClassDetailModal({ className, date, tab, onClose }: { className: string
                   <th className="px-3 py-2">Nama</th>
                   <th className="px-3 py-2">NISN</th>
                   <th className="px-3 py-2">Datang</th>
+                  <th className="px-3 py-2">Lokasi Datang</th>
                   <th className="px-3 py-2">Pulang</th>
+                  <th className="px-3 py-2">Lokasi Pulang</th>
                   <th className="px-3 py-2">Status</th>
                 </tr>
               </thead>
@@ -515,7 +536,13 @@ function ClassDetailModal({ className, date, tab, onClose }: { className: string
                     <td className="px-3 py-2 font-medium text-ink">{r.name}</td>
                     <td className="px-3 py-2 text-muted">{r.nis || '—'}</td>
                     <td className="px-3 py-2 font-mono text-muted">{r.time || '—'}</td>
+                    <td className="px-3 py-2">
+                      <LocationCell loc={r.checkInLocation} />
+                    </td>
                     <td className="px-3 py-2 font-mono text-muted">{r.checkOut || '—'}</td>
+                    <td className="px-3 py-2">
+                      <LocationCell loc={r.checkOutLocation} />
+                    </td>
                     <td className="px-3 py-2">
                       <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: `${STATUS_COLORS[r.status]}1a`, color: STATUS_COLORS[r.status] }}>
                         {STATUS_LABELS[r.status]}{r.status === 'LATE' && r.lateMinutes ? ` (${r.lateMinutes}m)` : ''}

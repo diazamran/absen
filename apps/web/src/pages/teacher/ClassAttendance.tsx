@@ -1,15 +1,26 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, UserRound, CheckCircle2, Clock3, FileQuestion, UserX } from 'lucide-react';
+import { ArrowLeft, UserRound, CheckCircle2, Clock3, FileQuestion, UserX, MapPin, MapPinOff } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { Card, Badge, Button, BottomSheet, Segmented, EmptyState, StatCard } from '../../lib/ui';
 import { STATUS_LABELS, STATUS_COLORS, timeLabel, todayJakartaKey } from '../../lib/format';
 
+interface LocationInfo {
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+  distanceMeters: number;
+  locationVerified: boolean;
+  mapsUrl: string;
+}
+
 interface StudentRow {
   studentId: string; name: string; nis: string; status: string;
   checkIn?: string | null; checkOut?: string | null; lateMinutes: number; method?: string | null;
+  checkInLocation?: LocationInfo | null;
+  checkOutLocation?: LocationInfo | null;
 }
 
 const STATUS_OPTIONS = ['PRESENT', 'LATE', 'EXCUSED', 'SICK', 'OFFICIAL_DUTY', 'ABSENT'];
@@ -100,6 +111,35 @@ export default function ClassAttendance() {
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-bold text-ink">{s.name}</p>
               <p className="text-xs text-muted">{s.nis} · {s.checkIn ? `Datang ${s.checkIn}` : 'Belum datang'}{s.checkOut ? ` · Pulang ${s.checkOut}` : ''}</p>
+              {/* Info lokasi datang & pulang */}
+              <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                {s.checkInLocation && (
+                  <a
+                    href={s.checkInLocation.mapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className={`inline-flex items-center gap-1 text-[11px] font-semibold hover:underline ${s.checkInLocation.locationVerified ? 'text-emerald-600' : 'text-amber-500'}`}
+                    title={`${s.checkInLocation.latitude}, ${s.checkInLocation.longitude}${s.checkInLocation.accuracy != null ? ` · ±${Math.round(s.checkInLocation.accuracy)}m` : ''}`}
+                  >
+                    {s.checkInLocation.locationVerified ? <MapPin className="h-2.5 w-2.5" /> : <MapPinOff className="h-2.5 w-2.5" />}
+                    Datang {s.checkInLocation.distanceMeters} m
+                  </a>
+                )}
+                {s.checkOutLocation && (
+                  <a
+                    href={s.checkOutLocation.mapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className={`inline-flex items-center gap-1 text-[11px] font-semibold hover:underline ${s.checkOutLocation.locationVerified ? 'text-emerald-600' : 'text-amber-500'}`}
+                    title={`${s.checkOutLocation.latitude}, ${s.checkOutLocation.longitude}${s.checkOutLocation.accuracy != null ? ` · ±${Math.round(s.checkOutLocation.accuracy)}m` : ''}`}
+                  >
+                    {s.checkOutLocation.locationVerified ? <MapPin className="h-2.5 w-2.5" /> : <MapPinOff className="h-2.5 w-2.5" />}
+                    Pulang {s.checkOutLocation.distanceMeters} m
+                  </a>
+                )}
+              </div>
             </div>
             <Badge status={s.status} label={s.status === 'LATE' && s.lateMinutes ? `Terlambat ${s.lateMinutes}m` : STATUS_LABELS[s.status]} />
           </Card>

@@ -1,12 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { recordAttendance, manualAttendance, updateAttendance, deleteAttendance } from '../services/attendance.js';
+import { recordAttendance, manualAttendance, updateAttendance, deleteAttendance, haversineMeters } from '../services/attendance.js';
 import { issueQrToken } from '../services/qr.js';
 import { validate } from '../utils/validate.js';
 import { ApiError } from '../utils/errors.js';
 import { todayStart, todayEnd, dateKey, localTime, startOfLocalDay, localDateKeyOfStoredDate } from '../lib/time.js';
 import { PERMISSION_KEYS, roleHasPermission } from '../rbac/permissions.js';
+import { getAttendanceRules } from '../services/settings.js';
 
 const proofSchema = z.object({
   descriptor: z.array(z.number()).optional(),
@@ -379,6 +380,25 @@ export async function attendanceRoutes(app: FastifyInstance) {
       attMap.set(a.userId, list);
     }
 
+    // Ambil koordinat sekolah untuk hitung jarak tiap absen
+    const rules = await getAttendanceRules();
+    const refLat = rules.schoolLatitude;
+    const refLng = rules.schoolLongitude;
+
+    /** Bangun info lokasi dari satu baris attendance */
+    const buildLocation = (row: (typeof atts)[number] | undefined) => {
+      if (!row || row.latitude == null || row.longitude == null) return null;
+      const dist = Math.round(haversineMeters(row.latitude, row.longitude, refLat, refLng));
+      return {
+        latitude: row.latitude,
+        longitude: row.longitude,
+        accuracy: row.accuracy ?? null,
+        distanceMeters: dist,
+        locationVerified: row.locationVerified,
+        mapsUrl: `https://maps.google.com/?q=${row.latitude},${row.longitude}`,
+      };
+    };
+
     return reply.send({
       success: true,
       data: klass.students.map((s) => {
@@ -394,6 +414,8 @@ export async function attendanceRoutes(app: FastifyInstance) {
           checkOut: checkOut?.checkOut ? localTime(checkOut.checkOut) : null,
           lateMinutes: checkIn?.lateMinutes ?? 0,
           method: checkIn?.method ?? null,
+          checkInLocation: buildLocation(checkIn),
+          checkOutLocation: buildLocation(checkOut),
         };
       }),
     });
