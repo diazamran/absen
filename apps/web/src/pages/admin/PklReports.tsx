@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Calendar, MapPin, MapPinOff, Download, Loader2, BarChart3 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { api } from '../../lib/api';
 import { Card, Badge, Skeleton, Button, EmptyState } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
@@ -91,36 +92,106 @@ interface PklLocation {
   name: string;
 }
 
-function exportDailyToCSV(report: DailyReport) {
-  const headers = ['No', 'Nama', 'NISN', 'Kelas', 'Lokasi', 'Guru Pembimbing', 'Jam Masuk', 'Jam Pulang', 'Status', 'Metode'];
+function exportDailyToExcel(report: DailyReport) {
+  const title = `Laporan PKL Harian — ${report.date}`;
+  const subtitle = `Total: ${report.total} siswa · Hadir: ${report.present} · Terlambat: ${report.late} · Sakit/Izin: ${report.sick + report.excused} · Absen: ${report.absent}`;
+
+  const headers = [
+    'No', 'Nama', 'NISN', 'Kelas', 'Lokasi PKL', 'Guru Pembimbing',
+    'Jam Masuk', 'Titik Masuk (m)', 'Koordinat Masuk',
+    'Jam Pulang', 'Titik Pulang (m)', 'Koordinat Pulang',
+    'Status', 'Metode',
+  ];
+
   const rows = report.rows.map((r, i) => [
-    i + 1, r.fullName, r.nis ?? '', r.className ?? '', r.locationName, r.supervisorName ?? '',
-    r.checkIn ?? '-', r.checkOut ? r.checkOut + (r.earlyLeave ? ' (Pulang Awal)' : '') : '-', STATUS_LABELS[r.status as keyof typeof STATUS_LABELS] ?? r.status, r.method ?? '-',
+    i + 1,
+    r.fullName,
+    r.nis ?? '',
+    r.className ?? '',
+    r.locationName,
+    r.supervisorName ?? '',
+    r.checkIn ?? '-',
+    r.checkInLocation ? r.checkInLocation.distanceMeters ?? '' : '',
+    r.checkInLocation ? `${r.checkInLocation.latitude},${r.checkInLocation.longitude}` : '',
+    r.checkOut ? r.checkOut + (r.earlyLeave ? ' (Pulang Awal)' : '') : '-',
+    r.checkOutLocation ? r.checkOutLocation.distanceMeters ?? '' : '',
+    r.checkOutLocation ? `${r.checkOutLocation.latitude},${r.checkOutLocation.longitude}` : '',
+    STATUS_LABELS[r.status as keyof typeof STATUS_LABELS] ?? r.status,
+    r.method ?? '-',
   ]);
-  const csv = [headers, ...rows].map((r) => r.join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `laporan-pkl-harian-${report.date}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+
+  const aoa: (string | number)[][] = [
+    [title],
+    [subtitle],
+    [],
+    headers,
+    ...rows,
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  // Lebar kolom
+  ws['!cols'] = [
+    { wch: 4 }, { wch: 28 }, { wch: 14 }, { wch: 12 }, { wch: 18 }, { wch: 26 },
+    { wch: 10 }, { wch: 14 }, { wch: 24 },
+    { wch: 10 }, { wch: 14 }, { wch: 24 },
+    { wch: 14 }, { wch: 10 },
+  ];
+  // Merge baris judul
+  ws['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } },
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Laporan PKL Harian');
+  XLSX.writeFile(wb, `laporan-pkl-harian-${report.date}.xlsx`, { bookType: 'xlsx' });
 }
 
-function exportMonthlyToCSV(report: MonthlyReport) {
-  const headers = ['No', 'Nama', 'NISN', 'Kelas', 'Lokasi', 'Guru Pembimbing', 'Hadir', 'Terlambat', 'Sakit', 'Izin', 'Absen', 'Persentase'];
+function exportMonthlyToExcel(report: MonthlyReport) {
+  const title = `Laporan PKL Bulanan — ${report.month}`;
+  const subtitle = `Total: ${report.totalStudents} siswa · ${report.schoolDays} hari kerja`;
+
+  const headers = [
+    'No', 'Nama', 'NISN', 'Kelas', 'Lokasi PKL', 'Guru Pembimbing',
+    'Hadir', 'Terlambat', 'Sakit', 'Izin', 'Absen', 'Persentase (%)',
+  ];
+
   const rows = report.rows.map((r, i) => [
-    i + 1, r.fullName, r.nis ?? '', r.className ?? '', r.locationName, r.supervisorName ?? '',
-    r.present, r.late, r.sick, r.excused, r.absent, `${r.percentage}%`,
+    i + 1,
+    r.fullName,
+    r.nis ?? '',
+    r.className ?? '',
+    r.locationName,
+    r.supervisorName ?? '',
+    r.present,
+    r.late,
+    r.sick,
+    r.excused,
+    r.absent,
+    r.percentage,
   ]);
-  const csv = [headers, ...rows].map((r) => r.join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `laporan-pkl-bulanan-${report.month}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+
+  const aoa: (string | number)[][] = [
+    [title],
+    [subtitle],
+    [],
+    headers,
+    ...rows,
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [
+    { wch: 4 }, { wch: 28 }, { wch: 14 }, { wch: 12 }, { wch: 18 }, { wch: 26 },
+    { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 14 },
+  ];
+  ws['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } },
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Laporan PKL Bulanan');
+  XLSX.writeFile(wb, `laporan-pkl-bulanan-${report.month}.xlsx`, { bookType: 'xlsx' });
 }
 
 export default function PklReports() {
@@ -164,10 +235,10 @@ export default function PklReports() {
         action={
           <Button
             variant="outline"
-            onClick={() => tab === 'daily' && daily ? exportDailyToCSV(daily) : tab === 'monthly' && monthly ? exportMonthlyToCSV(monthly) : null}
+            onClick={() => tab === 'daily' && daily ? exportDailyToExcel(daily) : tab === 'monthly' && monthly ? exportMonthlyToExcel(monthly) : null}
             disabled={tab === 'daily' ? !daily : !monthly}
           >
-            <Download className="h-4 w-4" /> Export CSV
+            <Download className="h-4 w-4" /> Export Excel
           </Button>
         }
       />
