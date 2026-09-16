@@ -72,15 +72,19 @@ export default function Settings() {
   };
 
   const mutation = useMutation({
-    mutationFn: () =>
-      api('/settings', {
+    mutationFn: () => {
+      const lat = s.latitude !== undefined && s.latitude !== '' ? Number(s.latitude) : undefined;
+      const lng = s.longitude !== undefined && s.longitude !== '' ? Number(s.longitude) : undefined;
+      const hasValidCoords = lat !== undefined && lng !== undefined && Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
+      return api('/settings', {
         method: 'PUT',
         body: {
           branding: branding ? { ...b } : undefined,
           attendanceRules: rules ? { ...r } : undefined,
-          school: school ? { latitude: Number(s.latitude), longitude: Number(s.longitude) } : undefined,
+          school: school ? (hasValidCoords ? { latitude: lat, longitude: lng } : {}) : undefined,
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast('success', 'Pengaturan disimpan.');
       qc.invalidateQueries({ queryKey: ['settings'] });
@@ -229,16 +233,37 @@ export default function Settings() {
           <div className="mt-4 rounded-2xl border border-line/70 bg-slate-50/60 p-3 dark:bg-slate-900/40">
             <p className="mb-2 text-sm font-semibold text-ink">📍 Titik Absensi (GPS)</p>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Latitude"><Input type="number" step="any" value={Number(s.latitude) || ''} onChange={(e) => setS('latitude', e.target.value)} placeholder="-7.9659" /></Field>
-              <Field label="Longitude"><Input type="number" step="any" value={Number(s.longitude) || ''} onChange={(e) => setS('longitude', e.target.value)} placeholder="111.9926" /></Field>
+              <Field label="Latitude">
+                <Input
+                  type="number"
+                  step="any"
+                  value={s.latitude !== undefined && s.latitude !== null && s.latitude !== '' ? String(s.latitude) : ''}
+                  onChange={(e) => setS('latitude', e.target.value)}
+                  placeholder="-7.9891495273718744"
+                />
+              </Field>
+              <Field label="Longitude">
+                <Input
+                  type="number"
+                  step="any"
+                  value={s.longitude !== undefined && s.longitude !== null && s.longitude !== '' ? String(s.longitude) : ''}
+                  onChange={(e) => setS('longitude', e.target.value)}
+                  placeholder="111.95729774418646"
+                />
+              </Field>
               <Field label="Radius (meter)"><Input type="number" value={Number(r.radiusMeters ?? 100)} onChange={(e) => setR('radiusMeters', Number(e.target.value))} /></Field>
               <label className="flex items-center gap-2 pt-5 text-sm font-medium text-ink">
                 <input type="checkbox" checked={r.locationEnabled === true} onChange={(e) => setR('locationEnabled', e.target.checked)} className="h-4 w-4 accent-teal-600" />
                 Wajib GPS di area sekolah
               </label>
             </div>
+            {r.locationEnabled === true && (!s.latitude || !s.longitude || Number(s.latitude) === 0 || Number(s.longitude) === 0) && (
+              <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-medium text-red-600 dark:bg-red-500/10 dark:text-red-400">
+                ⚠️ GPS wajib diaktifkan tapi koordinat sekolah belum diisi — siswa tidak akan bisa absen. Isi Latitude dan Longitude lalu simpan.
+              </p>
+            )}
             <p className="mt-2 text-xs leading-relaxed text-muted">
-              Cara ambil koordinat: buka Google Maps → klik kanan lokasi sekolah → salin angka dari kotak pencarian (contoh: <code>-7.965900, 111.992600</code>).
+              Cara ambil koordinat: buka Google Maps → klik kanan lokasi sekolah → salin angka pertama (contoh: <code>-7.989149, 111.957297</code>).
               Jika diaktifkan, siswa hanya bisa absen dalam radius ini dari titik sekolah.
             </p>
           </div>

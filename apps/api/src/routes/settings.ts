@@ -62,7 +62,14 @@ export async function settingRoutes(app: FastifyInstance) {
       }
     }
     if (body.school) {
-      await prisma.school.updateMany({ data: { ...(body.school as object), updatedAt: new Date() } });
+      const schoolData = body.school as Record<string, unknown>;
+      // Hanya update koordinat yang terisi valid — jangan timpa nilai yang ada dengan null/NaN
+      const updateData: { latitude?: number; longitude?: number; updatedAt: Date } = { updatedAt: new Date() };
+      const lat = Number(schoolData.latitude);
+      const lng = Number(schoolData.longitude);
+      if (Number.isFinite(lat) && lat !== 0) updateData.latitude = lat;
+      if (Number.isFinite(lng) && lng !== 0) updateData.longitude = lng;
+      await prisma.school.updateMany({ data: updateData });
       updated.push('school');
     }
 

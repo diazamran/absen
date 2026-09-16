@@ -51,9 +51,12 @@ body {
   }
 }
 
-/* Kamera fullscreen */
-.camera-view video {
+/* Kamera fullscreen — elemen video itu sendiri yang punya class camera-view */
+.camera-view {
   object-fit: cover;
+  /* Mirror kamera depan (selfie) secara visual — preview tampak alami.
+     captureFrame() tetap mengambil frame tanpa mirror supaya descriptor
+     wajah konsisten dengan data enroll yang juga tidak di-mirror. */
   transform: scaleX(-1);
 }
 

@@ -35,8 +35,8 @@ export const config = {
   checkInDeadlineMinute: num(process.env.CHECK_IN_DEADLINE_MINUTE, 59),
   locationEnabled: process.env.LOCATION_ENABLED === 'true',
   locationRadiusMeters: num(process.env.LOCATION_RADIUS_METERS, 100),
-  schoolLatitude: num(process.env.SCHOOL_LATITUDE, -6.2088),
-  schoolLongitude: num(process.env.SCHOOL_LONGITUDE, 106.8456),
+  schoolLatitude: num(process.env.SCHOOL_LATITUDE, -7.9891495273718744),
+  schoolLongitude: num(process.env.SCHOOL_LONGITUDE, 111.95729774418646),
 
   storage: {
     driver: process.env.STORAGE_DRIVER || 'local',
