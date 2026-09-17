@@ -99,7 +99,7 @@ interface PklLocation {
 
 function exportDailyToExcel(report: DailyReport) {
   const title = `Laporan PKL Harian — ${report.date}`;
-  const subtitle = `Total: ${report.total} siswa · Hadir: ${report.present} · Terlambat: ${report.late} · Sakit/Izin: ${report.sick + report.excused} · Absen: ${report.absent}`;
+  const subtitle = `Total: ${report.total} siswa · Hadir: ${report.present} · Terlambat: ${report.late} · Sakit/Izin: ${report.sick + report.excused} · Alpa: ${report.absent}`;
 
   const headers = [
     'No', 'Nama', 'NISN', 'Kelas', 'Lokasi PKL', 'Guru Pembimbing',
@@ -159,7 +159,7 @@ function exportMonthlyToExcel(report: MonthlyReport) {
   const headers = [
     'No', 'Nama', 'NISN', 'Kelas', 'Lokasi PKL', 'Guru Pembimbing',
     'Tgl Mulai PKL', 'Tgl Selesai PKL',
-    'Hadir', 'Terlambat', 'Sakit', 'Izin', 'Absen', 'Persentase (%)',
+    'Hadir', 'Terlambat', 'Sakit', 'Izin', 'Alpa', 'Persentase (%)',
   ];
 
   const rows = report.rows.map((r, i) => [
@@ -306,7 +306,7 @@ export default function PklReports() {
                   { label: 'Hadir', value: daily.present, color: 'text-emerald-500' },
                   { label: 'Terlambat', value: daily.late, color: 'text-amber-500' },
                   { label: 'Sakit/Izin', value: daily.sick + daily.excused, color: 'text-blue-500' },
-                  { label: 'Absen', value: daily.absent, color: 'text-red-500' },
+                  { label: 'Alpa', value: daily.absent, color: 'text-red-500' },
                 ].map((s) => (
                   <Card key={s.label} className="p-3 text-center">
                     <p className={`text-2xl font-extrabold ${s.color}`}>{s.value}</p>
@@ -423,7 +423,7 @@ export default function PklReports() {
                   <p className="text-2xl font-extrabold text-red-500">
                     {monthly.rows.reduce((a, r) => a + r.absent, 0)}
                   </p>
-                  <p className="text-xs text-muted">Total Absen</p>
+                  <p className="text-xs text-muted">Total Alpa</p>
                 </Card>
               </div>
 
@@ -450,7 +450,7 @@ export default function PklReports() {
                           <th className="px-3 py-2">Terlambat</th>
                           <th className="px-3 py-2">Sakit</th>
                           <th className="px-3 py-2">Izin</th>
-                          <th className="px-3 py-2">Absen</th>
+                          <th className="px-3 py-2">Alpa</th>
                           <th className="px-3 py-2">%</th>
                         </tr>
                       </thead>

@@ -60,7 +60,7 @@ const STATUS_SHORT: Record<string, string> = {
   EXCUSED: 'Izin',
   SICK: 'Sakit',
   OFFICIAL_DUTY: 'Dinas',
-  ABSENT: 'Tidak Hadir',
+  ABSENT: 'Alpa',
   LEAVE: 'Cuti',
 };
 
@@ -127,7 +127,7 @@ export function exportReportPdf(opts: ReportExportOptions): void {
     doc.setFont('helvetica', 'normal');
     autoTable(doc, {
       startY: after + 13,
-      head: [['Kelas', 'Total Siswa', 'Hadir', 'Terlambat', 'Izin / Sakit', 'Tidak Hadir']],
+      head: [['Kelas', 'Total Siswa', 'Hadir', 'Terlambat', 'Izin / Sakit', 'Alpa']],
       body: opts.classSummary.map((c) => [c.className, String(c.total), String(c.present), String(c.late), String(c.excused), String(c.absent)]),
       styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: [13, 148, 136], fontSize: 8 },
@@ -204,7 +204,7 @@ export function exportReportExcel(opts: ReportExportOptions): void {
     [summaryLine(opts.summary)],
     [],
     ['REKAP PER KELAS'],
-    ['Kelas', 'Total Siswa', 'Hadir', 'Terlambat', 'Izin / Sakit', 'Tidak Hadir'],
+    ['Kelas', 'Total Siswa', 'Hadir', 'Terlambat', 'Izin / Sakit', 'Alpa'],
     ...(opts.classSummary?.length
       ? opts.classSummary.map((c) => [c.className, c.total, c.present, c.late, c.excused, c.absent])
       : []),

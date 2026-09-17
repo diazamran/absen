@@ -122,7 +122,7 @@ export default function PklDashboard() {
       ]),
       [],
       [`Rekap Bulanan - ${formatLongDate(`${month}-01`).replace(/^\d+ /, '')}`],
-      ['No', 'Nama Siswa', 'NIS', 'Kelas', 'Lokasi PKL', 'Hadir', 'Terlambat', 'Sakit', 'Izin', 'Tidak Hadir', 'Total Hari'],
+      ['No', 'Nama Siswa', 'NIS', 'Kelas', 'Lokasi PKL', 'Hadir', 'Terlambat', 'Sakit', 'Izin', 'Alpa', 'Total Hari'],
       ...rekapRows.map((r, i) => [
         i + 1,
         r.fullName,
@@ -308,7 +308,7 @@ export default function PklDashboard() {
           <span className="rounded-full bg-amber-50 px-2 py-0.5 font-bold text-amber-600">Terlambat</span>
           <span className="rounded-full bg-blue-50 px-2 py-0.5 font-bold text-blue-600">Sakit</span>
           <span className="rounded-full bg-purple-50 px-2 py-0.5 font-bold text-purple-600">Izin</span>
-          <span className="rounded-full bg-red-50 px-2 py-0.5 font-bold text-red-600">Tidak Hadir</span>
+          <span className="rounded-full bg-red-50 px-2 py-0.5 font-bold text-red-600">Alpa</span>
         </div>
         <p className="mb-3 text-[11px] text-muted">Angka "Hadir" sudah mencakup siswa yang datang terlambat.</p>
         {rekapLoading && <Skeleton className="h-24 w-full" />}
@@ -329,7 +329,7 @@ export default function PklDashboard() {
               <span className="rounded-full bg-amber-50 px-2 py-0.5 font-bold text-amber-600">Terlambat: {r.late}</span>
               <span className="rounded-full bg-blue-50 px-2 py-0.5 font-bold text-blue-600">Sakit: {r.sick}</span>
               <span className="rounded-full bg-purple-50 px-2 py-0.5 font-bold text-purple-600">Izin: {r.excused}</span>
-              <span className="rounded-full bg-red-50 px-2 py-0.5 font-bold text-red-600">Tidak Hadir: {r.absent}</span>
+              <span className="rounded-full bg-red-50 px-2 py-0.5 font-bold text-red-600">Alpa: {r.absent}</span>
             </div>
           </div>
         ))}

@@ -83,7 +83,7 @@ const SUMMARY_KEYS: { key: keyof Summary; label: string }[] = [
   { key: 'SICK', label: 'Sakit' },
   { key: 'OFFICIAL_DUTY', label: 'Dinas' },
   { key: 'DISPENSATION', label: 'Dispensasi' },
-  { key: 'ABSENT', label: 'Tidak Hadir' },
+  { key: 'ABSENT', label: 'Alpa' },
 ];
 
 export default function Reports() {
@@ -368,7 +368,7 @@ export default function Reports() {
                   <th className="px-3 py-2">Hadir</th>
                   <th className="px-3 py-2">Terlambat</th>
                   <th className="px-3 py-2">Izin / Sakit / Dispensasi</th>
-                  <th className="px-3 py-2">Tidak Hadir</th>
+                  <th className="px-3 py-2">Alpa</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">

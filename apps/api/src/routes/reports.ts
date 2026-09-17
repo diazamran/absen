@@ -15,7 +15,7 @@ const STATUS_LABELS: Record<string, string> = {
   SICK: 'Sakit',
   OFFICIAL_DUTY: 'Dinas',
   DISPENSATION: 'Dispensasi',
-  ABSENT: 'Tidak Hadir',
+  ABSENT: 'Alpa',
   LEAVE: 'Cuti',
 };
 

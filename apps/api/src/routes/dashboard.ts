@@ -11,7 +11,7 @@ const STATUS_LABELS: Record<string, string> = {
   SICK: 'Sakit',
   OFFICIAL_DUTY: 'Dinas',
   DISPENSATION: 'Dispensasi',
-  ABSENT: 'Tidak Hadir',
+  ABSENT: 'Alpa',
   LEAVE: 'Cuti',
 };
 
@@ -144,7 +144,7 @@ async function schoolStats(dayStart: Date, dayEnd: Date) {
       { name: 'Izin', value: counts.EXCUSED || 0, color: '#3b82f6' },
       { name: 'Sakit', value: counts.SICK || 0, color: '#a855f7' },
       { name: 'Dispensasi', value: counts.DISPENSATION || 0, color: '#14b8a6' },
-      { name: 'Tidak Hadir', value: absentCount, color: '#ef4444' },
+      { name: 'Alpa', value: absentCount, color: '#ef4444' },
       { name: 'Cuti', value: leaveCount, color: '#8b5cf6' },
     ],
     recent: recent.map((r) => ({

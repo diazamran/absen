@@ -51,7 +51,7 @@ export default function Monitor() {
         <BigStat label="HADIR" value={`${s?.percent ?? 0}%`} color="#22c55e" />
         <BigStat label="TERLAMBAT" value={s?.late ?? 0} color="#f59e0b" />
         <BigStat label="IZIN / SAKIT" value={s?.excused ?? 0} color="#3b82f6" />
-        <BigStat label="TIDAK HADIR" value={s?.absent ?? 0} color="#ef4444" />
+        <BigStat label="ALPA" value={s?.absent ?? 0} color="#ef4444" />
         <BigStat label="BELUM HADIR" value={s?.notYet ?? 0} color="#94a3b8" />
       </div>
 
