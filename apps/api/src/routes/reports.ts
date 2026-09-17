@@ -49,25 +49,33 @@ async function checkOutMap(
 ): Promise<Map<string, { time: string; earlyLeave: boolean; method: string; latitude: number | null; longitude: number | null; accuracy: number | null; locationVerified: boolean }>> {
   const outs = await prisma.attendance.findMany({
     where: { type: 'CHECK_OUT', date: { gte: start, lt: end }, ...(classId ? { student: { classId } } : {}) },
-    select: { userId: true, checkOut: true, earlyLeave: true, method: true, latitude: true, longitude: true, accuracy: true, locationVerified: true },
+    select: { userId: true, date: true, checkOut: true, earlyLeave: true, method: true, latitude: true, longitude: true, accuracy: true, locationVerified: true },
     orderBy: { checkOut: 'asc' },
   });
+  // Key = "userId:dateISO" agar jam pulang dari tanggal berbeda tidak saling menimpa.
+  // Sebelumnya key = userId saja → laporan bulanan menampilkan jam pulang dari hari lain.
   const m = new Map<string, { time: string; earlyLeave: boolean; method: string; latitude: number | null; longitude: number | null; accuracy: number | null; locationVerified: boolean }>();
   for (const o of outs) {
-    if (o.checkOut) m.set(o.userId, {
-      time: localTime(o.checkOut),
-      earlyLeave: o.earlyLeave,
-      method: o.method,
-      latitude: o.latitude,
-      longitude: o.longitude,
-      accuracy: o.accuracy,
-      locationVerified: o.locationVerified,
-    });
+    if (o.checkOut) {
+      const key = `${o.userId}:${o.date.toISOString().slice(0, 10)}`;
+      m.set(key, {
+        time: localTime(o.checkOut),
+        earlyLeave: o.earlyLeave,
+        method: o.method,
+        latitude: o.latitude,
+        longitude: o.longitude,
+        accuracy: o.accuracy,
+        locationVerified: o.locationVerified,
+      });
+    }
   }
   return m;
 }
 
-/** Rekap per kelas: total siswa, hadir, terlambat, izin/sakit, dan tidak hadir pada rentang tanggal. */
+/** Helper: buat key checkOutMap dari userId + tanggal attendance (Date object dari DB). */
+function outKey(userId: string, date: Date): string {
+  return `${userId}:${date.toISOString().slice(0, 10)}`;
+}
 async function classRecap(start: Date, end: Date) {
   const classes = await prisma.class.findMany({
     where: { isActive: true },
@@ -163,7 +171,7 @@ export async function reportRoutes(app: FastifyInstance) {
           ABSENT: counts.ABSENT || 0,
         },
         rows: rows.map((r) => {
-          const out = outs.get(r.userId);
+          const out = outs.get(outKey(r.userId, r.date));
           return {
             name: r.user?.fullName ?? '-',
             nis: r.student?.nis ?? null,
@@ -230,8 +238,8 @@ export async function reportRoutes(app: FastifyInstance) {
           className: r.student?.class?.name ?? null,
           date: localDateKeyOfStoredDate(r.date),
           time: r.checkIn ? localTime(r.checkIn) : null,
-          checkOut: outs.get(r.userId)?.time ?? null,
-          earlyLeave: outs.get(r.userId)?.earlyLeave ?? false,
+          checkOut: outs.get(outKey(r.userId, r.date))?.time ?? null,
+          earlyLeave: outs.get(outKey(r.userId, r.date))?.earlyLeave ?? false,
           status: r.status,
           statusLabel: STATUS_LABELS[r.status],
           method: r.method,
@@ -499,7 +507,7 @@ export async function reportRoutes(app: FastifyInstance) {
         NIS: r.student?.nis ?? '',
         Kelas: r.student?.class?.name ?? '',
         'Jam Datang': r.checkIn ? localTime(r.checkIn) : '',
-        'Jam Pulang': outs.get(r.userId)?.time ?? '',
+        'Jam Pulang': outs.get(outKey(r.userId, r.date))?.time ?? '',
         Status: STATUS_LABELS[r.status] ?? r.status,
         Metode: r.method,
         'Terlambat (menit)': r.lateMinutes,
@@ -515,7 +523,7 @@ export async function reportRoutes(app: FastifyInstance) {
       rows = atts.map((r) => ({
         Tanggal: localDateKeyOfStoredDate(r.date),
         'Jam Datang': r.checkIn ? localTime(r.checkIn) : '',
-        'Jam Pulang': outs.get(r.userId)?.time ?? '',
+        'Jam Pulang': outs.get(outKey(r.userId, r.date))?.time ?? '',
         Status: STATUS_LABELS[r.status] ?? r.status,
         Metode: r.method,
         'Terlambat (menit)': r.lateMinutes,
