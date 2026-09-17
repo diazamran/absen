@@ -759,18 +759,15 @@ export async function pklRoutes(app: FastifyInstance) {
       if (wd >= 1 && wd <= 5) elapsedSchoolDays++; // Senin–Jumat
     }
 
-    // Hitung durasi total PKL (hari kerja) dari pklStart sampai akhir bulan
-    // Ini dipakai frontend untuk menampilkan "Durasi PKL: X hari kerja"
+    // Hitung durasi total PKL (hari kerja) dari pklStart sampai HARI INI — lintas bulan.
+    // Ini dipakai banner frontend "Durasi s.d. sekarang: X hari kerja".
     let totalPklWorkdays = 0;
     if (pklStart) {
-      // Hitung dari pklStart sampai akhir bulan (atau hari ini jika bulan berjalan)
-      const countTo = todayDate < new Date(Date.UTC(my, mo, 0)) ? todayDate : new Date(Date.UTC(my, mo, 0));
-      for (let day = 1; day <= daysInMonth; day++) {
-        const dayDate = new Date(Date.UTC(my, mo - 1, day));
-        if (dayDate < pklStart) continue;
-        if (dayDate > countTo) continue;
-        const wd = dayDate.getUTCDay();
+      const cur = new Date(pklStart.getTime());
+      while (cur <= todayDate) {
+        const wd = cur.getUTCDay();
         if (wd >= 1 && wd <= 5) totalPklWorkdays++;
+        cur.setUTCDate(cur.getUTCDate() + 1);
       }
     }
 
