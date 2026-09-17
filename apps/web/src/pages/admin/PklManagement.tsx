@@ -21,6 +21,7 @@ interface PklLocation {
   contactName: string | null;
   startDate: string | null;
   endDate: string | null;
+  workDays: number[] | null;
   isActive: boolean;
   studentCount: number;
   students: PklStudent[];
@@ -79,19 +80,22 @@ function LocationForm({ initial, onClose }: { initial?: PklLocation; onClose: ()
     contactName: initial?.contactName ?? '',
     startDate: initial?.startDate ?? '',
     endDate: initial?.endDate ?? '',
+    workDays: initial?.workDays ?? [1, 2, 3, 4, 5], // default Senin-Jumat
   });
 
-  // Hitung durasi PKL (hari kerja Senin–Jumat) dari startDate ke endDate
+  // Hitung durasi PKL berdasarkan workDays yang dipilih
   const durasiHariKerja = (() => {
     if (!form.startDate || !form.endDate) return null;
     const start = new Date(form.startDate);
     const end = new Date(form.endDate);
     if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return null;
+    const workSet = new Set(form.workDays);
     let count = 0;
     const cur = new Date(start);
     while (cur <= end) {
-      const wd = cur.getDay();
-      if (wd >= 1 && wd <= 5) count++;
+      const wd = cur.getDay(); // 0=Min,1=Sen,...,6=Sab
+      const wdNum = wd === 0 ? 7 : wd;
+      if (workSet.has(wdNum)) count++;
       cur.setDate(cur.getDate() + 1);
     }
     return count;
@@ -110,6 +114,7 @@ function LocationForm({ initial, onClose }: { initial?: PklLocation; onClose: ()
         radiusMeter: Number(form.radiusMeter),
         startDate: form.startDate || null,
         endDate: form.endDate || null,
+        workDays: form.workDays.length > 0 ? form.workDays : [1, 2, 3, 4, 5],
       };
       return initial
         ? api(`/pkl/locations/${initial.id}`, { method: 'PUT', body })
@@ -168,7 +173,47 @@ function LocationForm({ initial, onClose }: { initial?: PklLocation; onClose: ()
 
       {/* Periode PKL */}
       <div className="rounded-2xl border border-line/70 bg-slate-50/60 p-3 dark:bg-slate-900/40">
-        <p className="mb-2 text-xs font-semibold text-ink">📅 Periode PKL</p>
+        <p className="mb-2 text-xs font-semibold text-ink">📅 Periode & Hari Kerja PKL</p>
+        {/* Hari kerja */}
+        <div className="mb-3">
+          <p className="mb-1.5 text-xs font-semibold text-muted">Hari Kerja di Tempat PKL</p>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { d: 1, label: 'Sen' }, { d: 2, label: 'Sel' }, { d: 3, label: 'Rab' },
+              { d: 4, label: 'Kam' }, { d: 5, label: 'Jum' }, { d: 6, label: 'Sab' }, { d: 7, label: 'Min' },
+            ].map(({ d, label }) => {
+              const checked = form.workDays.includes(d);
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => {
+                    const next = checked
+                      ? form.workDays.filter((x) => x !== d)
+                      : [...form.workDays, d].sort();
+                    set('workDays', next);
+                  }}
+                  className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                    checked
+                      ? d >= 6
+                        ? 'bg-amber-500 text-white'
+                        : 'bg-primary text-white'
+                      : 'bg-slate-100 text-muted hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            Dipilih: {form.workDays.length} hari/minggu
+            {form.workDays.includes(6) || form.workDays.includes(7)
+              ? ' · Termasuk akhir pekan'
+              : ' · Hanya hari kerja'}
+          </p>
+        </div>
+        {/* Tanggal mulai-selesai */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-xs font-semibold text-muted">Tanggal Mulai</label>
@@ -193,7 +238,7 @@ function LocationForm({ initial, onClose }: { initial?: PklLocation; onClose: ()
           <div className="mt-2 flex items-center gap-2 rounded-xl bg-primary-soft/40 px-3 py-2">
             <span className="text-xs font-semibold text-primary">⏱ Durasi PKL:</span>
             <span className="text-sm font-bold text-ink">{durasiHariKerja} hari kerja</span>
-            <span className="text-xs text-muted">(Senin–Jumat, {form.startDate} s.d. {form.endDate})</span>
+            <span className="text-xs text-muted">({form.startDate} s.d. {form.endDate})</span>
           </div>
         )}
         {form.startDate && form.endDate && durasiHariKerja === null && (
@@ -480,10 +525,24 @@ export default function PklManagement() {
                         {loc.startDate && loc.endDate && (() => {
                           const start = new Date(loc.startDate!);
                           const end = new Date(loc.endDate!);
+                          const workSet = new Set(loc.workDays ?? [1,2,3,4,5]);
                           let count = 0;
                           const cur = new Date(start);
-                          while (cur <= end) { if (cur.getDay() >= 1 && cur.getDay() <= 5) count++; cur.setDate(cur.getDate() + 1); }
+                          while (cur <= end) {
+                            const wd = cur.getDay();
+                            const wdNum = wd === 0 ? 7 : wd;
+                            if (workSet.has(wdNum)) count++;
+                            cur.setDate(cur.getDate() + 1);
+                          }
                           return ` · ${count} hari kerja`;
+                        })()}
+                      </p>
+                    )}
+                    {loc.workDays && (
+                      <p className="text-xs text-muted">
+                        {(() => {
+                          const names = ['','Sen','Sel','Rab','Kam','Jum','Sab','Min'];
+                          return '🗓 ' + loc.workDays.map((d: number) => names[d]).join(', ');
                         })()}
                       </p>
                     )}

@@ -20,6 +20,8 @@ const locationSchema = z.object({
   contactName: z.string().optional(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  // Hari kerja: array 1-7 (1=Sen...7=Min). Null/kosong = Senin-Jumat default.
+  workDays: z.array(z.number().int().min(1).max(7)).optional().nullable(),
 });
 
 const assignmentSchema = z.object({
@@ -105,6 +107,7 @@ export async function pklRoutes(app: FastifyInstance) {
         contactName: r.contactName,
         startDate: (r as any).startDate ? (r as any).startDate.toISOString().slice(0, 10) : null,
         endDate: (r as any).endDate ? (r as any).endDate.toISOString().slice(0, 10) : null,
+        workDays: (r as any).workDays ?? null,
         isActive: r.isActive,
         studentCount: r.assignments.length,
         students: r.assignments.map((a) => ({
@@ -125,12 +128,13 @@ export async function pklRoutes(app: FastifyInstance) {
   // Create PKL location
   app.post('/pkl/locations', { preHandler: app.requirePermission(PERMISSION_KEYS.pklManage) }, async (request, reply) => {
     const body = validate(locationSchema, request.body);
-    const { startDate, endDate, ...rest } = body;
+    const { startDate, endDate, workDays, ...rest } = body;
     const row = await (prisma.pklLocation.create as any)({
       data: {
         ...rest,
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
+        workDays: workDays ?? null,
       },
     });
     await audit({ userId: request.user!.id, action: 'PKL_LOCATION_CREATED', entity: 'PklLocation', entityId: row.id, request });
@@ -141,13 +145,14 @@ export async function pklRoutes(app: FastifyInstance) {
   app.put('/pkl/locations/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.pklManage) }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = validate(locationSchema.partial(), request.body);
-    const { startDate, endDate, ...rest } = body;
+    const { startDate, endDate, workDays, ...rest } = body;
     const row = await (prisma.pklLocation.update as any)({
       where: { id },
       data: {
         ...rest,
         ...(startDate !== undefined ? { startDate: startDate ? new Date(startDate) : null } : {}),
         ...(endDate !== undefined ? { endDate: endDate ? new Date(endDate) : null } : {}),
+        ...(workDays !== undefined ? { workDays: workDays ?? null } : {}),
       },
     });
     await audit({ userId: request.user!.id, action: 'PKL_LOCATION_UPDATED', entity: 'PklLocation', entityId: id, request });
@@ -741,7 +746,28 @@ export async function pklRoutes(app: FastifyInstance) {
       if (dates.length > 0) pklStart = new Date(Math.min(...dates.map((d) => d.getTime())));
     }
 
-    // Hitung hari kerja (Senin–Jumat) yang sudah berlalu sejak pklStart (atau awal bulan)
+    // Kumpulkan workDays dari semua lokasi yang terlibat.
+    // getUTCDay() mengembalikan 0=Min,1=Sen,...,6=Sab
+    // workDays di DB: [1=Sen,2=Sel,3=Rab,4=Kam,5=Jum,6=Sab,7=Min]
+    // Konversi: getUTCDay → workDay: 0→7, 1→1, ..., 6→6
+    const allWorkDays = new Set<number>();
+    assignments.forEach((a) => {
+      const wd: number[] = Array.isArray((a.pklLocation as any).workDays)
+        ? (a.pklLocation as any).workDays
+        : [1, 2, 3, 4, 5]; // default Senin-Jumat
+      wd.forEach((d) => allWorkDays.add(d));
+    });
+    // Jika tidak ada assignment, pakai default
+    if (allWorkDays.size === 0) [1, 2, 3, 4, 5].forEach((d) => allWorkDays.add(d));
+
+    /** Apakah tanggal termasuk hari kerja berdasarkan workDays */
+    const isWorkDay = (date: Date): boolean => {
+      const utcDay = date.getUTCDay(); // 0=Min,1=Sen,...,6=Sab
+      const wdNum = utcDay === 0 ? 7 : utcDay; // konversi: 0→7
+      return allWorkDays.has(wdNum);
+    };
+
+    // Hitung hari kerja yang sudah berlalu sejak pklStart (atau awal bulan)
     // hingga hari ini, dalam rentang bulan yang dipilih.
     const todayParts = dateKey().split('-').map(Number);
     const todayDate = new Date(Date.UTC(todayParts[0], todayParts[1] - 1, todayParts[2]));
@@ -753,10 +779,9 @@ export async function pklRoutes(app: FastifyInstance) {
     let elapsedSchoolDays = 0;
     for (let day = 1; day <= daysInMonth; day++) {
       const dayDate = new Date(Date.UTC(my, mo - 1, day));
-      if (dayDate < countFrom) continue; // sebelum mulai PKL
-      if (dayDate > todayDate) continue; // belum terjadi
-      const wd = dayDate.getUTCDay();
-      if (wd >= 1 && wd <= 5) elapsedSchoolDays++; // Senin–Jumat
+      if (dayDate < countFrom) continue;
+      if (dayDate > todayDate) continue;
+      if (isWorkDay(dayDate)) elapsedSchoolDays++;
     }
 
     // Hitung durasi total PKL (hari kerja) dari pklStart sampai HARI INI — lintas bulan.
@@ -765,8 +790,7 @@ export async function pklRoutes(app: FastifyInstance) {
     if (pklStart) {
       const cur = new Date(pklStart.getTime());
       while (cur <= todayDate) {
-        const wd = cur.getUTCDay();
-        if (wd >= 1 && wd <= 5) totalPklWorkdays++;
+        if (isWorkDay(cur)) totalPklWorkdays++;
         cur.setUTCDate(cur.getUTCDate() + 1);
       }
     }
@@ -806,8 +830,7 @@ export async function pklRoutes(app: FastifyInstance) {
               const dayDate = new Date(Date.UTC(my, mo - 1, day));
               if (dayDate < firstDateUTC) continue;
               if (dayDate > todayDate) continue;
-              const wd = dayDate.getUTCDay();
-              if (wd >= 1 && wd <= 5) activeSchoolDays++;
+              if (isWorkDay(dayDate)) activeSchoolDays++;
             }
           }
 

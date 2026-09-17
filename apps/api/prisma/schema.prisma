@@ -413,6 +413,9 @@ model PklLocation {
   contactName String?   // nama PIC / penanggung jawab
   startDate   DateTime? // tanggal mulai periode PKL
   endDate     DateTime? // tanggal selesai periode PKL
+  // Hari kerja: array angka 1-7 (1=Sen,2=Sel,3=Rab,4=Kam,5=Jum,6=Sab,7=Min)
+  // Default null = hanya Senin-Jumat (1-5). Isi [1,2,3,4,5,6] untuk Senin-Sabtu, dll.
+  workDays    Json?
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
