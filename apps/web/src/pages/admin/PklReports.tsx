@@ -71,19 +71,23 @@ interface MonthlyRow {
   className: string | null;
   locationName: string;
   supervisorName: string | null;
+  startDate: string | null;         // tanggal mulai PKL siswa
+  endDate: string | null;           // tanggal selesai PKL siswa
   totalDays: number;
   present: number;
   late: number;
   sick: number;
   excused: number;
   absent: number;
-  percentage: number | null; // null = belum ada data absen sama sekali
+  percentage: number | null;
   hasData: boolean;
 }
 
 interface MonthlyReport {
   month: string;
   schoolDays: number;
+  pklStartDate: string | null;      // tanggal mulai PKL yang dipakai server
+  totalPklWorkdays: number | null;  // total hari kerja PKL dari startDate s.d. sekarang
   totalStudents: number;
   rows: MonthlyRow[];
 }
@@ -150,10 +154,11 @@ function exportDailyToExcel(report: DailyReport) {
 
 function exportMonthlyToExcel(report: MonthlyReport) {
   const title = `Laporan PKL Bulanan — ${report.month}`;
-  const subtitle = `Total: ${report.totalStudents} siswa · ${report.schoolDays} hari kerja`;
+  const subtitle = `Total: ${report.totalStudents} siswa · ${report.schoolDays} hari kerja${report.pklStartDate ? ` · Mulai PKL: ${report.pklStartDate}` : ''}${report.totalPklWorkdays != null ? ` · Durasi: ${report.totalPklWorkdays} hari kerja` : ''}`;
 
   const headers = [
     'No', 'Nama', 'NISN', 'Kelas', 'Lokasi PKL', 'Guru Pembimbing',
+    'Tgl Mulai PKL', 'Tgl Selesai PKL',
     'Hadir', 'Terlambat', 'Sakit', 'Izin', 'Absen', 'Persentase (%)',
   ];
 
@@ -164,6 +169,8 @@ function exportMonthlyToExcel(report: MonthlyReport) {
     r.className ?? '',
     r.locationName,
     r.supervisorName ?? '',
+    r.startDate ?? '-',
+    r.endDate ?? '-',
     r.present,
     r.late,
     r.sick,
@@ -183,6 +190,7 @@ function exportMonthlyToExcel(report: MonthlyReport) {
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols'] = [
     { wch: 4 }, { wch: 28 }, { wch: 14 }, { wch: 12 }, { wch: 18 }, { wch: 26 },
+    { wch: 13 }, { wch: 13 },
     { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 14 },
   ];
   ws['!merges'] = [
@@ -197,11 +205,11 @@ function exportMonthlyToExcel(report: MonthlyReport) {
 
 export default function PklReports() {
   const [tab, setTab] = useState<'daily' | 'monthly'>('daily');
-  // Default tanggal/bulan memakai WIB — new Date().toISOString() memakai UTC sehingga
-  // sebelum jam 07:00 WIB laporan terbuka untuk tanggal kemarin.
   const [date, setDate] = useState(todayJakartaKey());
   const [month, setMonth] = useState(currentMonthKey());
   const [locationFilter, setLocationFilter] = useState('');
+  // Tanggal mulai PKL untuk laporan bulanan — kosong = server tentukan otomatis
+  const [pklStartDate, setPklStartDate] = useState('');
 
   const { data: locations } = useQuery({
     queryKey: ['pkl-locations-list'],
@@ -219,10 +227,11 @@ export default function PklReports() {
   });
 
   const { data: monthly, isLoading: monthlyLoading } = useQuery({
-    queryKey: ['pkl-report-monthly', month, locationFilter],
+    queryKey: ['pkl-report-monthly', month, locationFilter, pklStartDate],
     queryFn: () => {
       const params = new URLSearchParams({ month });
       if (locationFilter) params.set('locationId', locationFilter);
+      if (pklStartDate) params.set('startDate', pklStartDate);
       return api<{ success: boolean; data: MonthlyReport }>(`/pkl/report/monthly?${params}`).then((r) => r.data);
     },
     enabled: tab === 'monthly',
@@ -257,7 +266,26 @@ export default function PklReports() {
         {tab === 'daily' ? (
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-xl border border-line bg-surface px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800" />
         ) : (
-          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-xl border border-line bg-surface px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800" />
+          <>
+            <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-xl border border-line bg-surface px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800" />
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-muted whitespace-nowrap">Mulai PKL:</label>
+              <input
+                type="date"
+                value={pklStartDate}
+                onChange={(e) => setPklStartDate(e.target.value)}
+                className="rounded-xl border border-line bg-surface px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
+                title="Tanggal mulai PKL — untuk menghitung hari kerja yang tepat"
+              />
+              {pklStartDate && (
+                <button
+                  onClick={() => setPklStartDate('')}
+                  className="text-xs text-muted hover:text-red-500"
+                  title="Reset ke otomatis"
+                >✕</button>
+              )}
+            </div>
+          </>
         )}
         <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} className="rounded-xl border border-line bg-surface px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800">
           <option value="">Semua Lokasi</option>
@@ -346,6 +374,25 @@ export default function PklReports() {
           {monthlyLoading && <Skeleton className="h-32 w-full" />}
           {!monthlyLoading && monthly && (
             <>
+              {/* Info tanggal mulai PKL + durasi */}
+              {monthly.pklStartDate && (
+                <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl border border-primary/20 bg-primary-soft/20 px-4 py-2.5 text-sm">
+                  <span className="font-semibold text-ink">📅 Mulai PKL:</span>
+                  <span className="font-mono text-primary">{monthly.pklStartDate}</span>
+                  {monthly.totalPklWorkdays !== null && (
+                    <>
+                      <span className="text-muted">·</span>
+                      <span className="text-muted">
+                        Durasi s.d. sekarang: <b className="text-ink">{monthly.totalPklWorkdays} hari kerja</b>
+                      </span>
+                    </>
+                  )}
+                  {!pklStartDate && (
+                    <span className="text-xs text-muted italic">(otomatis dari data penugasan)</span>
+                  )}
+                </div>
+              )}
+
               {/* Stats — hanya hitung dari siswa yang punya data attendance */}
               <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Card className="p-3 text-center">
@@ -397,6 +444,8 @@ export default function PklReports() {
                           <th className="px-3 py-2">Nama</th>
                           <th className="px-3 py-2">Kelas</th>
                           <th className="px-3 py-2">Lokasi</th>
+                          <th className="px-3 py-2">Tgl Mulai</th>
+                          <th className="px-3 py-2">Tgl Selesai</th>
                           <th className="px-3 py-2">Hadir</th>
                           <th className="px-3 py-2">Terlambat</th>
                           <th className="px-3 py-2">Sakit</th>
@@ -415,6 +464,8 @@ export default function PklReports() {
                             </td>
                             <td className="px-3 py-2 text-muted">{r.className ?? '-'}</td>
                             <td className="px-3 py-2 text-muted">{r.locationName}</td>
+                            <td className="px-3 py-2 font-mono text-xs text-muted">{r.startDate ?? '-'}</td>
+                            <td className="px-3 py-2 font-mono text-xs text-muted">{r.endDate ?? '-'}</td>
                             <td className="px-3 py-2 text-center font-bold text-emerald-600">{r.present}</td>
                             <td className="px-3 py-2 text-center font-bold text-amber-600">{r.late}</td>
                             <td className="px-3 py-2 text-center font-bold text-blue-600">{r.sick}</td>

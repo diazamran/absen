@@ -667,9 +667,7 @@ export async function pklRoutes(app: FastifyInstance) {
 
   // Laporan PKL bulanan — scoped by supervisor
   app.get('/pkl/report/monthly', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
-    const { month, locationId, classId } = request.query as { month?: string; locationId?: string; classId?: string };
-    // Gunakan monthRange (konsisten dengan laporan absensi utama) — batasnya cocok dengan
-    // cara @db.Date menyimpan tanggal (tanggal UTC = tanggal lokal − 1).
+    const { month, locationId, classId, startDate: startDateParam } = request.query as { month?: string; locationId?: string; classId?: string; startDate?: string };
     const monthKey = month || currentMonthKey();
     const { start: monthStart, end: monthEnd } = monthRange(monthKey);
     const [my, mo] = monthKey.split('-').map(Number);
@@ -677,7 +675,6 @@ export async function pklRoutes(app: FastifyInstance) {
 
     const scope = await getPklScope(request.user!.id);
     const whereAssignment: Record<string, unknown> = { isActive: true };
-    // Supervisor hanya lihat siswanya sendiri
     if (!scope.isAdmin && scope.teacherId) {
       whereAssignment.supervisorId = scope.teacherId;
     }
@@ -703,15 +700,52 @@ export async function pklRoutes(app: FastifyInstance) {
       orderBy: { student: { user: { fullName: 'asc' } } },
     });
 
-    // Hitung hari kerja dalam bulan (Senin–Jumat) dan hari kerja yang SUDAH BERLALU —
-    // siswa tidak boleh dihitung "Absen" untuk hari yang belum terjadi.
-    let elapsedSchoolDays = 0;
+    // Tanggal mulai PKL — dari query param bila admin isi manual,
+    // fallback ke startDate assignment pertama yang ada, fallback ke awal bulan.
+    let pklStart: Date | null = null;
+    if (startDateParam) {
+      const [sy, sm, sd] = startDateParam.split('-').map(Number);
+      if (sy && sm && sd) pklStart = new Date(Date.UTC(sy, sm - 1, sd));
+    }
+    if (!pklStart && assignments.length > 0) {
+      // Ambil startDate paling awal dari semua penugasan aktif bulan ini
+      const dates = assignments
+        .map((a) => a.startDate)
+        .filter(Boolean)
+        .map((d) => new Date(d!));
+      if (dates.length > 0) pklStart = new Date(Math.min(...dates.map((d) => d.getTime())));
+    }
+
+    // Hitung hari kerja (Senin–Jumat) yang sudah berlalu sejak pklStart (atau awal bulan)
+    // hingga hari ini, dalam rentang bulan yang dipilih.
     const todayParts = dateKey().split('-').map(Number);
+    const todayDate = new Date(Date.UTC(todayParts[0], todayParts[1] - 1, todayParts[2]));
+
+    // Batas bawah: pklStart atau tanggal 1 bulan (ambil yang lebih baru)
+    const monthFirstDay = new Date(Date.UTC(my, mo - 1, 1));
+    const countFrom = pklStart && pklStart > monthFirstDay ? pklStart : monthFirstDay;
+
+    let elapsedSchoolDays = 0;
     for (let day = 1; day <= daysInMonth; day++) {
-      const wd = new Date(Date.UTC(my, mo - 1, day)).getUTCDay();
-      if (wd >= 1 && wd <= 5) {
-        const isPast = my < todayParts[0] || (my === todayParts[0] && (mo < todayParts[1] || (mo === todayParts[1] && day <= todayParts[2])));
-        if (isPast) elapsedSchoolDays++;
+      const dayDate = new Date(Date.UTC(my, mo - 1, day));
+      if (dayDate < countFrom) continue; // sebelum mulai PKL
+      if (dayDate > todayDate) continue; // belum terjadi
+      const wd = dayDate.getUTCDay();
+      if (wd >= 1 && wd <= 5) elapsedSchoolDays++; // Senin–Jumat
+    }
+
+    // Hitung durasi total PKL (hari kerja) dari pklStart sampai akhir bulan
+    // Ini dipakai frontend untuk menampilkan "Durasi PKL: X hari kerja"
+    let totalPklWorkdays = 0;
+    if (pklStart) {
+      // Hitung dari pklStart sampai akhir bulan (atau hari ini jika bulan berjalan)
+      const countTo = todayDate < new Date(Date.UTC(my, mo, 0)) ? todayDate : new Date(Date.UTC(my, mo, 0));
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dayDate = new Date(Date.UTC(my, mo - 1, day));
+        if (dayDate < pklStart) continue;
+        if (dayDate > countTo) continue;
+        const wd = dayDate.getUTCDay();
+        if (wd >= 1 && wd <= 5) totalPklWorkdays++;
       }
     }
 
@@ -720,19 +754,17 @@ export async function pklRoutes(app: FastifyInstance) {
       data: {
         month: monthKey,
         schoolDays: elapsedSchoolDays,
+        pklStartDate: pklStart ? pklStart.toISOString().slice(0, 10) : null,
+        totalPklWorkdays: pklStart ? totalPklWorkdays : null,
         totalStudents: assignments.length,
         rows: assignments.map((a) => {
           const atts = a.student?.attendance ?? [];
-          // Hanya hitung absent bila siswa punya minimal 1 catatan di bulan ini.
-          // Jika tidak ada catatan sama sekali (mis. history dihapus atau siswa baru
-          // bergabung pertengahan bulan), absent ditampilkan 0 dan % ditampilkan '-'
-          // agar laporan tidak menyesatkan dengan angka besar dari hari berlalu.
           const hasData = atts.length > 0;
           const presentCount = atts.filter((at) => at.status === 'PRESENT' || at.status === 'LATE').length;
           const absent = hasData ? Math.max(0, elapsedSchoolDays - atts.length) : 0;
           const percentage = hasData && elapsedSchoolDays > 0
             ? Math.round((presentCount / elapsedSchoolDays) * 100)
-            : null; // null = belum ada data
+            : null;
           return {
             studentId: a.studentId,
             fullName: a.student?.user?.fullName ?? '-',
@@ -740,6 +772,8 @@ export async function pklRoutes(app: FastifyInstance) {
             className: a.student?.class?.name ?? null,
             locationName: a.pklLocation.name,
             supervisorName: a.supervisor?.user?.fullName ?? null,
+            startDate: a.startDate ? a.startDate.toISOString().slice(0, 10) : null,
+            endDate: a.endDate ? a.endDate.toISOString().slice(0, 10) : null,
             totalDays: atts.length,
             present: atts.filter((at) => at.status === 'PRESENT').length,
             late: atts.filter((at) => at.status === 'LATE').length,
