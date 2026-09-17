@@ -718,14 +718,22 @@ export async function pklRoutes(app: FastifyInstance) {
     });
 
     // Tanggal mulai PKL — dari query param bila admin isi manual,
-    // fallback ke startDate assignment pertama yang ada, fallback ke awal bulan.
+    // fallback ke startDate dari PklLocation, fallback ke startDate assignment, fallback ke awal bulan.
     let pklStart: Date | null = null;
     if (startDateParam) {
       const [sy, sm, sd] = startDateParam.split('-').map(Number);
       if (sy && sm && sd) pklStart = new Date(Date.UTC(sy, sm - 1, sd));
     }
     if (!pklStart && assignments.length > 0) {
-      // Ambil startDate paling awal dari semua penugasan aktif bulan ini
+      // 1) Coba ambil dari PklLocation startDate
+      const locDates = assignments
+        .map((a) => (a.pklLocation as any).startDate)
+        .filter(Boolean)
+        .map((d: any) => new Date(d));
+      if (locDates.length > 0) pklStart = new Date(Math.min(...locDates.map((d: Date) => d.getTime())));
+    }
+    if (!pklStart && assignments.length > 0) {
+      // 2) Fallback: startDate dari PklAssignment
       const dates = assignments
         .map((a) => a.startDate)
         .filter(Boolean)
@@ -789,8 +797,13 @@ export async function pklRoutes(app: FastifyInstance) {
             className: a.student?.class?.name ?? null,
             locationName: a.pklLocation.name,
             supervisorName: a.supervisor?.user?.fullName ?? null,
-            startDate: a.startDate ? a.startDate.toISOString().slice(0, 10) : null,
-            endDate: a.endDate ? a.endDate.toISOString().slice(0, 10) : null,
+            // Prioritas: startDate dari Assignment → fallback ke startDate PklLocation
+            startDate: a.startDate
+              ? a.startDate.toISOString().slice(0, 10)
+              : ((a.pklLocation as any).startDate ? new Date((a.pklLocation as any).startDate).toISOString().slice(0, 10) : null),
+            endDate: a.endDate
+              ? a.endDate.toISOString().slice(0, 10)
+              : ((a.pklLocation as any).endDate ? new Date((a.pklLocation as any).endDate).toISOString().slice(0, 10) : null),
             totalDays: atts.length,
             present: atts.filter((at) => at.status === 'PRESENT').length,
             late: atts.filter((at) => at.status === 'LATE').length,
