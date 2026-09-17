@@ -786,9 +786,37 @@ export async function pklRoutes(app: FastifyInstance) {
           const atts = a.student?.attendance ?? [];
           const hasData = atts.length > 0;
           const presentCount = atts.filter((at) => at.status === 'PRESENT' || at.status === 'LATE').length;
-          const absent = hasData ? Math.max(0, elapsedSchoolDays - atts.length) : 0;
-          const percentage = hasData && elapsedSchoolDays > 0
-            ? Math.round((presentCount / elapsedSchoolDays) * 100)
+
+          // Hitung absen hanya dari hari SETELAH catatan pertama siswa di bulan ini.
+          // Ini mencegah siswa dihukum absen untuk hari sebelum mereka mulai absen digital.
+          // Contoh: bulan Sep ada 13 hari kerja, siswa pertama kali absen tgl 17 →
+          //   activeSchoolDays = 1 (hanya tgl 17), absent = 1 - 1 = 0
+          let activeSchoolDays = elapsedSchoolDays;
+          if (hasData) {
+            // Tanggal catatan pertama siswa di bulan ini (atts sudah order by date asc)
+            // DB menyimpan @db.Date sebagai UTC midnight H-1 WIB, tambah 1 hari untuk
+            // mendapat tanggal lokal yang benar lalu normalisasi ke UTC midnight.
+            const firstDateRaw = atts[0].date;
+            const firstDateLocal = new Date(firstDateRaw.getTime() + 24 * 3600_000);
+            const firstDateUTC = new Date(Date.UTC(
+              firstDateLocal.getUTCFullYear(),
+              firstDateLocal.getUTCMonth(),
+              firstDateLocal.getUTCDate(),
+            ));
+            // Hitung hari kerja dari firstDate sampai hari ini dalam bulan ini
+            activeSchoolDays = 0;
+            for (let day = 1; day <= daysInMonth; day++) {
+              const dayDate = new Date(Date.UTC(my, mo - 1, day));
+              if (dayDate < firstDateUTC) continue;
+              if (dayDate > todayDate) continue;
+              const wd = dayDate.getUTCDay();
+              if (wd >= 1 && wd <= 5) activeSchoolDays++;
+            }
+          }
+
+          const absent = hasData ? Math.max(0, activeSchoolDays - atts.length) : 0;
+          const percentage = hasData && activeSchoolDays > 0
+            ? Math.round((presentCount / activeSchoolDays) * 100)
             : null;
           return {
             studentId: a.studentId,
