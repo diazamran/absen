@@ -9,6 +9,7 @@ import { toCsv } from '../lib/csv.js';
 import { ROLE_LABELS } from '../rbac/permissions.js';
 import { PERMISSION_KEYS } from '../rbac/permissions.js';
 import { config } from '../config.js';
+import * as XLSX from 'xlsx';
 
 function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
@@ -34,6 +35,16 @@ function parseCsv(text: string): string[][] {
   row.push(cur);
   if (row.some((v) => v.trim() !== '')) rows.push(row);
   return rows;
+}
+
+/** Parse Excel (.xlsx/.xls) buffer menjadi string[][] (sama seperti parseCsv) */
+function parseXlsx(buf: Buffer): string[][] {
+  const wb = XLSX.read(buf, { type: 'buffer' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const data: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  return (data as unknown[][])
+    .map((r) => (r as unknown[]).map((c) => (c === null || c === undefined ? '' : String(c))))
+    .filter((r) => r.some((v) => v.trim() !== ''));
 }
 
 export async function importRoutes(app: FastifyInstance) {
@@ -590,25 +601,33 @@ export async function importRoutes(app: FastifyInstance) {
 
   // ===== PKL LOCATIONS =====
 
-  // Template CSV untuk import lokasi PKL
+  // Template Excel untuk import lokasi PKL
   app.get('/import/pkl-locations/template', { preHandler: app.requirePermission(PERMISSION_KEYS.pklManage) }, async (_request, reply) => {
-    const csv = '\uFEFFNama Tempat,Kota,Alamat,Latitude,Longitude,Radius (meter),Kontak / PIC,No. HP\nPT. Maju Jaya,Kediri,Jl. Raya No. 123,-7.8205,112.0153,100,Budi Santoso,08123456789\n';
-    reply.header('Content-Type', 'text/csv; charset=utf-8');
-    reply.header('Content-Disposition', 'attachment; filename="template-lokasi-pkl.csv"');
-    return reply.send(csv);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['Nama Tempat', 'Kota', 'Alamat', 'Latitude', 'Longitude', 'Radius (meter)', 'Kontak / PIC', 'No. HP'],
+      ['PT. Maju Jaya', 'Kediri', 'Jl. Raya No. 123', -7.8205, 112.0153, 100, 'Budi Santoso', '08123456789'],
+    ]);
+    // Set lebar kolom agar lebih mudah dibaca
+    ws['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 15 }, { wch: 20 }, { wch: 15 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Template Lokasi PKL');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    reply.header('Content-Disposition', 'attachment; filename="template-lokasi-pkl.xlsx"');
+    return reply.send(buf);
   });
 
-  // Preview import lokasi PKL
+  // Preview import lokasi PKL dari Excel
   app.post('/import/pkl-locations/preview', { preHandler: app.requirePermission(PERMISSION_KEYS.pklManage) }, async (request, reply) => {
     const data = await request.file();
-    if (!data) throw ApiError.badRequest('FILE_REQUIRED', 'Pilih file CSV terlebih dahulu.');
-    const text = (await data.toBuffer()).toString('utf8').replace(/^\uFEFF/, '');
-    const rows = parseCsv(text);
-    if (rows.length < 2) throw ApiError.badRequest('EMPTY_CSV', 'File CSV kosong atau tidak memiliki data.');
+    if (!data) throw ApiError.badRequest('FILE_REQUIRED', 'Pilih file Excel terlebih dahulu.');
+    const buf = await data.toBuffer();
+    const rows = parseXlsx(buf);
+    if (rows.length < 2) throw ApiError.badRequest('EMPTY_FILE', 'File Excel kosong atau tidak memiliki data.');
 
     const headers = rows[0].map((h) => h.trim().toLowerCase());
     const nameIdx = headers.findIndex((h) => h.includes('nama'));
-    if (nameIdx === -1) throw ApiError.badRequest('INVALID_CSV', 'Kolom "Nama Tempat" tidak ditemukan.');
+    if (nameIdx === -1) throw ApiError.badRequest('INVALID_FILE', 'Kolom "Nama Tempat" tidak ditemukan.');
 
     const cityIdx = headers.findIndex((h) => h.includes('kota'));
     const addrIdx = headers.findIndex((h) => h.includes('alamat'));
@@ -638,17 +657,17 @@ export async function importRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: { total: preview.length, errors, rows: preview } });
   });
 
-  // Import lokasi PKL dari CSV
+  // Import lokasi PKL dari Excel
   app.post('/import/pkl-locations', { preHandler: app.requirePermission(PERMISSION_KEYS.pklManage) }, async (request, reply) => {
     const data = await request.file();
-    if (!data) throw ApiError.badRequest('FILE_REQUIRED', 'Pilih file CSV terlebih dahulu.');
-    const text = (await data.toBuffer()).toString('utf8').replace(/^\uFEFF/, '');
-    const rows = parseCsv(text);
-    if (rows.length < 2) throw ApiError.badRequest('EMPTY_CSV', 'File CSV kosong.');
+    if (!data) throw ApiError.badRequest('FILE_REQUIRED', 'Pilih file Excel terlebih dahulu.');
+    const buf = await data.toBuffer();
+    const rows = parseXlsx(buf);
+    if (rows.length < 2) throw ApiError.badRequest('EMPTY_FILE', 'File Excel kosong.');
 
     const headers = rows[0].map((h) => h.trim().toLowerCase());
     const nameIdx = headers.findIndex((h) => h.includes('nama'));
-    if (nameIdx === -1) throw ApiError.badRequest('INVALID_CSV', 'Kolom "Nama Tempat" tidak ditemukan.');
+    if (nameIdx === -1) throw ApiError.badRequest('INVALID_FILE', 'Kolom "Nama Tempat" tidak ditemukan.');
 
     const cityIdx = headers.findIndex((h) => h.includes('kota'));
     const addrIdx = headers.findIndex((h) => h.includes('alamat'));

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MapPin, Plus, Trash2, Edit, Users, Search, Loader2, X, ChevronDown, Building2, GraduationCap, Download, Upload } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
@@ -397,14 +398,14 @@ export default function PklManagement() {
   });
 
   const downloadTemplate = () => {
-    const csv = '\uFEFFNama Tempat,Kota,Alamat,Latitude,Longitude,Radius (meter),Kontak / PIC,No. HP\nPT. Maju Jaya,Kediri,Jl. Raya No. 123,-7.8205,112.0153,100,Budi Santoso,08123456789\n';
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'template-lokasi-pkl.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['Nama Tempat', 'Kota', 'Alamat', 'Latitude', 'Longitude', 'Radius (meter)', 'Kontak / PIC', 'No. HP'],
+      ['PT. Maju Jaya', 'Kediri', 'Jl. Raya No. 123', -7.8205, 112.0153, 100, 'Budi Santoso', '08123456789'],
+    ]);
+    ws['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 15 }, { wch: 20 }, { wch: 15 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Template Lokasi PKL');
+    XLSX.writeFile(wb, 'template-lokasi-pkl.xlsx');
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -452,12 +453,12 @@ export default function PklManagement() {
         />
         {tab === 'locations' && canManage && (
           <div className="flex gap-2">
-            <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleImport} />
+            <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
             <Button variant="outline" onClick={downloadTemplate}>
               <Download className="h-4 w-4" /> Template
             </Button>
             <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importing}>
-              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Import CSV
+              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Import Excel
             </Button>
             <Button onClick={() => setShowForm('add-location')}>
               <Plus className="h-4 w-4" /> Tambah Lokasi
