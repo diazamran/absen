@@ -34,12 +34,22 @@ interface RekapItem {
   nis: string | null;
   className: string | null;
   locationName: string;
+  startDate: string | null;
+  endDate: string | null;
   totalDays: number;
   present: number;
   late: number;
   sick: number;
   excused: number;
   absent: number;
+  percentage: number | null;
+  hasData: boolean;
+}
+
+interface RekapData {
+  month: string;
+  schoolDays: number;
+  rows: RekapItem[];
 }
 
 const METHOD_LABELS: Record<string, string> = {
@@ -89,7 +99,7 @@ export default function PklDashboard() {
 
   const { data: rekap, isLoading: rekapLoading } = useQuery({
     queryKey: ['pkl-rekap', teacherId, month],
-    queryFn: () => api<{ success: boolean; data: RekapItem[] }>(`/pkl/supervisor/${teacherId}/rekap?month=${month}`).then((r) => r.data),
+    queryFn: () => api<{ success: boolean; data: RekapData }>(`/pkl/supervisor/${teacherId}/rekap?month=${month}`).then((r) => r.data),
     enabled: !!teacherId,
   });
 
@@ -102,7 +112,7 @@ export default function PklDashboard() {
 
   function exportExcel() {
     if (!students) return;
-    const rekapRows = rekap ?? [];
+    const rekapRows = rekap?.rows ?? [];
     const aoa: (string | number)[][] = [
       ['Monitor PKL — Kehadiran Hari Ini'],
       [schoolName],
@@ -121,24 +131,26 @@ export default function PklDashboard() {
         methodText(s.todayAttendance.method),
       ]),
       [],
-      [`Rekap Bulanan - ${formatLongDate(`${month}-01`).replace(/^\d+ /, '')}`],
-      ['No', 'Nama Siswa', 'NIS', 'Kelas', 'Lokasi PKL', 'Hadir', 'Terlambat', 'Sakit', 'Izin', 'Alpa', 'Total Hari'],
+      [`Rekap Bulanan - ${formatLongDate(`${month}-01`).replace(/^\d+ /, '')}${rekap?.schoolDays ? ` · ${rekap.schoolDays} hari kerja` : ''}`],
+      ['No', 'Nama Siswa', 'NIS', 'Kelas', 'Lokasi PKL', 'Tgl Mulai', 'Tgl Selesai', 'Hadir', 'Terlambat', 'Sakit', 'Izin', 'Alpa', '%'],
       ...rekapRows.map((r, i) => [
         i + 1,
         r.fullName,
         r.nis ?? '',
         r.className ?? '',
         r.locationName,
+        r.startDate ?? '',
+        r.endDate ?? '',
         r.present,
         r.late,
         r.sick,
         r.excused,
         r.absent,
-        r.totalDays,
+        r.percentage !== null ? `${r.percentage}%` : '—',
       ]),
     ];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [{ wch: 4 }, { wch: 28 }, { wch: 14 }, { wch: 12 }, { wch: 24 }, { wch: 11 }, { wch: 11 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 10 }];
+    ws['!cols'] = [{ wch: 4 }, { wch: 28 }, { wch: 14 }, { wch: 12 }, { wch: 24 }, { wch: 11 }, { wch: 11 }, { wch: 8 }, { wch: 10 }, { wch: 7 }, { wch: 7 }, { wch: 7 }, { wch: 7 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Monitor PKL');
     XLSX.writeFile(wb, `${exportBaseName}.xlsx`, { bookType: 'xlsx' });
@@ -146,7 +158,7 @@ export default function PklDashboard() {
 
   function exportPdf() {
     if (!students) return;
-    const rekapRows = rekap ?? [];
+    const rekapRows = rekap?.rows ?? [];
     const doc = new jsPDF({ orientation: 'landscape' });
     const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -187,19 +199,21 @@ export default function PklDashboard() {
 
     autoTable(doc, {
       startY: y + 3,
-      head: [['No', 'Nama Siswa', 'NIS', 'Kelas', 'Lokasi PKL', 'Hadir', 'Terlambat', 'Sakit', 'Izin', 'Tidak Hadir', 'Total Hari']],
+      head: [['No', 'Nama Siswa', 'NIS', 'Kelas', 'Lokasi PKL', 'Tgl Mulai', 'Tgl Selesai', 'Hadir', 'Terlambat', 'Sakit', 'Izin', 'Alpa', '%']],
       body: rekapRows.map((r, i) => [
         String(i + 1),
         r.fullName,
         r.nis ?? '',
         r.className ?? '',
         r.locationName,
+        r.startDate ?? '-',
+        r.endDate ?? '-',
         String(r.present),
         String(r.late),
         String(r.sick),
         String(r.excused),
         String(r.absent),
-        String(r.totalDays),
+        r.percentage !== null ? `${r.percentage}%` : '—',
       ]),
       styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: [13, 148, 136], fontSize: 8 },
@@ -299,40 +313,76 @@ export default function PklDashboard() {
       {/* Rekap bulanan */}
       <Card>
         <div className="mb-3 flex items-center justify-between gap-2">
-          <p className="font-bold text-ink">📊 Rekap Bulanan</p>
+          <div>
+            <p className="font-bold text-ink">📊 Rekap {rekap?.month ?? month}</p>
+            {rekap?.schoolDays !== undefined && (
+              <p className="text-xs text-muted">{rekap.schoolDays} hari kerja</p>
+            )}
+          </div>
           <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-xl border border-line bg-surface px-3 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800" />
         </div>
-        {/* Keterangan warna */}
-        <div className="mb-1 flex flex-wrap gap-2 text-xs text-muted">
-          <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-bold text-emerald-600">Hadir</span>
-          <span className="rounded-full bg-amber-50 px-2 py-0.5 font-bold text-amber-600">Terlambat</span>
-          <span className="rounded-full bg-blue-50 px-2 py-0.5 font-bold text-blue-600">Sakit</span>
-          <span className="rounded-full bg-purple-50 px-2 py-0.5 font-bold text-purple-600">Izin</span>
-          <span className="rounded-full bg-red-50 px-2 py-0.5 font-bold text-red-600">Alpa</span>
-        </div>
-        <p className="mb-3 text-[11px] text-muted">Angka "Hadir" sudah mencakup siswa yang datang terlambat.</p>
+
         {rekapLoading && <Skeleton className="h-24 w-full" />}
-        {!rekapLoading && rekap && rekap.length === 0 && (
+        {!rekapLoading && rekap && rekap.rows.length === 0 && (
           <p className="py-4 text-center text-sm text-muted">Belum ada data rekap untuk bulan ini.</p>
         )}
-        {!rekapLoading && rekap && rekap.map((r) => (
-          <div key={r.studentId} className="mb-2 rounded-xl border border-line/60 bg-surface p-3 last:mb-0 dark:bg-slate-800/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-bold text-ink">{r.fullName}</p>
-                <p className="text-xs text-muted">{r.className ?? '-'} · {r.locationName}</p>
-              </div>
-              <p className="text-xs text-muted">{r.totalDays} hari absen</p>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2 text-xs">
-              <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-bold text-emerald-600">Hadir: {r.present}</span>
-              <span className="rounded-full bg-amber-50 px-2 py-0.5 font-bold text-amber-600">Terlambat: {r.late}</span>
-              <span className="rounded-full bg-blue-50 px-2 py-0.5 font-bold text-blue-600">Sakit: {r.sick}</span>
-              <span className="rounded-full bg-purple-50 px-2 py-0.5 font-bold text-purple-600">Izin: {r.excused}</span>
-              <span className="rounded-full bg-red-50 px-2 py-0.5 font-bold text-red-600">Alpa: {r.absent}</span>
-            </div>
+        {!rekapLoading && rekap && rekap.rows.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-line bg-slate-50 text-xs uppercase text-muted dark:border-slate-600 dark:bg-slate-800/60">
+                  <th className="px-3 py-2.5 font-semibold">No</th>
+                  <th className="px-3 py-2.5 font-semibold">Nama</th>
+                  <th className="px-3 py-2.5 font-semibold">Kelas</th>
+                  <th className="px-3 py-2.5 font-semibold">Lokasi</th>
+                  <th className="px-3 py-2.5 font-semibold">Tgl Mulai</th>
+                  <th className="px-3 py-2.5 font-semibold">Tgl Selesai</th>
+                  <th className="px-3 py-2.5 text-center font-semibold text-emerald-600">Hadir</th>
+                  <th className="px-3 py-2.5 text-center font-semibold text-amber-500">Terlambat</th>
+                  <th className="px-3 py-2.5 text-center font-semibold text-blue-500">Sakit</th>
+                  <th className="px-3 py-2.5 text-center font-semibold text-purple-500">Izin</th>
+                  <th className="px-3 py-2.5 text-center font-semibold text-red-500">Alpa</th>
+                  <th className="px-3 py-2.5 text-center font-semibold">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rekap.rows.map((r, i) => {
+                  const pct = r.percentage;
+                  const pctColor = pct === null
+                    ? 'bg-slate-100 text-slate-400 dark:bg-slate-700'
+                    : pct >= 90
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                    : pct >= 75
+                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                    : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+                  return (
+                    <tr key={r.studentId} className="border-b border-line/50 last:border-0 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/40">
+                      <td className="px-3 py-2.5 text-muted">{i + 1}</td>
+                      <td className="px-3 py-2.5">
+                        <p className="font-semibold text-ink">{r.fullName}</p>
+                        <p className="text-xs text-muted">{r.nis ?? '-'}</p>
+                      </td>
+                      <td className="px-3 py-2.5 text-muted">{r.className ?? '-'}</td>
+                      <td className="px-3 py-2.5 text-muted">{r.locationName}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-muted">{r.startDate ?? '-'}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-muted">{r.endDate ?? '-'}</td>
+                      <td className="px-3 py-2.5 text-center font-bold text-emerald-600">{r.present}</td>
+                      <td className="px-3 py-2.5 text-center font-bold text-amber-500">{r.late}</td>
+                      <td className="px-3 py-2.5 text-center font-bold text-blue-500">{r.sick}</td>
+                      <td className="px-3 py-2.5 text-center font-bold text-purple-500">{r.excused}</td>
+                      <td className="px-3 py-2.5 text-center font-bold text-red-500">{r.absent}</td>
+                      <td className="px-3 py-2.5 text-center">
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${pctColor}`}>
+                          {pct !== null ? `${pct}%` : '—'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        ))}
+        )}
       </Card>
     </div>
   );

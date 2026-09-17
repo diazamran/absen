@@ -512,6 +512,8 @@ export async function pklRoutes(app: FastifyInstance) {
 
     const monthKey = month || currentMonthKey();
     const { start: monthStart, end: monthEnd } = monthRange(monthKey);
+    const [my, mo] = monthKey.split('-').map(Number);
+    const daysInMonth = new Date(Date.UTC(my, mo, 0)).getUTCDate();
 
     const assignments = await prisma.pklAssignment.findMany({
       where: { supervisorId: teacherId, isActive: true },
@@ -528,29 +530,110 @@ export async function pklRoutes(app: FastifyInstance) {
         },
         pklLocation: true,
       },
+      orderBy: { student: { user: { fullName: 'asc' } } },
     });
+
+    // Kumpulkan workDays dari semua lokasi terlibat
+    const allWorkDays = new Set<number>();
+    assignments.forEach((a) => {
+      const wd: number[] = Array.isArray((a.pklLocation as any).workDays)
+        ? (a.pklLocation as any).workDays
+        : [1, 2, 3, 4, 5];
+      wd.forEach((d) => allWorkDays.add(d));
+    });
+    if (allWorkDays.size === 0) [1, 2, 3, 4, 5].forEach((d) => allWorkDays.add(d));
+
+    const isWorkDay = (date: Date): boolean => {
+      const utcDay = date.getUTCDay();
+      const wdNum = utcDay === 0 ? 7 : utcDay;
+      return allWorkDays.has(wdNum);
+    };
+
+    const todayParts = dateKey().split('-').map(Number);
+    const todayDate = new Date(Date.UTC(todayParts[0], todayParts[1] - 1, todayParts[2]));
+
+    // Tentukan pklStart dari PklLocation → PklAssignment → awal bulan
+    let pklStart: Date | null = null;
+    if (assignments.length > 0) {
+      const locDates = assignments
+        .map((a) => (a.pklLocation as any).startDate)
+        .filter(Boolean)
+        .map((d: any) => new Date(d));
+      if (locDates.length > 0) pklStart = new Date(Math.min(...locDates.map((d: Date) => d.getTime())));
+    }
+    if (!pklStart && assignments.length > 0) {
+      const dates = assignments.map((a) => a.startDate).filter(Boolean).map((d) => new Date(d!));
+      if (dates.length > 0) pklStart = new Date(Math.min(...dates.map((d) => d.getTime())));
+    }
+
+    // Hitung hari kerja bulan ini sejak pklStart s.d. hari ini
+    const monthFirstDay = new Date(Date.UTC(my, mo - 1, 1));
+    const countFrom = pklStart && pklStart > monthFirstDay ? pklStart : monthFirstDay;
+    let schoolDays = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayDate = new Date(Date.UTC(my, mo - 1, day));
+      if (dayDate < countFrom) continue;
+      if (dayDate > todayDate) continue;
+      if (isWorkDay(dayDate)) schoolDays++;
+    }
 
     return reply.send({
       success: true,
-      data: assignments.map((a) => {
-        const atts = a.student?.attendance ?? [];
-        return {
-          studentId: a.studentId,
-          fullName: a.student?.user?.fullName ?? '-',
-          nis: a.student?.nis ?? null,
-          className: a.student?.class?.name ?? null,
-          locationName: a.pklLocation.name,
-          totalDays: atts.length,
-          // "Hadir" mencakup yang terlambat — hadir terlambat tetap hadir.
-          // Sebelumnya hanya status PRESENT yang dihitung sehingga siswa yang
-          // selalu terlambat tampil "Hadir: 0" padahal absen setiap hari.
-          present: atts.filter((at) => at.status === 'PRESENT' || at.status === 'LATE').length,
-          late: atts.filter((at) => at.status === 'LATE').length,
-          sick: atts.filter((at) => at.status === 'SICK').length,
-          excused: atts.filter((at) => at.status === 'EXCUSED').length,
-          absent: atts.filter((at) => at.status === 'ABSENT').length,
-        };
-      }),
+      data: {
+        month: monthKey,
+        schoolDays,
+        rows: assignments.map((a) => {
+          const atts = a.student?.attendance ?? [];
+          const hasData = atts.length > 0;
+          const presentCount = atts.filter((at) => at.status === 'PRESENT' || at.status === 'LATE').length;
+
+          // Hitung activeSchoolDays dari tanggal pertama absen siswa — sama seperti laporan bulanan admin
+          let activeSchoolDays = schoolDays;
+          if (hasData) {
+            const firstDateRaw = atts[0].date;
+            const firstDateLocal = new Date(firstDateRaw.getTime() + 24 * 3600_000);
+            const firstDateUTC = new Date(Date.UTC(
+              firstDateLocal.getUTCFullYear(),
+              firstDateLocal.getUTCMonth(),
+              firstDateLocal.getUTCDate(),
+            ));
+            activeSchoolDays = 0;
+            for (let day = 1; day <= daysInMonth; day++) {
+              const dayDate = new Date(Date.UTC(my, mo - 1, day));
+              if (dayDate < firstDateUTC) continue;
+              if (dayDate > todayDate) continue;
+              if (isWorkDay(dayDate)) activeSchoolDays++;
+            }
+          }
+
+          const absent = hasData ? Math.max(0, activeSchoolDays - atts.length) : 0;
+          const percentage = hasData && activeSchoolDays > 0
+            ? Math.round((presentCount / activeSchoolDays) * 100)
+            : null;
+
+          return {
+            studentId: a.studentId,
+            fullName: a.student?.user?.fullName ?? '-',
+            nis: a.student?.nis ?? null,
+            className: a.student?.class?.name ?? null,
+            locationName: a.pklLocation.name,
+            startDate: a.startDate
+              ? a.startDate.toISOString().slice(0, 10)
+              : ((a.pklLocation as any).startDate ? new Date((a.pklLocation as any).startDate).toISOString().slice(0, 10) : null),
+            endDate: a.endDate
+              ? a.endDate.toISOString().slice(0, 10)
+              : ((a.pklLocation as any).endDate ? new Date((a.pklLocation as any).endDate).toISOString().slice(0, 10) : null),
+            totalDays: atts.length,
+            present: atts.filter((at) => at.status === 'PRESENT' || at.status === 'LATE').length,
+            late: atts.filter((at) => at.status === 'LATE').length,
+            sick: atts.filter((at) => at.status === 'SICK').length,
+            excused: atts.filter((at) => at.status === 'EXCUSED').length,
+            absent,
+            percentage,
+            hasData,
+          };
+        }),
+      },
     });
   });
 
