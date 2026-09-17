@@ -13,6 +13,7 @@ const STATUS_LABELS: Record<string, string> = {
   DISPENSATION: 'Dispensasi',
   ABSENT: 'Alpa',
   LEAVE: 'Cuti',
+  HOLIDAY: 'Libur',
 };
 
 async function statusCounts(dayStart: Date, dayEnd: Date, classId?: string) {

@@ -21,6 +21,7 @@ enum AttendanceStatus {
   DISPENSATION // Dispensasi
   ABSENT // Tidak hadir / alpa
   LEAVE // Cuti
+  HOLIDAY // Libur
 }
 
 enum AttendanceMethod {

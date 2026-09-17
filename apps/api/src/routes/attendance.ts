@@ -29,7 +29,7 @@ const checkSchema = z.object({
 
 const manualSchema = z.object({
   studentId: z.string().min(1),
-  status: z.enum(['PRESENT', 'LATE', 'EXCUSED', 'SICK', 'OFFICIAL_DUTY', 'DISPENSATION', 'ABSENT', 'LEAVE']),
+  status: z.enum(['PRESENT', 'LATE', 'EXCUSED', 'SICK', 'OFFICIAL_DUTY', 'DISPENSATION', 'ABSENT', 'LEAVE', 'HOLIDAY']),
   type: z.enum(['CHECK_IN', 'CHECK_OUT']).default('CHECK_IN'),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   checkIn: z.string().regex(/^\d{2}:\d{2}$/).optional(),
@@ -39,7 +39,7 @@ const manualSchema = z.object({
 });
 
 const updateSchema = z.object({
-  status: z.enum(['PRESENT', 'LATE', 'EXCUSED', 'SICK', 'OFFICIAL_DUTY', 'DISPENSATION', 'ABSENT', 'LEAVE']).optional(),
+  status: z.enum(['PRESENT', 'LATE', 'EXCUSED', 'SICK', 'OFFICIAL_DUTY', 'DISPENSATION', 'ABSENT', 'LEAVE', 'HOLIDAY']).optional(),
   checkIn: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   checkOut: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   notes: z.string().optional(),
@@ -261,7 +261,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
     const result = await manualAttendance({
       actor: { id: request.user!.id, request },
       studentId: body.studentId,
-      status: body.status,
+      status: body.status as never,
       type: body.type,
       dateKeyStr: body.date,
       checkIn: body.checkIn,
@@ -279,7 +279,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
     const result = await updateAttendance({
       actor: { id: request.user!.id, request },
       attendanceId: id,
-      status: body.status,
+      status: body.status as never,
       checkIn: body.checkIn,
       checkOut: body.checkOut,
       notes: body.notes,

@@ -17,6 +17,7 @@ const STATUS_LABELS: Record<string, string> = {
   DISPENSATION: 'Dispensasi',
   ABSENT: 'Alpa',
   LEAVE: 'Cuti',
+  HOLIDAY: 'Libur',
 };
 
 function statusCountsMap(rows: { status: string }[]): Record<string, number> {

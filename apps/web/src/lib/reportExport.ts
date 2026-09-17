@@ -62,6 +62,7 @@ const STATUS_SHORT: Record<string, string> = {
   OFFICIAL_DUTY: 'Dinas',
   ABSENT: 'Alpa',
   LEAVE: 'Cuti',
+  HOLIDAY: 'Libur',
 };
 
 function statusLabel(s: string): string {

@@ -7,6 +7,7 @@ export const STATUS_LABELS: Record<string, string> = {
   DISPENSATION: 'Dispensasi',
   ABSENT: 'Alpa',
   LEAVE: 'Cuti',
+  HOLIDAY: 'Libur',
 };
 
 export const STATUS_COLORS: Record<string, string> = {
@@ -18,6 +19,7 @@ export const STATUS_COLORS: Record<string, string> = {
   DISPENSATION: '#14b8a6',
   ABSENT: '#ef4444',
   LEAVE: '#6366f1',
+  HOLIDAY: '#94a3b8',
 };
 
 export const METHOD_LABELS: Record<string, string> = {

@@ -23,7 +23,7 @@ interface StudentRow {
   checkOutLocation?: LocationInfo | null;
 }
 
-const STATUS_OPTIONS = ['PRESENT', 'LATE', 'EXCUSED', 'SICK', 'OFFICIAL_DUTY', 'ABSENT'];
+const STATUS_OPTIONS = ['PRESENT', 'LATE', 'EXCUSED', 'SICK', 'OFFICIAL_DUTY', 'ABSENT', 'HOLIDAY'];
 
 export default function ClassAttendance() {
   const { id } = useParams();
