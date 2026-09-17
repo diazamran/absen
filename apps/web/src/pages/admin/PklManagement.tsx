@@ -19,6 +19,8 @@ interface PklLocation {
   radiusMeter: number;
   phone: string | null;
   contactName: string | null;
+  startDate: string | null;
+  endDate: string | null;
   isActive: boolean;
   studentCount: number;
   students: PklStudent[];
@@ -62,8 +64,6 @@ function LocationForm({ initial, onClose }: { initial?: PklLocation; onClose: ()
     name: initial?.name ?? '',
     address: initial?.address ?? '',
     city: initial?.city ?? '',
-    // Jika koordinat dari DB rusak (integer raksasa tanpa desimal), tampilkan kosong
-    // agar admin tahu harus mengisi ulang — lebih baik kosong daripada angka salah.
     latitude: (() => {
       const v = initial?.latitude;
       if (v == null) return '';
@@ -77,12 +77,28 @@ function LocationForm({ initial, onClose }: { initial?: PklLocation; onClose: ()
     radiusMeter: initial?.radiusMeter ?? 100,
     phone: initial?.phone ?? '',
     contactName: initial?.contactName ?? '',
+    startDate: initial?.startDate ?? '',
+    endDate: initial?.endDate ?? '',
   });
+
+  // Hitung durasi PKL (hari kerja Senin–Jumat) dari startDate ke endDate
+  const durasiHariKerja = (() => {
+    if (!form.startDate || !form.endDate) return null;
+    const start = new Date(form.startDate);
+    const end = new Date(form.endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return null;
+    let count = 0;
+    const cur = new Date(start);
+    while (cur <= end) {
+      const wd = cur.getDay();
+      if (wd >= 1 && wd <= 5) count++;
+      cur.setDate(cur.getDate() + 1);
+    }
+    return count;
+  })();
 
   const save = useMutation({
     mutationFn: () => {
-      // parseFloat memastikan "111.963068" tetap float, bukan integer.
-      // Validasi rentang menolak nilai yang jelas salah (integer raksasa tanpa desimal).
       const lat = parseFloat(String(form.latitude));
       const lng = parseFloat(String(form.longitude));
       const validLat = Number.isFinite(lat) && lat >= -90 && lat <= 90;
@@ -92,6 +108,8 @@ function LocationForm({ initial, onClose }: { initial?: PklLocation; onClose: ()
         latitude: validLat ? lat : undefined,
         longitude: validLng ? lng : undefined,
         radiusMeter: Number(form.radiusMeter),
+        startDate: form.startDate || null,
+        endDate: form.endDate || null,
       };
       return initial
         ? api(`/pkl/locations/${initial.id}`, { method: 'PUT', body })
@@ -146,6 +164,42 @@ function LocationForm({ initial, onClose }: { initial?: PklLocation; onClose: ()
           <label className="mb-1 block text-xs font-semibold text-muted">No. HP</label>
           <Input value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="08123456789" />
         </div>
+      </div>
+
+      {/* Periode PKL */}
+      <div className="rounded-2xl border border-line/70 bg-slate-50/60 p-3 dark:bg-slate-900/40">
+        <p className="mb-2 text-xs font-semibold text-ink">📅 Periode PKL</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-muted">Tanggal Mulai</label>
+            <input
+              type="date"
+              value={form.startDate}
+              onChange={(e) => set('startDate', e.target.value)}
+              className="w-full rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink dark:bg-slate-900"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-muted">Tanggal Selesai</label>
+            <input
+              type="date"
+              value={form.endDate}
+              onChange={(e) => set('endDate', e.target.value)}
+              className="w-full rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink dark:bg-slate-900"
+            />
+          </div>
+        </div>
+        {durasiHariKerja !== null && (
+          <div className="mt-2 flex items-center gap-2 rounded-xl bg-primary-soft/40 px-3 py-2">
+            <span className="text-xs font-semibold text-primary">⏱ Durasi PKL:</span>
+            <span className="text-sm font-bold text-ink">{durasiHariKerja} hari kerja</span>
+            <span className="text-xs text-muted">(Senin–Jumat, {form.startDate} s.d. {form.endDate})</span>
+          </div>
+        )}
+        {form.startDate && form.endDate && durasiHariKerja === null && (
+          <p className="mt-1 text-xs text-red-500">Tanggal selesai tidak boleh sebelum tanggal mulai.</p>
+        )}
+        <p className="mt-2 text-xs text-muted">Opsional — dipakai untuk menghitung hari kerja di laporan bulanan PKL.</p>
       </div>
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="outline" onClick={onClose}>Batal</Button>
@@ -420,6 +474,19 @@ export default function PklManagement() {
                     <p className="font-bold text-ink">{loc.name}</p>
                     <p className="text-xs text-muted">{loc.city ?? '-'} · {loc.address ?? '-'} · Radius: {loc.radiusMeter}m</p>
                     {loc.contactName && <p className="text-xs text-muted">PIC: {loc.contactName}{loc.phone ? ` · ${loc.phone}` : ''}</p>}
+                    {(loc.startDate || loc.endDate) && (
+                      <p className="text-xs text-muted">
+                        📅 {loc.startDate ?? '?'} s.d. {loc.endDate ?? '?'}
+                        {loc.startDate && loc.endDate && (() => {
+                          const start = new Date(loc.startDate!);
+                          const end = new Date(loc.endDate!);
+                          let count = 0;
+                          const cur = new Date(start);
+                          while (cur <= end) { if (cur.getDay() >= 1 && cur.getDay() <= 5) count++; cur.setDate(cur.getDate() + 1); }
+                          return ` · ${count} hari kerja`;
+                        })()}
+                      </p>
+                    )}
                     <p className="mt-1 text-xs font-semibold text-primary">{loc.studentCount} siswa ditugaskan</p>
                   </div>
                 </div>

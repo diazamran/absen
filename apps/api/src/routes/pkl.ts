@@ -13,13 +13,13 @@ const locationSchema = z.object({
   name: z.string().min(1),
   address: z.string().optional(),
   city: z.string().optional(),
-  // Validasi rentang koordinat — latitude ±90, longitude ±180.
-  // Menolak nilai integer raksasa (mis. 111963068) yang terjadi saat titik desimal hilang.
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
   radiusMeter: z.number().int().min(10).max(5000).default(100),
   phone: z.string().optional(),
   contactName: z.string().optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
 });
 
 const assignmentSchema = z.object({
@@ -103,6 +103,8 @@ export async function pklRoutes(app: FastifyInstance) {
         radiusMeter: r.radiusMeter,
         phone: r.phone,
         contactName: r.contactName,
+        startDate: (r as any).startDate ? (r as any).startDate.toISOString().slice(0, 10) : null,
+        endDate: (r as any).endDate ? (r as any).endDate.toISOString().slice(0, 10) : null,
         isActive: r.isActive,
         studentCount: r.assignments.length,
         students: r.assignments.map((a) => ({
@@ -123,7 +125,14 @@ export async function pklRoutes(app: FastifyInstance) {
   // Create PKL location
   app.post('/pkl/locations', { preHandler: app.requirePermission(PERMISSION_KEYS.pklManage) }, async (request, reply) => {
     const body = validate(locationSchema, request.body);
-    const row = await prisma.pklLocation.create({ data: body });
+    const { startDate, endDate, ...rest } = body;
+    const row = await (prisma.pklLocation.create as any)({
+      data: {
+        ...rest,
+        startDate: startDate ? new Date(startDate) : null,
+        endDate: endDate ? new Date(endDate) : null,
+      },
+    });
     await audit({ userId: request.user!.id, action: 'PKL_LOCATION_CREATED', entity: 'PklLocation', entityId: row.id, request });
     return reply.send({ success: true, data: row, message: 'Lokasi PKL ditambahkan.' });
   });
@@ -132,7 +141,15 @@ export async function pklRoutes(app: FastifyInstance) {
   app.put('/pkl/locations/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.pklManage) }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = validate(locationSchema.partial(), request.body);
-    const row = await prisma.pklLocation.update({ where: { id }, data: body });
+    const { startDate, endDate, ...rest } = body;
+    const row = await (prisma.pklLocation.update as any)({
+      where: { id },
+      data: {
+        ...rest,
+        ...(startDate !== undefined ? { startDate: startDate ? new Date(startDate) : null } : {}),
+        ...(endDate !== undefined ? { endDate: endDate ? new Date(endDate) : null } : {}),
+      },
+    });
     await audit({ userId: request.user!.id, action: 'PKL_LOCATION_UPDATED', entity: 'PklLocation', entityId: id, request });
     return reply.send({ success: true, data: row, message: 'Lokasi PKL diperbarui.' });
   });

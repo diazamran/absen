@@ -402,18 +402,20 @@ model Attendance {
 // ================= PKL (Praktek Kerja Lapangan) =================
 
 model PklLocation {
-  id          String   @id @default(cuid())
-  name        String   // nama perusahaan/tempat PKL
+  id          String    @id @default(cuid())
+  name        String    // nama perusahaan/tempat PKL
   address     String?
   city        String?
   latitude    Float?
   longitude   Float?
-  radiusMeter Int      @default(100) // radius toleransi absensi (meter)
+  radiusMeter Int       @default(100) // radius toleransi absensi (meter)
   phone       String?
-  contactName String?  // nama PIC / penanggung jawab
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  contactName String?   // nama PIC / penanggung jawab
+  startDate   DateTime? // tanggal mulai periode PKL
+  endDate     DateTime? // tanggal selesai periode PKL
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   assignments PklAssignment[]
   attendance  Attendance[]
