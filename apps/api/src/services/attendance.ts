@@ -203,11 +203,43 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   }
 
   if (type === 'CHECK_OUT') {
-    const checkIn = await prisma.attendance.findUnique({
+    let checkIn = await prisma.attendance.findUnique({
       where: { userId_date_type: { userId: targetUserId, date: dayStart, type: 'CHECK_IN' } },
     });
+    // Jika tidak ada CHECK_IN (lupa absen datang), buat CHECK_IN otomatis
+    // dengan status PRESENT dan jam sekarang, agar absen pulang tetap bisa dicatat.
     if (!checkIn) {
-      throw ApiError.badRequest('NO_CHECK_IN', 'Absensi pulang hanya bisa dilakukan setelah absensi datang.');
+      // Ambil data siswa/guru untuk CHECK_IN otomatis
+      const autoUser = await prisma.user.findUnique({
+        where: { id: targetUserId },
+        include: { student: true, teacher: true, staff: true },
+      });
+      try {
+        checkIn = await prisma.attendance.create({
+          data: {
+            userId: targetUserId,
+            studentId: autoUser?.student?.id,
+            teacherId: autoUser?.teacher?.id,
+            staffId: autoUser?.staff?.id,
+            date: dayStart,
+            type: 'CHECK_IN',
+            checkIn: now,
+            status: 'PRESENT',
+            method,
+            deviceId: input.deviceId,
+            notes: 'Absen datang dibuat otomatis (lupa absen datang)',
+            lateMinutes: 0,
+          },
+        });
+      } catch (e) {
+        // Race condition — CHECK_IN sudah dibuat proses lain, ambil yang ada
+        if ((e as { code?: string }).code === 'P2002') {
+          checkIn = await prisma.attendance.findUnique({
+            where: { userId_date_type: { userId: targetUserId, date: dayStart, type: 'CHECK_IN' } },
+          });
+        }
+        if (!checkIn) throw e;
+      }
     }
     // ===== Blokir CHECK_OUT sebelum jam "Mulai dihitung Pulang Awal" =====
     const batasPulangAwal = earlyLeaveRule.h * 60 + earlyLeaveRule.m;

@@ -369,11 +369,41 @@ export async function pklRoutes(app: FastifyInstance) {
         },
       });
     } else {
-      // CHECK_OUT
-      const existing = await prisma.attendance.findFirst({
+      // CHECK_OUT PKL
+      let existing = await prisma.attendance.findFirst({
         where: { userId: student.userId, date: today, type: 'CHECK_IN' },
       });
-      if (!existing) throw ApiError.badRequest('NOT_CHECKED_IN', 'Belum absen PKL hari ini.');
+      // Jika tidak ada CHECK_IN (lupa absen datang PKL), buat CHECK_IN otomatis
+      if (!existing) {
+        const pad2n = (n: number) => String(n).padStart(2, '0');
+        const nowDt = new Date();
+        try {
+          existing = await prisma.attendance.create({
+            data: {
+              userId: student.userId,
+              studentId: student.id,
+              date: today,
+              type: 'CHECK_IN',
+              checkIn: nowDt,
+              status: 'PRESENT',
+              method: body.method as never,
+              pklLocationId: body.pklLocationId,
+              latitude: body.latitude,
+              longitude: body.longitude,
+              locationVerified,
+              notes: 'Absen datang PKL dibuat otomatis (lupa absen datang)',
+              lateMinutes: 0,
+            },
+          });
+        } catch (e) {
+          if ((e as { code?: string }).code === 'P2002') {
+            existing = await prisma.attendance.findFirst({
+              where: { userId: student.userId, date: today, type: 'CHECK_IN' },
+            });
+          }
+          if (!existing) throw e;
+        }
+      }
 
       // Absen pulang PKL baru bisa dilakukan mulai jam "Pulang Awal PKL" —
       // jadwal PKL berbeda dari sekolah, jadi tidak ikut blok sekolah.
