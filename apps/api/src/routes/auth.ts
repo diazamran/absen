@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+﻿import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { verifyPassword, hashPassword } from '../lib/crypto.js';
@@ -396,17 +396,30 @@ export async function authRoutes(app: FastifyInstance) {
         if (!roleRow) throw new Error(`Role ${targetRoleKey} tidak ditemukan`);
 
         const cryptoLib = await import('../lib/crypto.js');
-        const randomLib = await import('node:crypto');
+        // Siswa: password default smkn1kras agar bisa login manual juga
+        const { randomBytes: _rb } = await import('node:crypto');
+        const defaultPwd = targetRoleKey === 'STUDENT'
+          ? (process.env.STUDENT_DEFAULT_PASSWORD || 'smkn1kras')
+          : _rb(16).toString('hex');
         user = await prisma.user.create({
           data: {
             username:     sdmsPayload.username,
             fullName:     sdmsPayload.full_name || sdmsPayload.username,
-            passwordHash: await cryptoLib.hashPassword(randomLib.default.randomBytes(16).toString('hex')),
+            passwordHash: await cryptoLib.hashPassword(defaultPwd),
             roleId:       roleRow.id,
             isActive:     true,
           },
           include: { role: true },
         });
+        // Untuk siswa: buat record student agar login-student bisa menemukan NIS
+        if (targetRoleKey === 'STUDENT') {
+          const existingStudent = await prisma.student.findUnique({ where: { nis: sdmsPayload.username } });
+          if (!existingStudent) {
+            await prisma.student.create({
+              data: { userId: user.id, nis: sdmsPayload.username, isActive: true },
+            });
+          }
+        }
         app.log.info(`[SSO] User baru: ${sdmsPayload.username} (${targetRoleKey})`);
       } else {
         // Update nama DAN role agar selalu sinkron dengan SDMS
