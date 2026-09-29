@@ -245,7 +245,7 @@ export default function PklManualAttendance() {
       <BottomSheet
         open={!!selected}
         onClose={() => setSelected(null)}
-        title={selected?.name ?? selected?.fullName ?? ''}
+        title={selected?.fullName ?? ''}
       >
         {selected && (
           <div className="space-y-4">
