@@ -979,6 +979,111 @@ export async function pklRoutes(app: FastifyInstance) {
     });
   });
 
+  // ===== ABSENSI MANUAL PKL MASSAL oleh GURU PEMBIMBING =====
+  // Guru pembimbing bisa input/koreksi absensi untuk banyak siswa bimbingannya sekaligus.
+  app.post('/pkl/manual-attendance/bulk', { preHandler: app.requirePermission(PERMISSION_KEYS.pklAttendance) }, async (request, reply) => {
+    const body = validate(z.object({
+      studentIds: z.array(z.string().min(1)).min(1).max(100),
+      status: z.enum(['PRESENT', 'LATE', 'SICK', 'EXCUSED', 'OFFICIAL_DUTY', 'ABSENT', 'HOLIDAY']),
+      type: z.enum(['CHECK_IN', 'CHECK_OUT']).default('CHECK_IN'),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      checkIn: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+      checkOut: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+      notes: z.string().optional(),
+    }), request.body);
+
+    const scope = await getPklScope(request.user!.id);
+    if (!scope.isAdmin && !scope.teacherId) {
+      throw ApiError.forbidden('NOT_SUPERVISOR', 'Anda bukan guru pembimbing PKL.');
+    }
+
+    // Verifikasi semua siswa adalah bimbingan guru ini
+    if (!scope.isAdmin && scope.teacherId) {
+      const assignments = await prisma.pklAssignment.findMany({
+        where: { studentId: { in: body.studentIds }, supervisorId: scope.teacherId, isActive: true },
+        select: { studentId: true },
+      });
+      const allowed = new Set(assignments.map((a) => a.studentId));
+      const forbidden = body.studentIds.filter((id) => !allowed.has(id));
+      if (forbidden.length > 0) {
+        throw ApiError.forbidden('SCOPE_RESTRICTED', 'Beberapa siswa bukan bimbingan PKL Anda.');
+      }
+    }
+
+    const dateStr = body.date ?? dateKey();
+    const dayStart = startOfLocalDay(dateStr);
+    const now = new Date();
+
+    const parseTime = (hhmm: string, baseDate: Date): Date => {
+      const [h, m] = hhmm.split(':').map(Number);
+      const d = new Date(baseDate);
+      d.setUTCHours(h - 7, m, 0, 0);
+      return d;
+    };
+    const checkInTime  = body.checkIn  ? parseTime(body.checkIn,  dayStart) : now;
+    const checkOutTime = body.checkOut ? parseTime(body.checkOut, dayStart) : now;
+
+    // Ambil data siswa sekaligus
+    const students = await prisma.student.findMany({
+      where: { id: { in: body.studentIds } },
+      select: { id: true, userId: true },
+    });
+
+    let created = 0;
+    let updated = 0;
+
+    for (const student of students) {
+      const existing = await prisma.attendance.findUnique({
+        where: { userId_date_type: { userId: student.userId, date: dayStart, type: body.type } },
+      });
+      if (existing) {
+        await prisma.attendance.update({
+          where: { id: existing.id },
+          data: {
+            status: body.status as never,
+            method: 'MANUAL' as never,
+            checkIn:  body.type === 'CHECK_IN'  ? checkInTime  : existing.checkIn,
+            checkOut: body.type === 'CHECK_OUT' ? checkOutTime : existing.checkOut,
+            notes: body.notes ?? existing.notes,
+            lateMinutes: body.status === 'LATE' ? (existing.lateMinutes ?? 0) : 0,
+          },
+        });
+        updated++;
+      } else {
+        await prisma.attendance.create({
+          data: {
+            userId: student.userId,
+            studentId: student.id,
+            date: dayStart,
+            type: body.type as never,
+            status: body.status as never,
+            method: 'MANUAL' as never,
+            checkIn:  body.type === 'CHECK_IN'  ? checkInTime  : null,
+            checkOut: body.type === 'CHECK_OUT' ? checkOutTime : null,
+            notes: body.notes,
+            lateMinutes: body.status === 'LATE' ? 1 : 0,
+          },
+        });
+        created++;
+      }
+    }
+
+    await audit({
+      userId: request.user!.id,
+      action: 'ATTENDANCE_UPDATED',
+      entity: 'Attendance',
+      entityId: 'bulk',
+      newValue: { type: body.type, status: body.status, date: dateStr, count: students.length, source: 'pkl-bulk-manual' },
+      request,
+    });
+
+    return reply.send({
+      success: true,
+      message: `Absensi massal selesai: ${created} dicatat, ${updated} diperbarui.`,
+      data: { created, updated, total: students.length },
+    });
+  });
+
   // ===== ABSENSI MANUAL PKL oleh GURU PEMBIMBING =====
   // Guru pembimbing bisa input/koreksi absensi untuk siswa bimbingannya saja.
   // Permission: pkl:attendance (sudah dimiliki TEACHER).
