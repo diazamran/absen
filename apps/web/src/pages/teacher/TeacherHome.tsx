@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  FilePlus2, FileText, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, LogOut, XCircle, CalendarDays, MapPin, ShieldCheck, ScanFace, BarChart3, ClipboardCheck,
+  FilePlus2, FileText, ScanLine, BookOpen, ClipboardList, Camera, History, Clock3, CheckCircle2, LogOut, XCircle, CalendarDays, MapPin, ShieldCheck, ScanFace, BarChart3, ClipboardCheck, MonitorCheck,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth, hasRole } from '../../lib/auth';
@@ -23,6 +23,77 @@ interface HomeData {
   attendanceRules?: { lateAfterHour: number; lateAfterMinute: number };
 }
 
+interface SupervisedStudent {
+  assignmentId: string;
+  studentId: string;
+  fullName: string;
+  nis: string | null;
+  className: string | null;
+  location: { id: string; name: string; city: string | null };
+  todayAttendance: { checkIn: string | null; checkOut: string | null; status: string };
+}
+
+function PklSupervisorCard({ teacherId, onNavigate }: { teacherId: string; onNavigate: (path: string) => void }) {
+  const { data: students } = useQuery({
+    queryKey: ['pkl-supervisor', teacherId],
+    queryFn: () =>
+      api<{ success: boolean; data: SupervisedStudent[] }>(`/pkl/supervisor/${teacherId}`)
+        .then((r) => r.data),
+    staleTime: 30_000,
+  });
+
+  const total   = students?.length ?? 0;
+  const hadir   = students?.filter((s) => ['PRESENT', 'LATE', 'SICK', 'EXCUSED', 'OFFICIAL_DUTY'].includes(s.todayAttendance.status)).length ?? 0;
+  const belum   = students?.filter((s) => s.todayAttendance.status === 'NOT_YET').length ?? 0;
+
+  return (
+    <Card className="border-teal-200 bg-gradient-to-br from-teal-50 to-emerald-50 dark:border-teal-700 dark:from-teal-900/30 dark:to-emerald-900/20">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-100 text-teal-600 dark:bg-teal-800/60 dark:text-teal-300">
+            <MonitorCheck className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="font-bold text-teal-800 dark:text-teal-200">PKL Bimbingan</p>
+            <p className="text-xs text-teal-600 dark:text-teal-400">{total} siswa ditugaskan</p>
+          </div>
+        </div>
+        <button
+          onClick={() => onNavigate('/app/pkl-monitor')}
+          className="rounded-xl bg-teal-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-teal-700"
+        >
+          Monitor
+        </button>
+      </div>
+
+      {/* Stats mini */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-xl bg-white/70 p-2 text-center dark:bg-slate-800/50">
+          <p className="text-lg font-extrabold text-emerald-600">{hadir}</p>
+          <p className="text-[10px] font-semibold text-muted">Hadir</p>
+        </div>
+        <div className="rounded-xl bg-white/70 p-2 text-center dark:bg-slate-800/50">
+          <p className="text-lg font-extrabold text-amber-500">{belum}</p>
+          <p className="text-[10px] font-semibold text-muted">Belum</p>
+        </div>
+        <div className="rounded-xl bg-white/70 p-2 text-center dark:bg-slate-800/50">
+          <p className="text-lg font-extrabold text-primary">{total}</p>
+          <p className="text-[10px] font-semibold text-muted">Total</p>
+        </div>
+      </div>
+
+      {/* Tombol absensi manual */}
+      <button
+        onClick={() => onNavigate('/app/pkl-manual')}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-teal-300 bg-white/60 py-2 text-xs font-bold text-teal-700 hover:bg-teal-50 dark:border-teal-600 dark:bg-slate-800/40 dark:text-teal-300"
+      >
+        <ClipboardCheck className="h-3.5 w-3.5" />
+        Absensi Manual PKL
+      </button>
+    </Card>
+  );
+}
+
 export default function TeacherHome() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -32,6 +103,17 @@ export default function TeacherHome() {
     queryKey: ['dashboard', user?.roleKey],
     queryFn: () => api<{ success: boolean; data: HomeData }>('/dashboard').then((r) => r.data),
   });
+
+  // Cek apakah guru ini pembimbing PKL
+  const { data: pklMe } = useQuery({
+    queryKey: ['pkl-me'],
+    queryFn: () =>
+      api<{ success: boolean; data: { isSupervisor: boolean; isPklAdmin: boolean; teacherId: string | null } }>('/pkl/me')
+        .then((r) => r.data),
+    enabled: isTeacher || isHomeroom,
+    staleTime: 60_000,
+  });
+  const isPklSupervisor = !!(pklMe?.isSupervisor || pklMe?.isPklAdmin);
 
   const isStudent = hasRole(user, 'STUDENT');
   const isParent = hasRole(user, 'PARENT');
@@ -192,7 +274,24 @@ export default function TeacherHome() {
             <span className="text-center text-xs font-semibold text-ink">{m.label}</span>
           </button>
         ))}
+        {/* Card Monitor PKL — muncul hanya jika guru adalah pembimbing PKL */}
+        {isPklSupervisor && (
+          <button
+            onClick={() => navigate('/app/pkl-monitor')}
+            className="flex flex-col items-center gap-2 rounded-2xl border border-teal-200 bg-teal-50 p-4 shadow-card transition-transform active:scale-95 dark:border-teal-700 dark:bg-teal-900/30"
+          >
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-100 text-teal-600 dark:bg-teal-800/50 dark:text-teal-300">
+              <MonitorCheck className="h-6 w-6" />
+            </div>
+            <span className="text-center text-xs font-semibold text-teal-700 dark:text-teal-300">Monitor PKL</span>
+          </button>
+        )}
       </div>
+
+      {/* Card PKL Supervisor — muncul hanya jika guru adalah pembimbing PKL */}
+      {isPklSupervisor && pklMe?.teacherId && (
+        <PklSupervisorCard teacherId={pklMe.teacherId} onNavigate={navigate} />
+      )}
 
       {/* Jadwal hari ini — khusus siswa (jadwal yang di-set admin di menu Kelas → Jadwal) */}
       {isStudent && (
