@@ -2,7 +2,6 @@ import { lazy, Suspense, type ReactNode } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth, hasRole } from './lib/auth';
 import { AppShell } from './components/AppShell';
-import ApkDownloadBanner from './components/ApkDownloadBanner';
 import { LoadingCard } from './lib/ui';
 
 const Login = lazy(() => import('./pages/Login'));
@@ -75,8 +74,6 @@ function RequireAuth({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <>
-      {/* Banner unduh APK — hanya tampil di browser Android biasa */}
-      <ApkDownloadBanner />
       <Routes>
       <Route path="/login" element={<Page><Login /></Page>} />
       <Route path="/monitor" element={<Page><Monitor /></Page>} />
