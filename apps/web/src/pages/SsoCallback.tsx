@@ -25,12 +25,14 @@ export default function SsoCallback() {
       return;
     }
 
-    // Ambil token dari URL fragment
-    const hash   = window.location.hash.substring(1);
-    const params = new URLSearchParams(hash);
-    const access  = params.get('access');
-    const refresh = params.get('refresh');
-    const role    = params.get('role');
+    // Baca token dari query param (baru) atau fragment (lama — fallback)
+    const qParams  = new URLSearchParams(window.location.search);
+    const hash     = window.location.hash.substring(1);
+    const hParams  = new URLSearchParams(hash);
+
+    const access  = qParams.get('access')  || hParams.get('access');
+    const refresh = qParams.get('refresh') || hParams.get('refresh');
+    const role    = qParams.get('role')    || hParams.get('role');
 
     if (!access) {
       setError('Token tidak ditemukan. Silakan buka kembali dari SDMS.');
@@ -64,8 +66,12 @@ export default function SsoCallback() {
     }
 
     // Hard reload ke halaman tujuan agar React app mount ulang
-    // sehingga AuthProvider membaca token baru dari localStorage
-    window.location.replace(dest);
+    // sehingga AuthProvider membaca token baru dari localStorage.
+    // Pakai href + setTimeout agar localStorage flush sebelum navigasi,
+    // mencegah blank putih di WebView Android in-app browser.
+    setTimeout(() => {
+      window.location.href = dest;
+    }, 100);
   }, []);
 
   if (error) {

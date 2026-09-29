@@ -456,8 +456,9 @@ export async function authRoutes(app: FastifyInstance) {
 
       // Redirect ke /sso di frontend React dengan KEDUA token di URL fragment
       // SsoCallback.tsx akan simpan access ke presensiku_access, refresh ke presensiku_refresh
+      // Gunakan query param sebagai fallback agar WebView Android in-app tidak strip fragment
       return reply.redirect(
-        `${APP_URL}/sso#access=${tokens.accessToken}&refresh=${tokens.refreshToken}&role=${targetRoleKey}`,
+        `${APP_URL}/sso?access=${tokens.accessToken}&refresh=${tokens.refreshToken}&role=${targetRoleKey}`,
       );
 
     } catch (err: any) {
