@@ -104,6 +104,12 @@ export default function TeacherHome() {
     queryFn: () => api<{ success: boolean; data: HomeData }>('/dashboard').then((r) => r.data),
   });
 
+  const isStudent = hasRole(user, 'STUDENT');
+  const isParent = hasRole(user, 'PARENT');
+  const isPiket = hasRole(user, 'PIKET');
+  const isTeacher = hasRole(user, 'TEACHER');
+  const isHomeroom = hasRole(user, 'HOMEROOM_TEACHER');
+
   // Cek apakah guru ini pembimbing PKL
   const { data: pklMe } = useQuery({
     queryKey: ['pkl-me'],
@@ -114,12 +120,6 @@ export default function TeacherHome() {
     staleTime: 60_000,
   });
   const isPklSupervisor = !!(pklMe?.isSupervisor || pklMe?.isPklAdmin);
-
-  const isStudent = hasRole(user, 'STUDENT');
-  const isParent = hasRole(user, 'PARENT');
-  const isPiket = hasRole(user, 'PIKET');
-  const isTeacher = hasRole(user, 'TEACHER');
-  const isHomeroom = hasRole(user, 'HOMEROOM_TEACHER');
 
   const menu = isStudent
     ? [
