@@ -5,7 +5,7 @@ import { validate } from '../utils/validate.js';
 import { ApiError } from '../utils/errors.js';
 import { audit } from '../lib/audit.js';
 import { PERMISSION_KEYS } from '../rbac/permissions.js';
-import { localTime, todayStart, todayEnd, dateKey, monthRange, currentMonthKey, localMinutesOf } from '../lib/time.js';
+import { localTime, todayStart, todayEnd, dateKey, monthRange, currentMonthKey, localMinutesOf, startOfLocalDay } from '../lib/time.js';
 import { getAttendanceRules } from '../services/settings.js';
 import { haversineMeters } from '../services/attendance.js';
 
@@ -975,6 +975,115 @@ export async function pklRoutes(app: FastifyInstance) {
             hasData,
           };
         }),
+      },
+    });
+  });
+
+  // ===== ABSENSI MANUAL PKL oleh GURU PEMBIMBING =====
+  // Guru pembimbing bisa input/koreksi absensi untuk siswa bimbingannya saja.
+  // Permission: pkl:attendance (sudah dimiliki TEACHER).
+  app.post('/pkl/manual-attendance', { preHandler: app.requirePermission(PERMISSION_KEYS.pklAttendance) }, async (request, reply) => {
+    const body = validate(z.object({
+      studentId: z.string().min(1),
+      status: z.enum(['PRESENT', 'LATE', 'SICK', 'EXCUSED', 'OFFICIAL_DUTY', 'ABSENT', 'HOLIDAY']),
+      type: z.enum(['CHECK_IN', 'CHECK_OUT']).default('CHECK_IN'),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // default: hari ini
+      checkIn: z.string().regex(/^\d{2}:\d{2}$/).optional(),    // HH:MM
+      checkOut: z.string().regex(/^\d{2}:\d{2}$/).optional(),   // HH:MM
+      notes: z.string().optional(),
+    }), request.body);
+
+    // Pastikan guru ini adalah pembimbing siswa tersebut
+    const scope = await getPklScope(request.user!.id);
+    if (!scope.isAdmin) {
+      if (!scope.teacherId) throw ApiError.forbidden('NOT_SUPERVISOR', 'Anda bukan guru pembimbing PKL.');
+      const assignment = await prisma.pklAssignment.findFirst({
+        where: { studentId: body.studentId, supervisorId: scope.teacherId, isActive: true },
+      });
+      if (!assignment) throw ApiError.forbidden('SCOPE_RESTRICTED', 'Anda hanya dapat mengelola absensi siswa bimbingan PKL Anda sendiri.');
+    }
+
+    // Ambil data siswa
+    const student = await prisma.student.findUnique({
+      where: { id: body.studentId },
+      include: { user: { select: { id: true, fullName: true } }, class: { select: { name: true } } },
+    });
+    if (!student) throw ApiError.notFound('Siswa tidak ditemukan.');
+
+    // Tentukan tanggal
+    const dateStr = body.date ?? dateKey();
+    const dayStart = startOfLocalDay(dateStr);
+
+    // Tentukan jam dari input atau default sekarang
+    const now = new Date();
+    const parseTime = (hhmm: string, baseDate: Date): Date => {
+      const [h, m] = hhmm.split(':').map(Number);
+      const d = new Date(baseDate);
+      // Konversi dari WIB ke UTC: WIB = UTC+7
+      d.setUTCHours(h - 7, m, 0, 0);
+      return d;
+    };
+
+    const checkInTime = body.checkIn ? parseTime(body.checkIn, dayStart) : now;
+    const checkOutTime = body.checkOut ? parseTime(body.checkOut, dayStart) : now;
+
+    // Cek apakah record sudah ada untuk upsert
+    const existing = await prisma.attendance.findUnique({
+      where: { userId_date_type: { userId: student.userId, date: dayStart, type: body.type } },
+    });
+
+    let attendance;
+    if (existing) {
+      // Update record yang sudah ada
+      attendance = await prisma.attendance.update({
+        where: { id: existing.id },
+        data: {
+          status: body.status as never,
+          method: 'MANUAL' as never,
+          checkIn: body.type === 'CHECK_IN' ? checkInTime : existing.checkIn,
+          checkOut: body.type === 'CHECK_OUT' ? checkOutTime : existing.checkOut,
+          notes: body.notes ?? existing.notes,
+          lateMinutes: body.status === 'LATE' ? (existing.lateMinutes ?? 0) : 0,
+        },
+      });
+    } else {
+      // Buat record baru
+      attendance = await prisma.attendance.create({
+        data: {
+          userId: student.userId,
+          studentId: student.id,
+          date: dayStart,
+          type: body.type as never,
+          status: body.status as never,
+          method: 'MANUAL' as never,
+          checkIn: body.type === 'CHECK_IN' ? checkInTime : null,
+          checkOut: body.type === 'CHECK_OUT' ? checkOutTime : null,
+          notes: body.notes,
+          lateMinutes: body.status === 'LATE' ? 1 : 0,
+        },
+      });
+    }
+
+    await audit({
+      userId: request.user!.id,
+      action: existing ? 'ATTENDANCE_UPDATED' : 'ATTENDANCE_CREATED',
+      entity: 'Attendance',
+      entityId: attendance.id,
+      newValue: { type: body.type, status: body.status, date: dateStr, studentId: body.studentId, source: 'pkl-manual' },
+      request,
+    });
+
+    return reply.send({
+      success: true,
+      message: existing ? 'Absensi PKL diperbarui.' : 'Absensi PKL dicatat.',
+      data: {
+        id: attendance.id,
+        fullName: student.user?.fullName ?? '-',
+        className: student.class?.name ?? null,
+        status: attendance.status,
+        type: attendance.type,
+        checkIn: attendance.checkIn ? localTime(attendance.checkIn) : null,
+        checkOut: attendance.checkOut ? localTime(attendance.checkOut) : null,
       },
     });
   });

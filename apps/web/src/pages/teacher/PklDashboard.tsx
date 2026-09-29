@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, Clock, FileSpreadsheet, FileText } from 'lucide-react';
+import { CheckCircle2, Clock, FileSpreadsheet, FileText, ClipboardEdit } from 'lucide-react';
 import { api } from '../../lib/api';
 import { Card, Badge, Skeleton } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
@@ -80,6 +81,7 @@ function statusColorClass(s: string): string {
 
 export default function PklDashboard() {
   const [month, setMonth] = useState(() => todayJakartaKey().slice(0, 7));
+  const navigate = useNavigate();
   const { branding } = useTheme();
   const schoolName = branding?.schoolName || 'Sekolah';
 
@@ -228,6 +230,15 @@ export default function PklDashboard() {
   return (
     <div>
       <PageHeader title="Monitor PKL" subtitle="Pantau kehadiran siswa bimbingan PKL Anda hari ini" />
+
+      {/* Tombol Absensi Manual */}
+      <button
+        onClick={() => navigate('/app/pkl-manual')}
+        className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-primary/90 active:scale-[.98]"
+      >
+        <ClipboardEdit className="h-4 w-4" />
+        Absensi Manual Siswa Bimbingan
+      </button>
 
       {/* Stats */}
       <div className="mb-4 grid grid-cols-3 gap-3">

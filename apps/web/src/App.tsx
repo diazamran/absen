@@ -45,6 +45,7 @@ const History = lazy(() => import('./pages/shared/History'));
 const Leave = lazy(() => import('./pages/shared/Leave'));
 const PklAbsent = lazy(() => import('./pages/student/PklAbsent'));
 const PklDashboard = lazy(() => import('./pages/teacher/PklDashboard'));
+const PklManualAttendance = lazy(() => import('./pages/teacher/PklManualAttendance'));
 
 // Orang tua
 const ParentHome = lazy(() => import('./pages/parent/ParentHome'));
@@ -123,6 +124,7 @@ export default function App() {
         {/* Siswa PKL */}
         <Route path="pkl-absent" element={<Page><PklAbsent /></Page>} />
         <Route path="pkl-monitor" element={<Page><PklDashboard /></Page>} />
+        <Route path="pkl-manual" element={<Page><PklManualAttendance /></Page>} />
 
         {/* Siswa */}
         <Route path="absent" element={<Page><Absent /></Page>} />
