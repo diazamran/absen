@@ -67,11 +67,11 @@ export default function SsoCallback() {
 
     // Hard reload ke halaman tujuan agar React app mount ulang
     // sehingga AuthProvider membaca token baru dari localStorage.
-    // Pakai href + setTimeout agar localStorage flush sebelum navigasi,
-    // mencegah blank putih di WebView Android in-app browser.
+    // Delay 300ms agar localStorage benar-benar flush di WebView Android,
+    // lalu hard reload via location.replace agar tidak ada history SSO tersisa.
     setTimeout(() => {
-      window.location.href = dest;
-    }, 100);
+      window.location.replace(dest);
+    }, 300);
   }, []);
 
   if (error) {
@@ -103,24 +103,18 @@ export default function SsoCallback() {
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', background: 'linear-gradient(135deg,#1a7fe8,#8b5cf6)',
+      justifyContent: 'center', background: '#f8fafc',
       fontFamily: 'system-ui,sans-serif',
     }}>
-      <div style={{
-        background: 'white', borderRadius: 20, padding: '48px 40px',
-        textAlign: 'center', maxWidth: 360, width: '90%',
-        boxShadow: '0 25px 60px rgba(0,0,0,0.15)',
-      }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🔑</div>
-        <h2 style={{ margin: '0 0 8px', color: '#1e293b' }}>Masuk via SDMS</h2>
-        <p style={{ color: '#64748b', fontSize: 14, marginBottom: 24 }}>Memverifikasi sesi…</p>
+      <div style={{ textAlign: 'center' }}>
         <div style={{
-          width: 36, height: 36, border: '4px solid #e2e8f0',
-          borderTopColor: '#3b82f6', borderRadius: '50%',
-          animation: 'spin 0.8s linear infinite', margin: '0 auto',
+          width: 48, height: 48, border: '5px solid #e2e8f0',
+          borderTopColor: '#0d9488', borderRadius: '50%',
+          animation: 'spin 0.7s linear infinite', margin: '0 auto 16px',
         }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>Memuat sesi…</p>
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

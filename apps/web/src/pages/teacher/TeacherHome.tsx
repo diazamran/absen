@@ -274,18 +274,6 @@ export default function TeacherHome() {
             <span className="text-center text-xs font-semibold text-ink">{m.label}</span>
           </button>
         ))}
-        {/* Card Monitor PKL — muncul hanya jika guru adalah pembimbing PKL */}
-        {isPklSupervisor && (
-          <button
-            onClick={() => navigate('/app/pkl-monitor')}
-            className="flex flex-col items-center gap-2 rounded-2xl border border-teal-200 bg-teal-50 p-4 shadow-card transition-transform active:scale-95 dark:border-teal-700 dark:bg-teal-900/30"
-          >
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-100 text-teal-600 dark:bg-teal-800/50 dark:text-teal-300">
-              <MonitorCheck className="h-6 w-6" />
-            </div>
-            <span className="text-center text-xs font-semibold text-teal-700 dark:text-teal-300">Monitor PKL</span>
-          </button>
-        )}
       </div>
 
       {/* Card PKL Supervisor — muncul hanya jika guru adalah pembimbing PKL */}
