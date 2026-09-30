@@ -704,8 +704,26 @@ export default function PklManagement() {
           value={tab}
           onChange={(v) => setTab(v as 'locations' | 'assignments')}
           options={[
-            { value: 'locations', label: `Lokasi (${locations?.length ?? 0})` },
-            { value: 'assignments', label: `Penugasan (${locations?.reduce((sum, l) => sum + l.students.length, 0) ?? 0})` },
+            {
+              value: 'locations',
+              label: `Lokasi (${
+                pklRoleLoading ? '…' :
+                isPklAdmin
+                  ? (locations?.length ?? 0)
+                  : (locations ?? []).filter((l) => supervisedLocationIds.includes(l.id)).length
+              })`,
+            },
+            {
+              value: 'assignments',
+              label: `Penugasan (${
+                pklRoleLoading ? '…' :
+                isPklAdmin
+                  ? (locations?.reduce((sum, l) => sum + l.students.length, 0) ?? 0)
+                  : (locations ?? [])
+                      .filter((l) => supervisedLocationIds.includes(l.id))
+                      .reduce((sum, l) => sum + l.students.length, 0)
+              })`,
+            },
           ]}
         />
         {tab === 'locations' && isPklAdmin && (
