@@ -596,7 +596,7 @@ export default function PklManagement() {
   const [tab, setTab] = useState<'locations' | 'assignments'>('locations');
 
   // Check if current user is PKL admin or supervisor
-  const { data: pklRole } = useQuery({
+  const { data: pklRole, isLoading: pklRoleLoading } = useQuery({
     queryKey: ['pkl-me'],
     queryFn: () =>
       api<{ success: boolean; data: { isSupervisor: boolean; isPklAdmin: boolean; teacherId: string | null; supervisedLocationIds: string[] } }>(
@@ -803,16 +803,24 @@ export default function PklManagement() {
           </div>
 
           {/* Locations list */}
-          {isLoading && <Skeleton className="h-32 w-full" />}
-          {!isLoading && (
+          {(isLoading || pklRoleLoading) && <Skeleton className="h-32 w-full" />}
+          {!isLoading && !pklRoleLoading && (
             <div className="space-y-3">
-              {locations && locations.length === 0 && (
-                <EmptyState icon={MapPin} title="Belum ada lokasi PKL" description="Klik 'Tambah Lokasi' untuk menambahkan tempat PKL." />
-              )}
-              {locations?.map((loc) => {
-                // Apakah guru ini adalah pembimbing di lokasi ini?
+              {(() => {
+                // Guru non-admin hanya lihat lokasi yang ia bimbing
+                const visibleLocations = isPklAdmin
+                  ? (locations ?? [])
+                  : (locations ?? []).filter((l) => supervisedLocationIds.includes(l.id));
+                if (visibleLocations.length === 0) {
+                  return isPklAdmin
+                    ? <EmptyState icon={MapPin} title="Belum ada lokasi PKL" description="Klik 'Tambah Lokasi' untuk menambahkan tempat PKL." />
+                    : <EmptyState icon={MapPin} title="Belum ada lokasi PKL yang dibimbing" description="Minta admin untuk mendaftarkan Anda sebagai pembimbing di lokasi PKL." />;
+                }
+                return null;
+              })()}
+              {(isPklAdmin ? (locations ?? []) : (locations ?? []).filter((l) => supervisedLocationIds.includes(l.id))).map((loc) => {
+                // Guru selalu bisa manage lokasinya (sudah difilter)
                 const isMyLocation = supervisedLocationIds.includes(loc.id);
-                // Bisa manage penugasan di lokasi ini: admin atau supervisor lokasi
                 const canManageLoc = isPklAdmin || isMyLocation;
 
                 return (
@@ -944,9 +952,6 @@ export default function PklManagement() {
                   </Card>
                 );
               })}
-              {!isLoading && locations && locations.length === 0 && (
-                <EmptyState icon={MapPin} title="Belum ada lokasi PKL" description="Klik 'Tambah Lokasi' untuk menambahkan tempat PKL." />
-              )}
             </div>
           )}
         </>
