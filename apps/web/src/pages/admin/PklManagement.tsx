@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { MapPin, Plus, Trash2, Edit, Users, Search, Loader2, X, ChevronDown, Building2, GraduationCap, Download, Upload, Clock3 } from 'lucide-react';
-import { api, ApiError } from '../../lib/api';
+import { MapPin, Plus, Trash2, Edit, Users, Search, Loader2, X, ChevronDown, Building2, GraduationCap, Download, Upload, Clock3, FileDown } from 'lucide-react';
+import { api, ApiError, getToken } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { useAuth } from '../../lib/auth';
 import { Button, Card, Input, Badge, EmptyState, Skeleton } from '../../lib/ui';
@@ -657,6 +657,72 @@ export default function PklManagement() {
     XLSX.writeFile(wb, 'template-lokasi-pkl.xlsx');
   };
 
+  const exportToExcel = () => {
+    if (!locations || locations.length === 0) {
+      toast('error', 'Tidak ada data lokasi PKL untuk diekspor.');
+      return;
+    }
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Daftar Lokasi
+    const locRows: (string | number | null)[][] = [
+      ['No', 'Nama Tempat', 'Kota', 'Alamat', 'Latitude', 'Longitude', 'Radius (m)', 'Kontak / PIC', 'No. HP',
+       'Tanggal Mulai', 'Tanggal Selesai', 'Hari Kerja', 'Jumlah Siswa'],
+    ];
+    const dayNames: Record<number, string> = { 1: 'Sen', 2: 'Sel', 3: 'Rab', 4: 'Kam', 5: 'Jum', 6: 'Sab', 7: 'Min' };
+    locations.forEach((loc, i) => {
+      const hariKerja = loc.workDays ? loc.workDays.map((d: number) => dayNames[d] ?? d).join(', ') : 'Sen-Jum';
+      locRows.push([
+        i + 1,
+        loc.name,
+        loc.city ?? '',
+        loc.address ?? '',
+        loc.latitude ?? '',
+        loc.longitude ?? '',
+        loc.radiusMeter,
+        loc.contactName ?? '',
+        loc.phone ?? '',
+        loc.startDate ?? '',
+        loc.endDate ?? '',
+        hariKerja,
+        loc.studentCount,
+      ]);
+    });
+    const wsLoc = XLSX.utils.aoa_to_sheet(locRows);
+    wsLoc['!cols'] = [
+      { wch: 4 }, { wch: 28 }, { wch: 15 }, { wch: 35 }, { wch: 12 }, { wch: 12 },
+      { wch: 10 }, { wch: 22 }, { wch: 15 }, { wch: 14 }, { wch: 14 }, { wch: 20 }, { wch: 13 },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsLoc, 'Lokasi PKL');
+
+    // Sheet 2: Daftar Siswa PKL (semua lokasi)
+    const siswaRows: (string | number | null)[][] = [
+      ['No', 'Nama Siswa', 'NIS', 'Kelas', 'Nama Tempat PKL', 'Kota', 'Guru Pembimbing'],
+    ];
+    let no = 1;
+    locations.forEach((loc) => {
+      loc.students.forEach((s) => {
+        siswaRows.push([
+          no++,
+          s.fullName,
+          s.nis ?? '',
+          s.className ?? '',
+          loc.name,
+          loc.city ?? '',
+          s.supervisorName ?? '',
+        ]);
+      });
+    });
+    const wsSiswa = XLSX.utils.aoa_to_sheet(siswaRows);
+    wsSiswa['!cols'] = [
+      { wch: 4 }, { wch: 30 }, { wch: 14 }, { wch: 14 }, { wch: 28 }, { wch: 15 }, { wch: 28 },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsSiswa, 'Siswa PKL');
+
+    const now = new Date().toLocaleDateString('id-ID').replace(/\//g, '-');
+    XLSX.writeFile(wb, `data-pkl-${now}.xlsx`);
+  };
+
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -664,9 +730,10 @@ export default function PklManagement() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      // Pakai getToken() — bukan localStorage.getItem('token') yang salah key
       const res = await fetch('/api/import/pkl-locations', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        headers: { Authorization: `Bearer ${getToken()}` },
         body: formData,
       }).then((r) => r.json());
       if (res.success) {
@@ -729,11 +796,14 @@ export default function PklManagement() {
         {tab === 'locations' && isPklAdmin && (
           <div className="flex gap-2">
             <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
-            <Button variant="outline" onClick={downloadTemplate}>
+            <Button variant="outline" onClick={downloadTemplate} title="Download template import">
               <Download className="h-4 w-4" /> Template
             </Button>
-            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importing}>
-              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Import Excel
+            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importing} title="Import lokasi dari Excel">
+              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Import
+            </Button>
+            <Button variant="outline" onClick={exportToExcel} title="Export semua data PKL ke Excel">
+              <FileDown className="h-4 w-4" /> Export
             </Button>
             <Button onClick={() => setShowForm('add-location')}>
               <Plus className="h-4 w-4" /> Tambah Lokasi
