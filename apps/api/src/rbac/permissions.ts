@@ -42,6 +42,7 @@ export const PERMISSION_KEYS = {
   faceDelete: 'face:delete',
   monitorView: 'monitor:view',
   pklManage: 'pkl:manage',
+  pklManageOwn: 'pkl:manage:own', // guru pembimbing: kelola siswa & jadwal di lokasi yang ia bimbing
   pklRead: 'pkl:read',
   pklAttendance: 'pkl:attendance',
   violationsManage: 'violations:manage',
@@ -103,6 +104,9 @@ const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     PERMISSION_KEYS.violationsManage,
     PERMISSION_KEYS.violationsRead,
     PERMISSION_KEYS.violationsCreate,
+    PERMISSION_KEYS.pklRead,
+    PERMISSION_KEYS.pklAttendance,
+    PERMISSION_KEYS.pklManageOwn,
   ],
   TEACHER: [
     PERMISSION_KEYS.dashboardView,
@@ -118,6 +122,7 @@ const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     PERMISSION_KEYS.monitorView,
     PERMISSION_KEYS.pklRead,
     PERMISSION_KEYS.pklAttendance,
+    PERMISSION_KEYS.pklManageOwn,
   ],
   BK: [
     PERMISSION_KEYS.dashboardView,

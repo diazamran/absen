@@ -22,6 +22,17 @@ const locationSchema = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   // Hari kerja: array 1-7 (1=Sen...7=Min). Null/kosong = Senin-Jumat default.
   workDays: z.array(z.number().int().min(1).max(7)).optional().nullable(),
+  // Jadwal absensi khusus per-lokasi PKL. Null = ikut jadwal global di settings.
+  schedule: z.object({
+    lateAfterHour: z.number().int().min(0).max(23),
+    lateAfterMinute: z.number().int().min(0).max(59).default(0),
+    checkInDeadlineHour: z.number().int().min(0).max(23).default(23),
+    checkInDeadlineMinute: z.number().int().min(0).max(59).default(59),
+    checkOutAfterHour: z.number().int().min(0).max(23),
+    checkOutAfterMinute: z.number().int().min(0).max(59).default(0),
+    earlyLeaveBeforeHour: z.number().int().min(0).max(23),
+    earlyLeaveBeforeMinute: z.number().int().min(0).max(59).default(0),
+  }).optional().nullable(),
 });
 
 const assignmentSchema = z.object({
@@ -54,15 +65,20 @@ export async function pklRoutes(app: FastifyInstance) {
     });
     if (!user?.teacher) {
       // Admin/SuperAdmin tetap bisa akses PKL management walau tidak punya teacher record
-      return reply.send({ success: true, data: { isSupervisor: false, isPklAdmin, teacherId: null } });
+      return reply.send({ success: true, data: { isSupervisor: false, isPklAdmin, teacherId: null, supervisedLocationIds: [] } });
     }
-    const assignmentCount = await prisma.pklAssignment.count({ where: { supervisorId: user.teacher.id } });
+    const assignments = await prisma.pklAssignment.findMany({
+      where: { supervisorId: user.teacher.id, isActive: true },
+      select: { pklLocationId: true },
+    });
+    const supervisedLocationIds = [...new Set(assignments.map((a) => a.pklLocationId))];
     return reply.send({
       success: true,
       data: {
-        isSupervisor: assignmentCount > 0,
+        isSupervisor: supervisedLocationIds.length > 0,
         isPklAdmin,
         teacherId: user.teacher.id,
+        supervisedLocationIds,
       },
     });
   });
@@ -108,6 +124,7 @@ export async function pklRoutes(app: FastifyInstance) {
         startDate: (r as any).startDate ? (r as any).startDate.toISOString().slice(0, 10) : null,
         endDate: (r as any).endDate ? (r as any).endDate.toISOString().slice(0, 10) : null,
         workDays: (r as any).workDays ?? null,
+        schedule: (r as any).schedule ?? null,
         isActive: r.isActive,
         studentCount: r.assignments.length,
         students: r.assignments.map((a) => ({
@@ -128,32 +145,46 @@ export async function pklRoutes(app: FastifyInstance) {
   // Create PKL location
   app.post('/pkl/locations', { preHandler: app.requirePermission(PERMISSION_KEYS.pklManage) }, async (request, reply) => {
     const body = validate(locationSchema, request.body);
-    const { startDate, endDate, workDays, ...rest } = body;
+    const { startDate, endDate, workDays, schedule, ...rest } = body;
     const row = await (prisma.pklLocation.create as any)({
       data: {
         ...rest,
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
         workDays: workDays ?? null,
+        schedule: schedule ?? null,
       },
     });
     await audit({ userId: request.user!.id, action: 'PKL_LOCATION_CREATED', entity: 'PklLocation', entityId: row.id, request });
     return reply.send({ success: true, data: row, message: 'Lokasi PKL ditambahkan.' });
   });
 
-  // Update PKL location
-  app.put('/pkl/locations/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.pklManage) }, async (request, reply) => {
+  // Update PKL location — admin atau guru pembimbing lokasi tersebut
+  app.put('/pkl/locations/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const scope = await getPklScope(request.user!.id);
+    // Guru non-admin hanya boleh update jadwal (schedule) di lokasi yang ia bimbing
+    if (!scope.isAdmin) {
+      if (!scope.teacherId) throw ApiError.forbidden('FORBIDDEN', 'Anda tidak memiliki akses untuk mengubah lokasi PKL.');
+      const isSupervisor = await prisma.pklAssignment.findFirst({
+        where: { pklLocationId: id, supervisorId: scope.teacherId, isActive: true },
+      });
+      if (!isSupervisor) throw ApiError.forbidden('FORBIDDEN', 'Anda hanya bisa mengubah jadwal lokasi PKL yang Anda bimbing.');
+    }
     const body = validate(locationSchema.partial(), request.body);
-    const { startDate, endDate, workDays, ...rest } = body;
+    const { startDate, endDate, workDays, schedule, ...rest } = body;
+    // Guru non-admin hanya boleh update field schedule — field lain hanya admin
+    const updateData: Record<string, unknown> = {};
+    if (scope.isAdmin) {
+      Object.assign(updateData, rest);
+      if (startDate !== undefined) updateData.startDate = startDate ? new Date(startDate) : null;
+      if (endDate !== undefined) updateData.endDate = endDate ? new Date(endDate) : null;
+      if (workDays !== undefined) updateData.workDays = workDays ?? null;
+    }
+    if (schedule !== undefined) updateData.schedule = schedule ?? null;
     const row = await (prisma.pklLocation.update as any)({
       where: { id },
-      data: {
-        ...rest,
-        ...(startDate !== undefined ? { startDate: startDate ? new Date(startDate) : null } : {}),
-        ...(endDate !== undefined ? { endDate: endDate ? new Date(endDate) : null } : {}),
-        ...(workDays !== undefined ? { workDays: workDays ?? null } : {}),
-      },
+      data: updateData,
     });
     await audit({ userId: request.user!.id, action: 'PKL_LOCATION_UPDATED', entity: 'PklLocation', entityId: id, request });
     return reply.send({ success: true, data: row, message: 'Lokasi PKL diperbarui.' });
@@ -170,8 +201,28 @@ export async function pklRoutes(app: FastifyInstance) {
   // ===== ASSIGNMENTS =====
 
   // Create assignment (assign siswa ke lokasi + guru pembimbing)
-  app.post('/pkl/assignments', { preHandler: app.requirePermission(PERMISSION_KEYS.pklManage) }, async (request, reply) => {
+  // Admin: bisa ke lokasi mana saja. Guru (pklManageOwn): hanya ke lokasi yang ia supervisi.
+  app.post('/pkl/assignments', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
     const body = validate(assignmentSchema, request.body);
+    const scope = await getPklScope(request.user!.id);
+    if (!scope.isAdmin) {
+      if (!scope.teacherId) throw ApiError.forbidden('FORBIDDEN', 'Anda tidak memiliki izin untuk menambah penugasan PKL.');
+      // Guru hanya bisa assign siswa ke lokasi di mana ia menjadi supervisor
+      const isSupervisorOfLocation = await prisma.pklAssignment.findFirst({
+        where: { pklLocationId: body.pklLocationId, supervisorId: scope.teacherId, isActive: true },
+      });
+      // Guru juga boleh assign jika lokasi belum punya siswa tapi admin sudah set dia sebagai supervisor
+      // via field lain — karena di awal lokasi masih kosong, cek via existing supervisor mapping
+      // Fallback: cek apakah ada penugasan (active) dari guru ini ke lokasi ini
+      if (!isSupervisorOfLocation) {
+        // Coba cek apakah guru adalah satu-satunya supervisor yang pernah di-set admin
+        // Admin bisa pre-set supervisorId di lokasi via assignment pertama mereka sendiri.
+        // Jika belum ada assignment sama sekali di lokasi ini dengan supervisor ini, tolak.
+        throw ApiError.forbidden('FORBIDDEN', 'Anda hanya bisa menambah siswa ke lokasi PKL yang Anda bimbing. Minta admin untuk mendaftarkan Anda sebagai pembimbing di lokasi ini terlebih dahulu.');
+      }
+      // Supervisor auto-set ke dirinya sendiri
+      body.supervisorId = scope.teacherId;
+    }
     const existing = await prisma.pklAssignment.findFirst({
       where: { studentId: body.studentId, pklLocationId: body.pklLocationId },
     });
@@ -191,7 +242,8 @@ export async function pklRoutes(app: FastifyInstance) {
   });
 
   // Bulk assign (assign banyak siswa sekaligus)
-  app.post('/pkl/assignments/bulk', { preHandler: app.requirePermission(PERMISSION_KEYS.pklManage) }, async (request, reply) => {
+  // Admin: bebas. Guru (pklManageOwn): hanya lokasi yang ia bimbing, supervisorId otomatis dirinya.
+  app.post('/pkl/assignments/bulk', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
     const body = validate(z.object({
       studentIds: z.array(z.string()).min(1),
       pklLocationId: z.string().min(1),
@@ -199,6 +251,17 @@ export async function pklRoutes(app: FastifyInstance) {
       startDate: z.string().optional(),
       endDate: z.string().optional(),
     }), request.body);
+    const scope = await getPklScope(request.user!.id);
+    if (!scope.isAdmin) {
+      if (!scope.teacherId) throw ApiError.forbidden('FORBIDDEN', 'Anda tidak memiliki izin untuk menambah penugasan PKL.');
+      const isSupervisorOfLocation = await prisma.pklAssignment.findFirst({
+        where: { pklLocationId: body.pklLocationId, supervisorId: scope.teacherId, isActive: true },
+      });
+      if (!isSupervisorOfLocation) {
+        throw ApiError.forbidden('FORBIDDEN', 'Anda hanya bisa menambah siswa ke lokasi PKL yang Anda bimbing.');
+      }
+      body.supervisorId = scope.teacherId;
+    }
     let created = 0;
     for (const studentId of body.studentIds) {
       const existing = await prisma.pklAssignment.findFirst({
@@ -224,22 +287,40 @@ export async function pklRoutes(app: FastifyInstance) {
   });
 
   // Update assignment (ubah guru pembimbing, tanggal, dll)
-  app.put('/pkl/assignments/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.pklManage) }, async (request, reply) => {
+  // Admin: bebas. Guru: hanya assignment di bawah supervisorId-nya.
+  app.put('/pkl/assignments/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const scope = await getPklScope(request.user!.id);
+    if (!scope.isAdmin) {
+      if (!scope.teacherId) throw ApiError.forbidden('FORBIDDEN', 'Anda tidak memiliki izin untuk mengubah penugasan PKL.');
+      const assignment = await prisma.pklAssignment.findUnique({ where: { id } });
+      if (!assignment || assignment.supervisorId !== scope.teacherId) {
+        throw ApiError.forbidden('FORBIDDEN', 'Anda hanya bisa mengubah penugasan siswa bimbingan Anda sendiri.');
+      }
+    }
     const body = validate(assignmentSchema.partial(), request.body);
     const data: Record<string, unknown> = {};
-    if (body.supervisorId !== undefined) data.supervisorId = body.supervisorId || null;
+    if (scope.isAdmin && body.supervisorId !== undefined) data.supervisorId = body.supervisorId || null;
     if (body.startDate !== undefined) data.startDate = body.startDate ? new Date(body.startDate) : null;
     if (body.endDate !== undefined) data.endDate = body.endDate ? new Date(body.endDate) : null;
     if (body.notes !== undefined) data.notes = body.notes;
-    if (body.pklLocationId !== undefined) data.pklLocationId = body.pklLocationId;
+    if (scope.isAdmin && body.pklLocationId !== undefined) data.pklLocationId = body.pklLocationId;
     const row = await prisma.pklAssignment.update({ where: { id }, data });
     return reply.send({ success: true, data: row, message: 'Penugasan diperbarui.' });
   });
 
   // Delete assignment
-  app.delete('/pkl/assignments/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.pklManage) }, async (request, reply) => {
+  // Admin: bebas. Guru: hanya assignment di bawah supervisorId-nya.
+  app.delete('/pkl/assignments/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const scope = await getPklScope(request.user!.id);
+    if (!scope.isAdmin) {
+      if (!scope.teacherId) throw ApiError.forbidden('FORBIDDEN', 'Anda tidak memiliki izin untuk menghapus penugasan PKL.');
+      const assignment = await prisma.pklAssignment.findUnique({ where: { id } });
+      if (!assignment || assignment.supervisorId !== scope.teacherId) {
+        throw ApiError.forbidden('FORBIDDEN', 'Anda hanya bisa menghapus penugasan siswa bimbingan Anda sendiri.');
+      }
+    }
     await prisma.pklAssignment.delete({ where: { id } });
     await audit({ userId: request.user!.id, action: 'PKL_ASSIGNMENT_DELETED', entity: 'PklAssignment', entityId: id, request });
     return reply.send({ success: true, message: 'Penugasan dihapus.' });
@@ -300,15 +381,29 @@ export async function pklRoutes(app: FastifyInstance) {
     const today = todayStart();
     const todayKey = today.toISOString().slice(0, 10);
 
-    // ===== Jadwal PKL (aturan khusus PKL; yang kosong mengikuti jam sekolah) =====
+    // ===== Jadwal PKL: per-lokasi (location.schedule) → global PKL → jam sekolah =====
     const rules = await getAttendanceRules();
+    const locSched = (location as any).schedule as {
+      lateAfterHour?: number; lateAfterMinute?: number;
+      checkInDeadlineHour?: number; checkInDeadlineMinute?: number;
+      checkOutAfterHour?: number; checkOutAfterMinute?: number;
+      earlyLeaveBeforeHour?: number; earlyLeaveBeforeMinute?: number;
+    } | null ?? null;
     const nowMinutes = localMinutesOf(new Date());
-    const lateH = rules.pklLateAfterHour ?? rules.lateAfterHour;
-    const lateM = rules.pklLateAfterHour !== null ? (rules.pklLateAfterMinute ?? 0) : rules.lateAfterMinute;
-    const inDeadlineH = rules.pklCheckInDeadlineHour ?? rules.checkInDeadlineHour;
-    const inDeadlineM = rules.pklCheckInDeadlineHour !== null ? (rules.pklCheckInDeadlineMinute ?? 0) : rules.checkInDeadlineMinute;
-    const earlyH = rules.pklEarlyLeaveBeforeHour ?? rules.earlyLeaveBeforeHour;
-    const earlyM = rules.pklEarlyLeaveBeforeHour !== null ? (rules.pklEarlyLeaveBeforeMinute ?? 0) : rules.earlyLeaveBeforeMinute;
+
+    // lateH/lateM: prioritas (1) jadwal lokasi, (2) jadwal PKL global, (3) jam sekolah
+    const lateH = locSched?.lateAfterHour ?? rules.pklLateAfterHour ?? rules.lateAfterHour;
+    const lateM = locSched?.lateAfterHour != null
+      ? (locSched.lateAfterMinute ?? 0)
+      : rules.pklLateAfterHour !== null ? (rules.pklLateAfterMinute ?? 0) : rules.lateAfterMinute;
+    const inDeadlineH = locSched?.checkInDeadlineHour ?? rules.pklCheckInDeadlineHour ?? rules.checkInDeadlineHour;
+    const inDeadlineM = locSched?.checkInDeadlineHour != null
+      ? (locSched.checkInDeadlineMinute ?? 59)
+      : rules.pklCheckInDeadlineHour !== null ? (rules.pklCheckInDeadlineMinute ?? 0) : rules.checkInDeadlineMinute;
+    const earlyH = locSched?.earlyLeaveBeforeHour ?? rules.pklEarlyLeaveBeforeHour ?? rules.earlyLeaveBeforeHour;
+    const earlyM = locSched?.earlyLeaveBeforeHour != null
+      ? (locSched.earlyLeaveBeforeMinute ?? 0)
+      : rules.pklEarlyLeaveBeforeHour !== null ? (rules.pklEarlyLeaveBeforeMinute ?? 0) : rules.earlyLeaveBeforeMinute;
 
     if (body.type === 'CHECK_IN') {
       // Cek apakah sudah ada check-in hari ini
@@ -415,8 +510,10 @@ export async function pklRoutes(app: FastifyInstance) {
         );
       }
 
-      const outH = rules.pklCheckOutAfterHour ?? rules.checkOutAfterHour;
-      const outM = rules.pklCheckOutAfterHour !== null ? (rules.pklCheckOutAfterMinute ?? 0) : rules.checkOutAfterMinute;
+      const outH = locSched?.checkOutAfterHour ?? rules.pklCheckOutAfterHour ?? rules.checkOutAfterHour;
+      const outM = locSched?.checkOutAfterHour != null
+        ? (locSched.checkOutAfterMinute ?? 0)
+        : rules.pklCheckOutAfterHour !== null ? (rules.pklCheckOutAfterMinute ?? 0) : rules.checkOutAfterMinute;
       const pulangAwal = nowMinutes < outH * 60 + outM;
 
       const att = await prisma.attendance.update({

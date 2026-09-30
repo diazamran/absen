@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { MapPin, Plus, Trash2, Edit, Users, Search, Loader2, X, ChevronDown, Building2, GraduationCap, Download, Upload } from 'lucide-react';
+import { MapPin, Plus, Trash2, Edit, Users, Search, Loader2, X, ChevronDown, Building2, GraduationCap, Download, Upload, Clock3 } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { useAuth } from '../../lib/auth';
@@ -10,6 +10,17 @@ import { PageHeader } from '../../components/AppShell';
 import { Segmented } from '../../lib/ui';
 
 // ===== Types =====
+interface PklSchedule {
+  lateAfterHour: number;
+  lateAfterMinute: number;
+  checkInDeadlineHour: number;
+  checkInDeadlineMinute: number;
+  checkOutAfterHour: number;
+  checkOutAfterMinute: number;
+  earlyLeaveBeforeHour: number;
+  earlyLeaveBeforeMinute: number;
+}
+
 interface PklLocation {
   id: string;
   name: string;
@@ -23,6 +34,7 @@ interface PklLocation {
   startDate: string | null;
   endDate: string | null;
   workDays: number[] | null;
+  schedule: PklSchedule | null;
   isActive: boolean;
   studentCount: number;
   students: PklStudent[];
@@ -58,10 +70,152 @@ interface TeacherOption {
   isPiket: boolean;
 }
 
-// ===== Location Form =====
+// ===== Helper: TimeInput (jam:menit) =====
+function TimeInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [h, m] = value.split(':').map(Number);
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  return (
+    <div className="flex items-center gap-1">
+      <select
+        value={h}
+        onChange={(e) => onChange(`${pad2(Number(e.target.value))}:${pad2(m)}`)}
+        className="rounded-xl border border-line bg-white px-2 py-2 text-sm text-ink dark:bg-slate-900"
+      >
+        {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{pad2(i)}</option>)}
+      </select>
+      <span className="font-bold text-muted">:</span>
+      <select
+        value={m}
+        onChange={(e) => onChange(`${pad2(h)}:${pad2(Number(e.target.value))}`)}
+        className="rounded-xl border border-line bg-white px-2 py-2 text-sm text-ink dark:bg-slate-900"
+      >
+        {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((i) => (
+          <option key={i} value={i}>{pad2(i)}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+// ===== Schedule Form (jadwal PKL per-lokasi) =====
+function ScheduleForm({
+  locationId,
+  locationName,
+  initialSchedule,
+  onClose,
+  readOnly,
+}: {
+  locationId: string;
+  locationName: string;
+  initialSchedule: PklSchedule | null;
+  onClose: () => void;
+  readOnly?: boolean;
+}) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+
+  const DEFAULT_SCHEDULE: PklSchedule = {
+    lateAfterHour: 8, lateAfterMinute: 0,
+    checkInDeadlineHour: 23, checkInDeadlineMinute: 59,
+    checkOutAfterHour: 16, checkOutAfterMinute: 0,
+    earlyLeaveBeforeHour: 15, earlyLeaveBeforeMinute: 30,
+  };
+
+  const [schedOn, setSchedOn] = useState(initialSchedule !== null);
+  const [sched, setSched] = useState<PklSchedule>(initialSchedule ?? DEFAULT_SCHEDULE);
+  const setS = (k: keyof PklSchedule, v: number) => setSched((s) => ({ ...s, [k]: v }));
+  const setTime = (key: string, val: string) => {
+    const [h, m] = val.split(':').map(Number);
+    setSched((s) => ({ ...s, [`${key}Hour`]: h, [`${key}Minute`]: m }));
+  };
+
+  const save = useMutation({
+    mutationFn: () =>
+      api(`/pkl/locations/${locationId}`, {
+        method: 'PUT',
+        body: { schedule: schedOn ? sched : null },
+      }),
+    onSuccess: () => {
+      toast('success', 'Jadwal PKL disimpan.');
+      qc.invalidateQueries({ queryKey: ['pkl-locations'] });
+      onClose();
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menyimpan jadwal.'),
+  });
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted">
+        Jadwal absensi khusus untuk <span className="font-semibold text-ink">{locationName}</span>. Jika tidak diatur, siswa di lokasi ini mengikuti jadwal PKL global di Settings.
+      </p>
+      <label className="flex items-center gap-2 text-sm font-semibold text-ink">
+        <input
+          type="checkbox"
+          checked={schedOn}
+          onChange={(e) => setSchedOn(e.target.checked)}
+          disabled={readOnly}
+          className="h-4 w-4 accent-teal-600"
+        />
+        Aktifkan jadwal khusus untuk lokasi ini
+      </label>
+
+      {schedOn && (
+        <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-muted">Batas terlambat</label>
+            <TimeInput
+              value={`${pad2(sched.lateAfterHour)}:${pad2(sched.lateAfterMinute)}`}
+              onChange={(v) => setTime('lateAfter', v)}
+            />
+            <p className="mt-1 text-xs text-muted">Absen datang setelah jam ini = Terlambat.</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-muted">Batas akhir absen datang</label>
+            <TimeInput
+              value={`${pad2(sched.checkInDeadlineHour)}:${pad2(sched.checkInDeadlineMinute)}`}
+              onChange={(v) => setTime('checkInDeadline', v)}
+            />
+            <p className="mt-1 text-xs text-muted">Setelah jam ini, absen datang ditutup. 23:59 = tidak dibatasi.</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-muted">Jam selesai kerja</label>
+            <TimeInput
+              value={`${pad2(sched.checkOutAfterHour)}:${pad2(sched.checkOutAfterMinute)}`}
+              onChange={(v) => setTime('checkOutAfter', v)}
+            />
+            <p className="mt-1 text-xs text-muted">Acuan jam pulang PKL di laporan.</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-muted">Mulai dihitung Pulang Awal</label>
+            <TimeInput
+              value={`${pad2(sched.earlyLeaveBeforeHour)}:${pad2(sched.earlyLeaveBeforeMinute)}`}
+              onChange={(v) => setTime('earlyLeaveBefore', v)}
+            />
+            <p className="mt-1 text-xs text-muted">Absen pulang sebelum jam ini = Pulang Awal. Sekaligus jam absen pulang dibuka.</p>
+          </div>
+        </div>
+      )}
+
+      {!readOnly && (
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={onClose}>Batal</Button>
+          <Button onClick={() => save.mutate()} disabled={save.isPending}>
+            {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Simpan Jadwal
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ===== Location Form (hanya untuk admin) =====
 function LocationForm({ initial, onClose }: { initial?: PklLocation; onClose: () => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+
   const [form, setForm] = useState({
     name: initial?.name ?? '',
     address: initial?.address ?? '',
@@ -83,6 +237,21 @@ function LocationForm({ initial, onClose }: { initial?: PklLocation; onClose: ()
     endDate: initial?.endDate ?? '',
     workDays: initial?.workDays ?? [1, 2, 3, 4, 5], // default Senin-Jumat
   });
+
+  // Jadwal PKL di-handle di ScheduleForm terpisah (tab bawah) untuk edit,
+  // atau bisa langsung di sini saat create dengan toggle.
+  const [schedOn, setSchedOn] = useState(!!initial?.schedule);
+  const DEFAULT_SCHED = {
+    lateAfterHour: 8, lateAfterMinute: 0,
+    checkInDeadlineHour: 23, checkInDeadlineMinute: 59,
+    checkOutAfterHour: 16, checkOutAfterMinute: 0,
+    earlyLeaveBeforeHour: 15, earlyLeaveBeforeMinute: 30,
+  };
+  const [sched, setSched] = useState<PklSchedule>(initial?.schedule ?? DEFAULT_SCHED);
+  const setTime = (key: string, val: string) => {
+    const [h, m] = val.split(':').map(Number);
+    setSched((s) => ({ ...s, [`${key}Hour`]: h, [`${key}Minute`]: m }));
+  };
 
   // Hitung durasi PKL berdasarkan workDays yang dipilih
   const durasiHariKerja = (() => {
@@ -116,6 +285,7 @@ function LocationForm({ initial, onClose }: { initial?: PklLocation; onClose: ()
         startDate: form.startDate || null,
         endDate: form.endDate || null,
         workDays: form.workDays.length > 0 ? form.workDays : [1, 2, 3, 4, 5],
+        schedule: schedOn ? sched : null,
       };
       return initial
         ? api(`/pkl/locations/${initial.id}`, { method: 'PUT', body })
@@ -247,6 +417,56 @@ function LocationForm({ initial, onClose }: { initial?: PklLocation; onClose: ()
         )}
         <p className="mt-2 text-xs text-muted">Opsional — dipakai untuk menghitung hari kerja di laporan bulanan PKL.</p>
       </div>
+
+      {/* Jadwal PKL per-lokasi */}
+      <div className="rounded-2xl border border-line/70 bg-slate-50/60 p-3 dark:bg-slate-900/40">
+        <label className="flex items-center gap-2 text-sm font-semibold text-ink">
+          <input
+            type="checkbox"
+            checked={schedOn}
+            onChange={(e) => setSchedOn(e.target.checked)}
+            className="h-4 w-4 accent-teal-600"
+          />
+          <Clock3 className="h-4 w-4 text-muted" />
+          Jadwal absensi khusus untuk DUDI ini
+        </label>
+        <p className="mt-1 text-xs text-muted">
+          Aktifkan jika jam kerja DUDI ini berbeda dari jadwal PKL global. Guru pembimbing juga bisa mengatur jadwal ini nanti.
+        </p>
+        {schedOn && (
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-muted">Batas terlambat</label>
+              <TimeInput
+                value={`${pad2(sched.lateAfterHour)}:${pad2(sched.lateAfterMinute)}`}
+                onChange={(v) => setTime('lateAfter', v)}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-muted">Batas akhir absen datang</label>
+              <TimeInput
+                value={`${pad2(sched.checkInDeadlineHour)}:${pad2(sched.checkInDeadlineMinute)}`}
+                onChange={(v) => setTime('checkInDeadline', v)}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-muted">Jam selesai kerja</label>
+              <TimeInput
+                value={`${pad2(sched.checkOutAfterHour)}:${pad2(sched.checkOutAfterMinute)}`}
+                onChange={(v) => setTime('checkOutAfter', v)}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-muted">Mulai dihitung Pulang Awal</label>
+              <TimeInput
+                value={`${pad2(sched.earlyLeaveBeforeHour)}:${pad2(sched.earlyLeaveBeforeMinute)}`}
+                onChange={(v) => setTime('earlyLeaveBefore', v)}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="outline" onClick={onClose}>Batal</Button>
         <Button onClick={() => save.mutate()} disabled={!form.name || save.isPending}>
@@ -259,7 +479,16 @@ function LocationForm({ initial, onClose }: { initial?: PklLocation; onClose: ()
 }
 
 // ===== Assignment Form =====
-function AssignmentForm({ locationId, onClose }: { locationId: string; onClose: () => void }) {
+// canSetSupervisor: true = admin (bisa pilih guru), false = guru (supervisorId auto = dirinya)
+function AssignmentForm({
+  locationId,
+  canSetSupervisor,
+  onClose,
+}: {
+  locationId: string;
+  canSetSupervisor: boolean;
+  onClose: () => void;
+}) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
@@ -273,7 +502,14 @@ function AssignmentForm({ locationId, onClose }: { locationId: string; onClose: 
 
   const { data: teachers } = useQuery({
     queryKey: ['teachers-for-pkl'],
-    queryFn: () => api<{ success: boolean; data: TeacherOption[] }>('/users?pageSize=200').then((r) => (r.data ?? []).filter((u: TeacherOption & { roleKey?: string; additionalRoles?: string[] }) => { const roles = [u.roleKey, ...((u as TeacherOption & { additionalRoles?: string[] }).additionalRoles || [])]; return roles.includes('TEACHER') || roles.includes('HOMEROOM_TEACHER') || roles.includes('SUPER_ADMIN'); })),
+    enabled: canSetSupervisor,
+    queryFn: () =>
+      api<{ success: boolean; data: TeacherOption[] }>('/users?pageSize=200').then((r) =>
+        (r.data ?? []).filter((u: TeacherOption & { roleKey?: string; additionalRoles?: string[] }) => {
+          const roles = [u.roleKey, ...((u as TeacherOption & { additionalRoles?: string[] }).additionalRoles || [])];
+          return roles.includes('TEACHER') || roles.includes('HOMEROOM_TEACHER') || roles.includes('SUPER_ADMIN');
+        }),
+      ),
   });
 
   const assign = useMutation({
@@ -283,7 +519,7 @@ function AssignmentForm({ locationId, onClose }: { locationId: string; onClose: 
         body: {
           studentIds: [...selectedStudents],
           pklLocationId: locationId,
-          supervisorId: supervisorId || undefined,
+          ...(canSetSupervisor ? { supervisorId: supervisorId || undefined } : {}),
         },
       });
     },
@@ -305,19 +541,21 @@ function AssignmentForm({ locationId, onClose }: { locationId: string; onClose: 
 
   return (
     <div className="space-y-3">
-      <div>
-        <label className="mb-1 block text-xs font-semibold text-muted">Guru Pembimbing</label>
-        <select
-          value={supervisorId}
-          onChange={(e) => setSupervisorId(e.target.value)}
-          className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink dark:border-slate-600 dark:bg-slate-800"
-        >
-          <option value="">— Pilih Guru —</option>
-          {teachers?.filter((t) => t.teacherId).map((t) => (
-            <option key={t.id} value={t.teacherId!}>{t.fullName}{t.nip ? ` (${t.nip})` : ''}</option>
-          ))}
-        </select>
-      </div>
+      {canSetSupervisor && (
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-muted">Guru Pembimbing</label>
+          <select
+            value={supervisorId}
+            onChange={(e) => setSupervisorId(e.target.value)}
+            className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink dark:border-slate-600 dark:bg-slate-800"
+          >
+            <option value="">— Pilih Guru —</option>
+            {teachers?.filter((t) => t.teacherId).map((t) => (
+              <option key={t.id} value={t.teacherId!}>{t.fullName}{t.nip ? ` (${t.nip})` : ''}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div>
         <label className="mb-1 block text-xs font-semibold text-muted">Pilih Siswa ({selectedStudents.size} dipilih)</label>
@@ -360,13 +598,26 @@ export default function PklManagement() {
   // Check if current user is PKL admin or supervisor
   const { data: pklRole } = useQuery({
     queryKey: ['pkl-me'],
-    queryFn: () => api<{ success: boolean; data: { isSupervisor: boolean; isPklAdmin: boolean; teacherId: string | null } }>('/pkl/me').then((r) => r.data),
+    queryFn: () =>
+      api<{ success: boolean; data: { isSupervisor: boolean; isPklAdmin: boolean; teacherId: string | null; supervisedLocationIds: string[] } }>(
+        '/pkl/me',
+      ).then((r) => r.data),
     staleTime: 60_000,
   });
-  const canManage = pklRole?.isPklAdmin || !pklRole?.isSupervisor; // admin bisa manage, supervisor tidak
+
+  // isPklAdmin: admin/kepala sekolah — bisa CRUD lokasi dan manage semua penugasan
+  const isPklAdmin = pklRole?.isPklAdmin ?? false;
+  // isSupervisor: guru yang sudah di-mapping ke minimal 1 lokasi PKL
+  const isSupervisor = pklRole?.isSupervisor ?? false;
+  const supervisedLocationIds = pklRole?.supervisedLocationIds ?? [];
+  // canManage: bisa manage penugasan (admin atau supervisor di lokasi itu)
+  const canManage = isPklAdmin || isSupervisor;
+
   const [showForm, setShowForm] = useState<'add-location' | null>(null);
   const [editLocation, setEditLocation] = useState<PklLocation | null>(null);
   const [assignTo, setAssignTo] = useState<string | null>(null);
+  // jadwal form: hanya untuk lokasi yang bisa diedit (admin atau supervisor lokasi)
+  const [scheduleFor, setScheduleFor] = useState<PklLocation | null>(null);
   const [search, setSearch] = useState('');
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -375,8 +626,6 @@ export default function PklManagement() {
     queryKey: ['pkl-locations', search],
     queryFn: () => api<{ success: boolean; data: PklLocation[] }>(`/pkl/locations?search=${encodeURIComponent(search)}`).then((r) => r.data),
   });
-
-
 
   const deleteLocation = useMutation({
     mutationFn: (id: string) => api(`/pkl/locations/${id}`, { method: 'DELETE' }),
@@ -434,11 +683,19 @@ export default function PklManagement() {
     }
   };
 
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+
   return (
     <div>
       <PageHeader
         title="Manajemen PKL"
-        subtitle={canManage ? "Kelola lokasi PKL, penugasan siswa, dan guru pembimbing" : "Lihat siswa PKL bimbingan Anda"}
+        subtitle={
+          isPklAdmin
+            ? 'Kelola lokasi PKL, penugasan siswa, dan guru pembimbing'
+            : isSupervisor
+            ? 'Kelola siswa bimbingan PKL Anda dan atur jadwal absensi per DUDI'
+            : 'Lihat data PKL'
+        }
       />
 
       {/* Tabs */}
@@ -451,7 +708,7 @@ export default function PklManagement() {
             { value: 'assignments', label: `Penugasan (${locations?.reduce((sum, l) => sum + l.students.length, 0) ?? 0})` },
           ]}
         />
-        {tab === 'locations' && canManage && (
+        {tab === 'locations' && isPklAdmin && (
           <div className="flex gap-2">
             <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
             <Button variant="outline" onClick={downloadTemplate}>
@@ -467,10 +724,21 @@ export default function PklManagement() {
         )}
       </div>
 
+      {/* Guru non-admin: banner info */}
+      {!isPklAdmin && isSupervisor && (
+        <div className="mb-4 rounded-2xl bg-primary-soft/30 border border-primary/20 px-4 py-3 text-sm text-ink">
+          <p className="font-semibold text-primary mb-0.5">👨‍🏫 Mode Guru Pembimbing PKL</p>
+          <p className="text-xs text-muted">
+            Anda dapat menambah / menghapus siswa bimbingan dan mengatur jadwal absensi di lokasi PKL yang Anda bimbing.
+            Lokasi PKL dikelola oleh admin.
+          </p>
+        </div>
+      )}
+
       {/* ===== TAB LOKASI ===== */}
       {tab === 'locations' && (
         <>
-          {/* Add Location Form */}
+          {/* Add Location Form (admin only) */}
           {showForm === 'add-location' && (
             <Card className="mb-4">
               <p className="mb-3 font-bold text-ink">Tambah Lokasi PKL</p>
@@ -478,7 +746,7 @@ export default function PklManagement() {
             </Card>
           )}
 
-          {/* Edit Location Form */}
+          {/* Edit Location Form (admin only) */}
           {editLocation && (
             <Card className="mb-4">
               <p className="mb-3 font-bold text-ink">Edit Lokasi PKL</p>
@@ -486,11 +754,43 @@ export default function PklManagement() {
             </Card>
           )}
 
+          {/* Schedule Form (admin atau guru pembimbing lokasi) */}
+          {scheduleFor && (
+            <Card className="mb-4">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="font-bold text-ink flex items-center gap-2">
+                  <Clock3 className="h-4 w-4 text-primary" />
+                  Jadwal PKL — {scheduleFor.name}
+                </p>
+                <button onClick={() => setScheduleFor(null)} className="rounded p-1 text-muted hover:bg-slate-100">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <ScheduleForm
+                locationId={scheduleFor.id}
+                locationName={scheduleFor.name}
+                initialSchedule={scheduleFor.schedule}
+                onClose={() => setScheduleFor(null)}
+              />
+            </Card>
+          )}
+
           {/* Assignment Form */}
           {assignTo && (
             <Card className="mb-4">
-              <p className="mb-3 font-bold text-ink">Tugaskan Siswa ke Lokasi</p>
-              <AssignmentForm locationId={assignTo} onClose={() => setAssignTo(null)} />
+              <div className="mb-3 flex items-center justify-between">
+                <p className="font-bold text-ink">
+                  Tambah Siswa ke {locations?.find((l) => l.id === assignTo)?.name ?? 'Lokasi PKL'}
+                </p>
+                <button onClick={() => setAssignTo(null)} className="rounded p-1 text-muted hover:bg-slate-100">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <AssignmentForm
+                locationId={assignTo}
+                canSetSupervisor={isPklAdmin}
+                onClose={() => setAssignTo(null)}
+              />
             </Card>
           )}
 
@@ -505,95 +805,150 @@ export default function PklManagement() {
           {/* Locations list */}
           {isLoading && <Skeleton className="h-32 w-full" />}
           {!isLoading && (
-        <div className="space-y-3">
-          {locations && locations.length === 0 && (
-            <EmptyState icon={MapPin} title="Belum ada lokasi PKL" description="Klik 'Tambah Lokasi' untuk menambahkan tempat PKL." />
-          )}
-          {locations?.map((loc) => (
-            <Card key={loc.id} className="overflow-hidden">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
-                    <Building2 className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-ink">{loc.name}</p>
-                    <p className="text-xs text-muted">{loc.city ?? '-'} · {loc.address ?? '-'} · Radius: {loc.radiusMeter}m</p>
-                    {loc.contactName && <p className="text-xs text-muted">PIC: {loc.contactName}{loc.phone ? ` · ${loc.phone}` : ''}</p>}
-                    {(loc.startDate || loc.endDate) && (
-                      <p className="text-xs text-muted">
-                        📅 {loc.startDate ?? '?'} s.d. {loc.endDate ?? '?'}
-                        {loc.startDate && loc.endDate && (() => {
-                          const start = new Date(loc.startDate!);
-                          const end = new Date(loc.endDate!);
-                          const workSet = new Set(loc.workDays ?? [1,2,3,4,5]);
-                          let count = 0;
-                          const cur = new Date(start);
-                          while (cur <= end) {
-                            const wd = cur.getDay();
-                            const wdNum = wd === 0 ? 7 : wd;
-                            if (workSet.has(wdNum)) count++;
-                            cur.setDate(cur.getDate() + 1);
-                          }
-                          return ` · ${count} hari kerja`;
-                        })()}
-                      </p>
-                    )}
-                    {loc.workDays && (
-                      <p className="text-xs text-muted">
-                        {(() => {
-                          const names = ['','Sen','Sel','Rab','Kam','Jum','Sab','Min'];
-                          return '🗓 ' + loc.workDays.map((d: number) => names[d]).join(', ');
-                        })()}
-                      </p>
-                    )}
-                    <p className="mt-1 text-xs font-semibold text-primary">{loc.studentCount} siswa ditugaskan</p>
-                  </div>
-                </div>
-                {canManage && (<div className="flex gap-1">
-                  <Button variant="outline" className="!px-2 !py-1.5" onClick={() => setAssignTo(loc.id)} title="Tambah siswa">
-                    <Users className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" className="!px-2 !py-1.5" onClick={() => setEditLocation(loc)} title="Edit">
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button variant="danger" className="!px-2 !py-1.5" onClick={() => {
-                    if (window.confirm(`Hapus lokasi "${loc.name}"? Semua penugasan siswa juga akan dihapus.`)) deleteLocation.mutate(loc.id);
-                  }} title="Hapus">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>)}
-              </div>
-              {/* Students list */}
-              {loc.students.length > 0 && (
-                <div className="mt-3 border-t border-line pt-3 dark:border-slate-600">
-                  <div className="space-y-1.5">
-                    {loc.students.map((s) => (
-                      <div key={s.assignmentId} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/50">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-ink">{s.fullName}</p>
-                          <p className="text-xs text-muted">{s.nis} · {s.className ?? '-'}{s.supervisorName ? ` · 👨‍🏫 ${s.supervisorName}` : ''}</p>
-                        </div>
-                        {canManage && <button
-                          onClick={() => {
-                            if (window.confirm(`Hapus penugasan ${s.fullName}?`)) deleteAssignment.mutate(s.assignmentId);
-                          }}
-                          className="rounded p-1 text-muted hover:bg-red-50 hover:text-red-500"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
+            <div className="space-y-3">
+              {locations && locations.length === 0 && (
+                <EmptyState icon={MapPin} title="Belum ada lokasi PKL" description="Klik 'Tambah Lokasi' untuk menambahkan tempat PKL." />
               )}
-            </Card>
-          ))}
-          {!isLoading && locations && locations.length === 0 && (
-            <EmptyState icon={MapPin} title="Belum ada lokasi PKL" description="Klik 'Tambah Lokasi' untuk menambahkan tempat PKL." />
+              {locations?.map((loc) => {
+                // Apakah guru ini adalah pembimbing di lokasi ini?
+                const isMyLocation = supervisedLocationIds.includes(loc.id);
+                // Bisa manage penugasan di lokasi ini: admin atau supervisor lokasi
+                const canManageLoc = isPklAdmin || isMyLocation;
+
+                return (
+                  <Card key={loc.id} className="overflow-hidden">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
+                          <Building2 className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-ink">{loc.name}</p>
+                            {isMyLocation && !isPklAdmin && (
+                              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">Bimbingan Anda</span>
+                            )}
+                            {loc.schedule && (
+                              <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-semibold text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
+                                🕐 Jadwal khusus
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted">{loc.city ?? '-'} · {loc.address ?? '-'} · Radius: {loc.radiusMeter}m</p>
+                          {loc.contactName && <p className="text-xs text-muted">PIC: {loc.contactName}{loc.phone ? ` · ${loc.phone}` : ''}</p>}
+                          {(loc.startDate || loc.endDate) && (
+                            <p className="text-xs text-muted">
+                              📅 {loc.startDate ?? '?'} s.d. {loc.endDate ?? '?'}
+                              {loc.startDate && loc.endDate && (() => {
+                                const start = new Date(loc.startDate!);
+                                const end = new Date(loc.endDate!);
+                                const workSet = new Set(loc.workDays ?? [1, 2, 3, 4, 5]);
+                                let count = 0;
+                                const cur = new Date(start);
+                                while (cur <= end) {
+                                  const wd = cur.getDay();
+                                  const wdNum = wd === 0 ? 7 : wd;
+                                  if (workSet.has(wdNum)) count++;
+                                  cur.setDate(cur.getDate() + 1);
+                                }
+                                return ` · ${count} hari kerja`;
+                              })()}
+                            </p>
+                          )}
+                          {loc.workDays && (
+                            <p className="text-xs text-muted">
+                              {(() => {
+                                const names = ['', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+                                return '🗓 ' + loc.workDays.map((d: number) => names[d]).join(', ');
+                              })()}
+                            </p>
+                          )}
+                          {/* Tampilkan ringkasan jadwal jika ada */}
+                          {loc.schedule && (
+                            <p className="text-xs text-teal-700 dark:text-teal-400">
+                              🕐 Masuk: {pad2(loc.schedule.lateAfterHour)}:{pad2(loc.schedule.lateAfterMinute)} · Pulang: {pad2(loc.schedule.checkOutAfterHour)}:{pad2(loc.schedule.checkOutAfterMinute)}
+                            </p>
+                          )}
+                          <p className="mt-1 text-xs font-semibold text-primary">{loc.studentCount} siswa ditugaskan</p>
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex flex-col gap-1 items-end">
+                        {/* Tombol kelola untuk guru di lokasi bimbingannya */}
+                        {canManageLoc && (
+                          <div className="flex gap-1">
+                            <Button
+                              variant="outline"
+                              className="!px-2 !py-1.5"
+                              onClick={() => setAssignTo(loc.id)}
+                              title="Tambah siswa"
+                            >
+                              <Users className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              className="!px-2 !py-1.5"
+                              onClick={() => setScheduleFor(loc)}
+                              title="Atur jadwal PKL"
+                            >
+                              <Clock3 className="h-4 w-4" />
+                            </Button>
+                            {isPklAdmin && (
+                              <>
+                                <Button variant="outline" className="!px-2 !py-1.5" onClick={() => setEditLocation(loc)} title="Edit lokasi">
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="danger"
+                                  className="!px-2 !py-1.5"
+                                  onClick={() => {
+                                    if (window.confirm(`Hapus lokasi "${loc.name}"? Semua penugasan siswa juga akan dihapus.`)) deleteLocation.mutate(loc.id);
+                                  }}
+                                  title="Hapus"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Students list */}
+                    {loc.students.length > 0 && (
+                      <div className="mt-3 border-t border-line pt-3 dark:border-slate-600">
+                        <div className="space-y-1.5">
+                          {loc.students.map((s) => (
+                            <div key={s.assignmentId} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/50">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-ink">{s.fullName}</p>
+                                <p className="text-xs text-muted">{s.nis} · {s.className ?? '-'}{s.supervisorName ? ` · 👨‍🏫 ${s.supervisorName}` : ''}</p>
+                              </div>
+                              {canManageLoc && (
+                                <button
+                                  onClick={() => {
+                                    if (window.confirm(`Hapus penugasan ${s.fullName}?`)) deleteAssignment.mutate(s.assignmentId);
+                                  }}
+                                  className="rounded p-1 text-muted hover:bg-red-50 hover:text-red-500"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+              {!isLoading && locations && locations.length === 0 && (
+                <EmptyState icon={MapPin} title="Belum ada lokasi PKL" description="Klik 'Tambah Lokasi' untuk menambahkan tempat PKL." />
+              )}
+            </div>
           )}
-        </div>
-        )}
         </>
       )}
 
@@ -611,34 +966,86 @@ export default function PklManagement() {
           {isLoading && <Skeleton className="h-32 w-full" />}
           {!isLoading && (
             <div className="space-y-3">
-              {locations?.filter((l) => l.students.length > 0).length === 0 && (
-                <EmptyState icon={GraduationCap} title="Belum ada siswa PKL" description="Tugaskan siswa ke lokasi PKL dari tab Lokasi." />
+              {locations?.filter((l) => {
+                // Guru hanya lihat lokasi yang dibimbing + ada siswanya
+                if (!isPklAdmin) return supervisedLocationIds.includes(l.id) && l.students.length > 0;
+                return l.students.length > 0;
+              }).length === 0 && (
+                <EmptyState
+                  icon={GraduationCap}
+                  title="Belum ada siswa PKL"
+                  description={isPklAdmin ? 'Tugaskan siswa ke lokasi PKL dari tab Lokasi.' : 'Anda belum memiliki siswa bimbingan PKL.'}
+                />
               )}
               {/* Group by location */}
-              {locations?.filter((l) => l.students.length > 0).map((loc) => (
-                <Card key={loc.id}>
-                  <p className="mb-2 font-bold text-ink">{loc.name} <span className="text-xs font-normal text-muted">({loc.city ?? '-'})</span></p>
-                  <div className="space-y-1.5">
-                    {loc.students.map((s) => (
-                      <div key={s.assignmentId} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/50">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-bold text-ink">{s.fullName}</p>
-                          <p className="text-xs text-muted">{s.nis} · {s.className ?? '-'}{s.supervisorName ? ` · 👨‍🏫 ${s.supervisorName}` : ''}</p>
-                        </div>
-                        <button
-                          onClick={() => {
-                            if (window.confirm(`Hapus penugasan ${s.fullName} dari ${loc.name}?`)) deleteAssignment.mutate(s.assignmentId);
-                          }}
-                          className="rounded p-1 text-muted hover:bg-red-50 hover:text-red-500"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+              {locations
+                ?.filter((l) => {
+                  if (!isPklAdmin) return supervisedLocationIds.includes(l.id) && l.students.length > 0;
+                  return l.students.length > 0;
+                })
+                .map((loc) => {
+                  const isMyLocation = supervisedLocationIds.includes(loc.id);
+                  const canManageLoc = isPklAdmin || isMyLocation;
+                  return (
+                    <Card key={loc.id}>
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <p className="font-bold text-ink">
+                          {loc.name}{' '}
+                          <span className="text-xs font-normal text-muted">({loc.city ?? '-'})</span>
+                        </p>
+                        {canManageLoc && (
+                          <Button
+                            variant="outline"
+                            className="!px-2 !py-1"
+                            onClick={() => setAssignTo(loc.id)}
+                            title="Tambah siswa"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                </Card>
-              ))}
+                      <div className="space-y-1.5">
+                        {loc.students.map((s) => (
+                          <div key={s.assignmentId} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/50">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-bold text-ink">{s.fullName}</p>
+                              <p className="text-xs text-muted">{s.nis} · {s.className ?? '-'}{s.supervisorName ? ` · 👨‍🏫 ${s.supervisorName}` : ''}</p>
+                            </div>
+                            {canManageLoc && (
+                              <button
+                                onClick={() => {
+                                  if (window.confirm(`Hapus penugasan ${s.fullName} dari ${loc.name}?`)) deleteAssignment.mutate(s.assignmentId);
+                                }}
+                                className="rounded p-1 text-muted hover:bg-red-50 hover:text-red-500"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  );
+                })}
             </div>
+          )}
+          {/* Assignment form juga bisa muncul di tab penugasan */}
+          {assignTo && (
+            <Card className="mt-4">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="font-bold text-ink">
+                  Tambah Siswa ke {locations?.find((l) => l.id === assignTo)?.name ?? 'Lokasi PKL'}
+                </p>
+                <button onClick={() => setAssignTo(null)} className="rounded p-1 text-muted hover:bg-slate-100">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <AssignmentForm
+                locationId={assignTo}
+                canSetSupervisor={isPklAdmin}
+                onClose={() => setAssignTo(null)}
+              />
+            </Card>
           )}
         </>
       )}
