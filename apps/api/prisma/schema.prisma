@@ -393,11 +393,15 @@ model Attendance {
 
   @@unique([userId, date, type]) // satu absen datang & satu pulang per hari per user
   @@index([date])
+  @@index([userId])              // dashboard siswa/ortu: query by userId
+  @@index([userId, date])        // range query per user per tanggal
   @@index([studentId])
   @@index([teacherId])
   @@index([status])
   @@index([createdAt])
   @@index([deviceId])
+  @@index([pklLocationId])       // laporan PKL filter by lokasi
+  @@index([type])                // filter CHECK_IN / CHECK_OUT
 }
 
 // ================= PKL (Praktek Kerja Lapangan) =================
@@ -550,6 +554,9 @@ model LeaveApproval {
 
   leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
   approver     User         @relation(fields: [approverId], references: [id])
+
+  @@index([leaveRequestId]) // lookup approval per izin
+  @@index([approverId])     // riwayat approval per user
 }
 
 // ================= JURNAL MENGAJAR =================
@@ -575,6 +582,8 @@ model TeachingJournal {
   @@unique([teacherId, classId, date])
   @@index([classId])
   @@index([date])
+  @@index([teacherId])            // query jurnal per guru
+  @@index([teacherId, date])      // query jurnal guru range tanggal
 }
 
 // ================= NOTIFIKASI =================

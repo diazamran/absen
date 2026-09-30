@@ -74,6 +74,11 @@ let _rulesCacheTime = 0;
 
 export function invalidateRulesCache() { _rulesCache = null; }
 
+let _brandingCache: Branding | null = null;
+let _brandingCacheTime = 0;
+
+export function invalidateBrandingCache() { _brandingCache = null; }
+
 export async function getAttendanceRules(): Promise<AttendanceRules> {
   const now = Date.now();
   if (_rulesCache && now - _rulesCacheTime < 60_000) return _rulesCache;
@@ -144,11 +149,13 @@ const DEFAULT_LOGIN_TEXTS: LoginTexts = {
 };
 
 export async function getBranding(): Promise<Branding> {
+  const now = Date.now();
+  if (_brandingCache && now - _brandingCacheTime < 60_000) return _brandingCache;
   const row = await prisma.schoolSetting.findUnique({ where: { key: 'branding' } });
   const v = (row?.value as Record<string, unknown>) || {};
   const school = await prisma.school.findFirst();
   const lt = (v.loginTexts as Record<string, unknown>) || {};
-  return {
+  const result: Branding = {
     appName: String(v.appName || config.appName),
     schoolName: String(v.schoolName || school?.name || config.schoolName),
     tagline: String(v.tagline || 'Sistem Informasi Absensi Terintegrasi'),
@@ -164,4 +171,7 @@ export async function getBranding(): Promise<Branding> {
       features: Array.isArray(lt.features) && lt.features.length > 0 ? lt.features.map(String) : DEFAULT_LOGIN_TEXTS.features,
     },
   };
+  _brandingCache = result;
+  _brandingCacheTime = now;
+  return result;
 }

@@ -158,6 +158,29 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   const today = dateKey(now);
   const dayStart = startOfLocalDay(today);
 
+  // ===== Target user (fetch sekali di sini — dipakai untuk PKL, lokasi, status, notifikasi) =====
+  // Tidak perlu query ulang nanti. Include pklAssignments untuk cek jadwal PKL & koordinat DUDI.
+  const target = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    include: {
+      student: {
+        include: {
+          class: { select: { name: true } },
+          pklAssignments: {
+            where: { isActive: true },
+            include: { pklLocation: { select: { name: true, latitude: true, longitude: true, radiusMeter: true } } },
+            take: 1,
+          },
+        },
+      },
+      teacher: true,
+      staff: true,
+    },
+  });
+  if (!target || !target.isActive) throw ApiError.unauthorized('Akun tidak aktif.');
+  const className = target.student?.class?.name ?? null;
+  const isPklStudent = (target.student?.pklAssignments?.length ?? 0) > 0;
+
   // ===== Aturan jam pulang & pulang awal (berlaku juga saat memperbarui pulang terbaru) =====
   let earlyLeave = false;
   if (type === 'CHECK_OUT' && rules.checkOutAllowed === false) {
@@ -166,14 +189,6 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   const nowMinutes = localMinutesOf(now);
 
   // ===== Jadwal khusus PKL =====
-  // Siswa dengan penugasan PKL aktif dinilai dengan jam kerja PKL (bisa beda dari jam
-  // sekolah biasa) supaya tidak rancu. Nilai jadwal PKL yang tidak diisi di Pengaturan
-  // otomatis mengikuti jadwal sekolah.
-  const pklActive = await prisma.pklAssignment.findFirst({
-    where: { isActive: true, student: { userId: targetUserId } },
-    select: { id: true },
-  });
-  const isPklStudent = !!pklActive;
   const lateRule =
     isPklStudent && rules.pklLateAfterHour !== null
       ? { h: rules.pklLateAfterHour, m: rules.pklLateAfterMinute ?? 0 }
@@ -209,18 +224,14 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
     // Jika tidak ada CHECK_IN (lupa absen datang), buat CHECK_IN otomatis
     // dengan status PRESENT dan jam sekarang, agar absen pulang tetap bisa dicatat.
     if (!checkIn) {
-      // Ambil data siswa/guru untuk CHECK_IN otomatis
-      const autoUser = await prisma.user.findUnique({
-        where: { id: targetUserId },
-        include: { student: true, teacher: true, staff: true },
-      });
+      // Gunakan target yang sudah di-fetch sebelumnya
       try {
         checkIn = await prisma.attendance.create({
           data: {
             userId: targetUserId,
-            studentId: autoUser?.student?.id,
-            teacherId: autoUser?.teacher?.id,
-            staffId: autoUser?.staff?.id,
+            studentId: target.student?.id,
+            teacherId: target.teacher?.id,
+            staffId: target.staff?.id,
             date: dayStart,
             type: 'CHECK_IN',
             checkIn: now,
@@ -263,40 +274,32 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   // Info jarak untuk indikator di aplikasi siswa (di luar blok if supaya selalu terisi)
   let locDistance: number | null = null;
   let locAllowed: number | null = null;
+
+  // ===== Validasi lokasi (opsional) =====
+  let locationVerified = false;
+  let locDistance: number | null = null;
+  let locAllowed: number | null = null;
+
   if (rules.locationEnabled) {
     if (input.latitude === undefined || input.longitude === undefined) {
       throw ApiError.badRequest('LOCATION_REQUIRED', 'Lokasi belum akurat. Aktifkan GPS dan tunggu beberapa detik.');
     }
-    // Cek apakah siswa aktif di PKL
+    // Cek apakah siswa aktif di PKL — gunakan data yang sudah di-fetch di atas
     let refLat = rules.schoolLatitude;
     let refLng = rules.schoolLongitude;
     let refRadius = rules.radiusMeters;
     let locationLabel = 'sekolah';
-    const targetForLocation = await prisma.user.findUnique({
-      where: { id: targetUserId },
-      include: {
-        student: {
-          include: {
-            pklAssignments: {
-              where: { isActive: true },
-              include: { pklLocation: true },
-              take: 1,
-            },
-          },
-        },
-      },
-    });
-    if (targetForLocation?.student?.pklAssignments?.[0]?.pklLocation) {
-      const dudu = targetForLocation.student.pklAssignments[0].pklLocation;
+    const pklLoc = target.student?.pklAssignments?.[0]?.pklLocation;
+    if (pklLoc) {
       // Validasi rentang koordinat PKL — tolak nilai integer rusak (mis. 111963068)
       // yang terjadi saat titik desimal hilang saat input form.
-      const latValid = dudu.latitude != null && dudu.latitude >= -90 && dudu.latitude <= 90;
-      const lngValid = dudu.longitude != null && dudu.longitude >= -180 && dudu.longitude <= 180;
+      const latValid = pklLoc.latitude != null && pklLoc.latitude >= -90 && pklLoc.latitude <= 90;
+      const lngValid = pklLoc.longitude != null && pklLoc.longitude >= -180 && pklLoc.longitude <= 180;
       if (latValid && lngValid) {
-        refLat = dudu.latitude!;
-        refLng = dudu.longitude!;
-        refRadius = dudu.radiusMeter;
-        locationLabel = dudu.name;
+        refLat = pklLoc.latitude!;
+        refLng = pklLoc.longitude!;
+        refRadius = pklLoc.radiusMeter;
+        locationLabel = pklLoc.name;
       }
       // Bila koordinat PKL rusak/tidak valid, tetap pakai koordinat sekolah sebagai fallback.
     }
@@ -328,16 +331,6 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
     }
     locationVerified = true;
   }
-
-  // ===== Target user + kelas (dipakai juga untuk catatan yang sudah ada) =====
-  const target = await prisma.user.findUnique({
-    where: { id: targetUserId },
-    include: { student: true, teacher: true, staff: true },
-  });
-  if (!target || !target.isActive) throw ApiError.unauthorized('Akun tidak aktif.');
-  const className = target.student?.classId
-    ? (await prisma.class.findUnique({ where: { id: target.student.classId }, select: { name: true } }))?.name
-    : null;
 
   /**
    * Aturan "datang pertama menang, pulang terakhir menang":

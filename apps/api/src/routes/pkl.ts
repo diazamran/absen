@@ -102,8 +102,15 @@ export async function pklRoutes(app: FastifyInstance) {
         assignments: {
           where: { isActive: true },
           include: {
-            student: { include: { user: { select: { fullName: true } }, class: { select: { name: true } } } },
-            supervisor: { include: { user: { select: { fullName: true } } } },
+            student: {
+              select: {
+                id: true,
+                nis: true,
+                user: { select: { fullName: true } },
+                class: { select: { name: true } },
+              },
+            },
+            supervisor: { select: { id: true, user: { select: { fullName: true } } } },
           },
         },
       },
@@ -262,24 +269,18 @@ export async function pklRoutes(app: FastifyInstance) {
       }
       body.supervisorId = scope.teacherId;
     }
-    let created = 0;
-    for (const studentId of body.studentIds) {
-      const existing = await prisma.pklAssignment.findFirst({
-        where: { studentId, pklLocationId: body.pklLocationId },
-      });
-      if (!existing) {
-        await prisma.pklAssignment.create({
-          data: {
-            studentId,
-            pklLocationId: body.pklLocationId,
-            supervisorId: body.supervisorId || null,
-            startDate: body.startDate ? new Date(body.startDate) : null,
-            endDate: body.endDate ? new Date(body.endDate) : null,
-          },
-        });
-        created++;
-      }
-    }
+    // Ganti loop N+1 (2N query) dengan createMany skipDuplicates (1 query)
+    const result = await prisma.pklAssignment.createMany({
+      data: body.studentIds.map((studentId) => ({
+        studentId,
+        pklLocationId: body.pklLocationId,
+        supervisorId: body.supervisorId || null,
+        startDate: body.startDate ? new Date(body.startDate) : null,
+        endDate: body.endDate ? new Date(body.endDate) : null,
+      })),
+      skipDuplicates: true, // aman karena ada @@unique([studentId, pklLocationId])
+    });
+    const created = result.count;
     if (created > 0) {
       await audit({ userId: request.user!.id, action: 'PKL_BULK_ASSIGNMENT', entity: 'PklAssignment', entityId: body.pklLocationId, request });
     }
@@ -1126,44 +1127,67 @@ export async function pklRoutes(app: FastifyInstance) {
       select: { id: true, userId: true },
     });
 
-    let created = 0;
-    let updated = 0;
+    // Batch: ambil semua catatan yang sudah ada sekaligus (1 query, bukan N query)
+    const userIds = students.map((s) => s.userId);
+    const existingRows = await prisma.attendance.findMany({
+      where: {
+        userId: { in: userIds },
+        date: dayStart,
+        type: body.type as never,
+      },
+      select: { id: true, userId: true, checkIn: true, lateMinutes: true },
+    });
+    const existingByUserId = new Map(existingRows.map((r) => [r.userId, r]));
+
+    const toCreate: typeof students = [];
+    const toUpdate: Array<{ id: string; userId: string; existingCheckIn: Date | null; existingLateMinutes: number }> = [];
 
     for (const student of students) {
-      const existing = await prisma.attendance.findUnique({
-        where: { userId_date_type: { userId: student.userId, date: dayStart, type: body.type } },
-      });
+      const existing = existingByUserId.get(student.userId);
       if (existing) {
-        await prisma.attendance.update({
-          where: { id: existing.id },
-          data: {
-            status: body.status as never,
-            method: 'MANUAL' as never,
-            checkIn:  body.type === 'CHECK_IN'  ? checkInTime  : existing.checkIn,
-            checkOut: body.type === 'CHECK_OUT' ? checkOutTime : existing.checkOut,
-            notes: body.notes ?? existing.notes,
-            lateMinutes: body.status === 'LATE' ? (existing.lateMinutes ?? 0) : 0,
-          },
-        });
-        updated++;
+        toUpdate.push({ id: existing.id, userId: student.userId, existingCheckIn: existing.checkIn, existingLateMinutes: existing.lateMinutes });
       } else {
-        await prisma.attendance.create({
-          data: {
-            userId: student.userId,
-            studentId: student.id,
-            date: dayStart,
-            type: body.type as never,
-            status: body.status as never,
-            method: 'MANUAL' as never,
-            checkIn:  body.type === 'CHECK_IN'  ? checkInTime  : null,
-            checkOut: body.type === 'CHECK_OUT' ? checkOutTime : null,
-            notes: body.notes,
-            lateMinutes: body.status === 'LATE' ? 1 : 0,
-          },
-        });
-        created++;
+        toCreate.push(student);
       }
     }
+
+    // Batch create — 1 query untuk semua yang belum ada
+    if (toCreate.length > 0) {
+      await prisma.attendance.createMany({
+        data: toCreate.map((student) => ({
+          userId: student.userId,
+          studentId: student.id,
+          date: dayStart,
+          type: body.type as never,
+          status: body.status as never,
+          method: 'MANUAL' as never,
+          checkIn:  body.type === 'CHECK_IN'  ? checkInTime  : null,
+          checkOut: body.type === 'CHECK_OUT' ? checkOutTime : null,
+          notes: body.notes,
+          lateMinutes: body.status === 'LATE' ? 1 : 0,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    // Update yang sudah ada — masih per-baris karena checkIn berbeda tiap siswa
+    // tapi jumlahnya jauh lebih kecil (hanya yang duplicate)
+    for (const row of toUpdate) {
+      await prisma.attendance.update({
+        where: { id: row.id },
+        data: {
+          status: body.status as never,
+          method: 'MANUAL' as never,
+          checkIn:  body.type === 'CHECK_IN'  ? checkInTime  : row.existingCheckIn,
+          checkOut: body.type === 'CHECK_OUT' ? checkOutTime : undefined,
+          notes: body.notes,
+          lateMinutes: body.status === 'LATE' ? (row.existingLateMinutes ?? 0) : 0,
+        },
+      });
+    }
+
+    const created = toCreate.length;
+    const updated = toUpdate.length;
 
     await audit({
       userId: request.user!.id,

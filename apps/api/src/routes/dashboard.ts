@@ -47,7 +47,7 @@ async function schoolStats(dayStart: Date, dayEnd: Date) {
     take: 20,
     include: {
       user: { select: { fullName: true } },
-      student: { include: { class: { select: { name: true } } } },
+      student: { select: { nis: true, class: { select: { name: true } } } },
     },
   });
 
@@ -57,7 +57,7 @@ async function schoolStats(dayStart: Date, dayEnd: Date) {
       classId: { not: null },
       attendance: { none: { date: { gte: dayStart, lt: dayEnd }, type: 'CHECK_IN' } },
     },
-    include: { user: { select: { fullName: true } }, class: { select: { name: true } } },
+    select: { id: true, nis: true, user: { select: { fullName: true } }, class: { select: { name: true } } },
     take: 10,
     orderBy: { nis: 'asc' },
   });
@@ -377,33 +377,51 @@ export async function dashboardRoutes(app: FastifyInstance) {
 
       case hasRole('PARENT'): {
         const childLinks = user.parent?.childLinks ?? [];
-        const children = [];
-        for (const link of childLinks) {
-          const s = link.student;
-          if (!s) continue;
-          const todayAtt = await prisma.attendance.findMany({
-            where: { userId: s.userId, date: { gte: dayStart, lt: dayEnd } },
+        const childStudents = childLinks.map((l) => l.student).filter(Boolean) as NonNullable<typeof childLinks[0]['student']>[];
+        const childUserIds = childStudents.map((s) => s.userId);
+        const monthStart = new Date(`${currentMonthKey()}-01T00:00:00+07:00`);
+
+        // Batch 2 query flat — bukan loop per anak
+        const [todayAtts, monthGroups] = await Promise.all([
+          prisma.attendance.findMany({
+            where: { userId: { in: childUserIds }, date: { gte: dayStart, lt: dayEnd } },
+            select: { userId: true, type: true, checkIn: true, checkOut: true, status: true, earlyLeave: true, lateMinutes: true, createdAt: true },
             orderBy: { createdAt: 'asc' },
-          });
-          const monthStats = await prisma.attendance.groupBy({
-            by: ['status'],
-            where: { userId: s.userId, type: 'CHECK_IN', date: { gte: new Date(`${currentMonthKey()}-01T00:00:00+07:00`), lt: dayEnd } },
+          }),
+          prisma.attendance.groupBy({
+            by: ['userId', 'status'],
+            where: { userId: { in: childUserIds }, type: 'CHECK_IN', date: { gte: monthStart, lt: dayEnd } },
             _count: { _all: true },
-          });
-          const counts: Record<string, number> = {};
-          for (const g of monthStats) counts[g.status] = g._count._all;
-          children.push({
+          }),
+        ]);
+
+        // Index per userId
+        const todayByUser = new Map<string, typeof todayAtts>();
+        for (const a of todayAtts) {
+          if (!todayByUser.has(a.userId)) todayByUser.set(a.userId, []);
+          todayByUser.get(a.userId)!.push(a);
+        }
+        const monthByUser = new Map<string, Record<string, number>>();
+        for (const g of monthGroups) {
+          if (!monthByUser.has(g.userId)) monthByUser.set(g.userId, {});
+          monthByUser.get(g.userId)![g.status] = g._count._all;
+        }
+
+        const children = childStudents.map((s) => {
+          const atts = todayByUser.get(s.userId) ?? [];
+          return {
             studentId: s.id,
             name: s.user?.fullName ?? '-',
             nis: s.nis,
             className: s.class?.name ?? null,
             today: {
-              checkIn: todayAtt.find((a) => a.type === 'CHECK_IN') ?? null,
-              checkOut: todayAtt.find((a) => a.type === 'CHECK_OUT') ?? null,
+              checkIn: atts.find((a) => a.type === 'CHECK_IN') ?? null,
+              checkOut: atts.find((a) => a.type === 'CHECK_OUT') ?? null,
             },
-            monthStats: counts,
-          });
-        }
+            monthStats: monthByUser.get(s.userId) ?? {},
+          };
+        });
+
         return reply.send({
           success: true,
           data: {
@@ -446,7 +464,7 @@ export async function homeroomRoutes(app: FastifyInstance) {
     // Find classes where this teacher is homeroom teacher
     const classes = await prisma.class.findMany({
       where: { homeroomTeacherId: teacher.id, isActive: true },
-      include: { students: { include: { user: true } } },
+      select: { id: true, students: { select: { id: true } } },
     });
 
     if (classes.length === 0) {
