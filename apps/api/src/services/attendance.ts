@@ -268,14 +268,6 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   }
 
   // ===== Validasi lokasi (opsional) =====
-  // Jika siswa aktif di PKL, gunakan koordinat DUDU (lokasi PKL) sebagai referensi GPS.
-  // Jika tidak PKL, gunakan koordinat sekolah.
-  let locationVerified = false;
-  // Info jarak untuk indikator di aplikasi siswa (di luar blok if supaya selalu terisi)
-  let locDistance: number | null = null;
-  let locAllowed: number | null = null;
-
-  // ===== Validasi lokasi (opsional) =====
   let locationVerified = false;
   let locDistance: number | null = null;
   let locAllowed: number | null = null;
