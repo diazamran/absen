@@ -58,12 +58,20 @@ function PklSupervisorCard({ teacherId, onNavigate }: { teacherId: string; onNav
             <p className="text-xs text-teal-600 dark:text-teal-400">{total} siswa ditugaskan</p>
           </div>
         </div>
-        <button
-          onClick={() => onNavigate('/app/pkl-monitor')}
-          className="rounded-xl bg-teal-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-teal-700"
-        >
-          Monitor
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => onNavigate('/app/pkl-monitor')}
+            className="rounded-xl bg-teal-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-teal-700"
+          >
+            Monitor
+          </button>
+          <button
+            onClick={() => onNavigate('/app/pkl')}
+            className="rounded-xl border border-teal-400 bg-white/60 px-3 py-1.5 text-xs font-bold text-teal-700 hover:bg-teal-50 dark:bg-slate-800/40 dark:text-teal-300"
+          >
+            Kelola
+          </button>
+        </div>
       </div>
 
       {/* Stats mini */}

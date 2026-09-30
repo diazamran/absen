@@ -124,6 +124,7 @@ function roleMenu(user: MeData | null, pklRole?: { isSupervisor: boolean; isPklA
   // 5. PKL — only for supervisors (any teacher-like role)
   if (pklRole?.isSupervisor) {
     add({ to: '/app/pkl-monitor', label: 'Monitor PKL', icon: <MapPin className="h-5 w-5" /> });
+    add({ to: '/app/pkl', label: 'Manajemen PKL', icon: <Building2 className="h-5 w-5" /> });
   }
 
   // 5b. BK: menu konseling & pelanggaran
@@ -223,6 +224,16 @@ function buildBottomNav(user: MeData | null, pklRole?: { isSupervisor: boolean; 
   }
 
   // Guru / Staff — default
+  // Jika supervisor PKL, tampilkan shortcut Monitor PKL di bottom nav
+  if (pklRole?.isSupervisor) {
+    return [
+      { to: '/app/home',        label: 'Beranda', icon: <Home className="h-6 w-6" /> },
+      { to: '/app/pkl-monitor', label: 'Monitor PKL', icon: <MapPin className="h-6 w-6" /> },
+      { to: '/app/pkl',         label: 'Mgmt PKL', icon: <Building2 className="h-6 w-6" /> },
+      { to: '/app/classes',     label: 'Kelas',   icon: <GraduationCap className="h-6 w-6" /> },
+      { to: '/app/profile',     label: 'Profil',  icon: <UserRound className="h-6 w-6" /> },
+    ];
+  }
   return [
     { to: '/app/home',    label: 'Beranda', icon: <Home className="h-6 w-6" /> },
     { to: '/app/classes', label: 'Kelas',   icon: <GraduationCap className="h-6 w-6" /> },
