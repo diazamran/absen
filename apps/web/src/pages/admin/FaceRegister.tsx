@@ -178,10 +178,14 @@ export default function FaceRegister() {
 
   // Unique classes from registered faces
   const regClasses = [...new Set((registeredFaces ?? []).map((r) => r.className).filter(Boolean))].sort() as string[];
-  // Filtered list by class
-  const filteredRegistered = regClassFilter
+  // Filtered list by class — urut kelas → nama
+  const filteredRegistered = [...(regClassFilter
     ? (registeredFaces ?? []).filter((r) => r.className === regClassFilter)
-    : (registeredFaces ?? []);
+    : (registeredFaces ?? [])
+  )].sort((a, b) => {
+    const cls = (a.className ?? '').localeCompare(b.className ?? '', 'id');
+    return cls !== 0 ? cls : a.fullName.localeCompare(b.fullName, 'id');
+  });
 
   // Nyalakan kamera saat siswa dipilih & belum terdaftar
   useEffect(() => {
@@ -323,7 +327,10 @@ export default function FaceRegister() {
             </div>
           )}
           <div className="space-y-2">
-            {pending.map((p) => (
+            {[...(pending ?? [])].sort((a, b) => {
+              const cls = (a.className ?? '').localeCompare(b.className ?? '', 'id');
+              return cls !== 0 ? cls : a.fullName.localeCompare(b.fullName, 'id');
+            }).map((p) => (
               <div key={p.userId} className={`flex flex-wrap items-center gap-3 rounded-2xl border p-3 dark:bg-slate-800/70 ${pendingSelected.has(p.userId) ? 'border-primary bg-primary-soft/30' : 'border-line/60 bg-surface'}`}>
                 <input type="checkbox" checked={pendingSelected.has(p.userId)} onChange={() => togglePending(p.userId)} className="h-4 w-4 shrink-0 accent-[var(--primary)]" />
                 <div className="min-w-0 flex-1">

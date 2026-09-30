@@ -84,21 +84,24 @@ export async function faceRoutes(app: FastifyInstance) {
       include: { class: { select: { name: true } } },
     });
     const studentMap = new Map(students.map((s) => [s.userId, s]));
-    return reply.send({
-      success: true,
-      data: rows.map((r) => {
-        const st = r.userId ? studentMap.get(r.userId) : undefined;
-        return {
-          userId: r.userId,
-          fullName: r.user?.fullName ?? '-',
-          nis: st?.nis ?? null,
-          className: st?.class?.name ?? null,
-          samples: r.samplesCount,
-          embeddingsCount: r.embeddings.length,
-          submittedAt: r.createdAt,
-        };
-      }),
+    const mapped = rows.map((r) => {
+      const st = r.userId ? studentMap.get(r.userId) : undefined;
+      return {
+        userId: r.userId,
+        fullName: r.user?.fullName ?? '-',
+        nis: st?.nis ?? null,
+        className: st?.class?.name ?? null,
+        samples: r.samplesCount,
+        embeddingsCount: r.embeddings.length,
+        submittedAt: r.createdAt,
+      };
     });
+    // Urutkan: kelas (alfabet) → nama (alfabet)
+    mapped.sort((a, b) => {
+      const cls = (a.className ?? '').localeCompare(b.className ?? '', 'id');
+      return cls !== 0 ? cls : (a.fullName).localeCompare(b.fullName, 'id');
+    });
+    return reply.send({ success: true, data: mapped });
   });
 
   // Persetujuan oleh admin → wajah langsung aktif untuk absensi
@@ -165,20 +168,22 @@ export async function faceRoutes(app: FastifyInstance) {
         },
         embeddings: { select: { id: true } },
       },
-      orderBy: { updatedAt: 'desc' },
     });
-    return reply.send({
-      success: true,
-      data: profiles.map((p) => ({
-        userId: p.userId,
-        fullName: p.user?.fullName ?? '-',
-        nis: p.user?.student?.nis ?? null,
-        className: p.user?.student?.class?.name ?? null,
-        samples: p.samplesCount,
-        embeddingsCount: p.embeddings.length,
-        status: p.status,
-      })),
+    // Urutkan: kelas (alfabet) → nama (alfabet)
+    const mapped = profiles.map((p) => ({
+      userId: p.userId,
+      fullName: p.user?.fullName ?? '-',
+      nis: p.user?.student?.nis ?? null,
+      className: p.user?.student?.class?.name ?? null,
+      samples: p.samplesCount,
+      embeddingsCount: p.embeddings.length,
+      status: p.status,
+    }));
+    mapped.sort((a, b) => {
+      const cls = (a.className ?? '').localeCompare(b.className ?? '', 'id');
+      return cls !== 0 ? cls : (a.fullName).localeCompare(b.fullName, 'id');
     });
+    return reply.send({ success: true, data: mapped });
   });
 
   // Reset/hapus data wajah — hanya admin/superadmin yang bisa reset wajah siswa
