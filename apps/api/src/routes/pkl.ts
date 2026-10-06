@@ -1368,10 +1368,12 @@ export async function pklRoutes(app: FastifyInstance) {
       }
     }
 
-    // Hitung nilai UTC yang tersimpan di kolom @db.Date (= WIB - 1 hari karena UTC+7)
+    // Hitung nilai UTC untuk query range (min/max tidak bergantung urutan dateStrings)
     const dateUTCValues = dateStrings.map((ds) => startOfLocalDay(ds));
-    const minDate = dateUTCValues[dateUTCValues.length - 1];
-    const maxDate = dateUTCValues[0];
+    // min = tanggal terkecil, max = tanggal terbesar (tidak bergantung urutan array)
+    const sortedUTC = [...dateUTCValues].sort((a, b) => a.getTime() - b.getTime());
+    const minDate = sortedUTC[0];
+    const maxDate = sortedUTC[sortedUTC.length - 1];
 
     const studentIds = assignments.map((a) => a.studentId);
 

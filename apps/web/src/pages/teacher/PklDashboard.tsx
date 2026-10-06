@@ -92,6 +92,10 @@ function statusColorClass(s: string): string {
 
 export default function PklDashboard() {
   const [month, setMonth] = useState(() => todayJakartaKey().slice(0, 7));
+  // Absensi Harian: mode 'days' (N hari terakhir) atau 'month' (bulan tertentu)
+  const [dailyMode, setDailyMode] = useState<'days' | 'month'>('days');
+  const [dailyDays, setDailyDays] = useState<7 | 14 | 30>(7);
+  const [dailyMonth, setDailyMonth] = useState(() => todayJakartaKey().slice(0, 7));
   const navigate = useNavigate();
   const { branding } = useTheme();
   const schoolName = branding?.schoolName || 'Sekolah';
@@ -117,10 +121,14 @@ export default function PklDashboard() {
   });
 
   const { data: dailyRecap, isLoading: dailyRekapLoading } = useQuery({
-    queryKey: ['pkl-daily-recap', teacherId, month],
-    queryFn: () =>
-      api<{ success: boolean; data: DailyRekapData }>(`/pkl/daily-recap?month=${month}`)
-        .then((r) => r.data),
+    queryKey: ['pkl-daily-recap', teacherId, dailyMode, dailyMode === 'days' ? dailyDays : dailyMonth],
+    queryFn: () => {
+      const params = dailyMode === 'month'
+        ? `month=${dailyMonth}`
+        : `days=${dailyDays}`;
+      return api<{ success: boolean; data: DailyRekapData }>(`/pkl/daily-recap?${params}`)
+        .then((r) => r.data);
+    },
     enabled: !!teacherId,
   });
 
@@ -137,6 +145,14 @@ export default function PklDashboard() {
     const names = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
     return `${names[Number(m)]} ${y}`;
   })();
+
+  const dailyLabel = dailyMode === 'month'
+    ? (() => {
+        const [y, m] = dailyMonth.split('-');
+        const names = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+        return `${names[Number(m)]} ${y}`;
+      })()
+    : `${dailyDays} hari terakhir`;
 
   function exportExcel() {
     if (!students) return;
@@ -199,7 +215,7 @@ export default function PklDashboard() {
       return `${dayNames[dayIdx]} ${dd}/${mm}`;
     });
     const aoa2: (string | number)[][] = [
-      [`Absensi Harian — ${monthLabel}`],
+      [`Absensi Harian — ${dailyLabel}`],
       [schoolName],
       [],
       ['No', 'Nama Siswa', 'Kelas', 'Lokasi PKL', ...dateHeaders, 'Hadir', 'Tidak Hadir'],
@@ -282,7 +298,7 @@ export default function PklDashboard() {
       doc.addPage('landscape');
       doc.setFontSize(13);
       doc.setFont('helvetica', 'bold');
-      doc.text(`Absensi Harian PKL — ${monthLabel}`, pageWidth / 2, 15, { align: 'center' });
+      doc.text(`Absensi Harian PKL — ${dailyLabel}`, pageWidth / 2, 15, { align: 'center' });
       doc.setFontSize(10);
       doc.text(schoolName, pageWidth / 2, 21, { align: 'center' });
       doc.setFont('helvetica', 'normal');
@@ -481,29 +497,70 @@ export default function PklDashboard() {
 
       {/* Rekap Absensi Harian */}
       <Card className="mt-4">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <div>
-            <p className="font-bold text-ink">📅 Absensi Harian</p>
-            <p className="text-xs text-muted">{monthLabel} · {dailyRecap ? `${dailyRecap.dates.length} hari` : '...'}</p>
+        <div className="mb-3 space-y-2">
+          {/* Baris 1: judul + tombol export */}
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="font-bold text-ink">📅 Absensi Harian</p>
+              <p className="text-xs text-muted">
+                {dailyMode === 'month' ? dailyLabel : `${dailyDays} hari terakhir`}
+                {dailyRecap ? ` · ${dailyRecap.dates.length} hari` : ''}
+              </p>
+            </div>
+            {canExport && (
+              <div className="flex gap-2">
+                <button onClick={exportExcel} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700">
+                  <FileSpreadsheet className="h-4 w-4" /> Excel
+                </button>
+                <button onClick={exportPdf} className="flex items-center gap-1.5 rounded-xl bg-red-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-red-700">
+                  <FileText className="h-4 w-4" /> PDF
+                </button>
+              </div>
+            )}
           </div>
-          {canExport && (
-            <div className="flex gap-2">
+          {/* Baris 2: tab mode + kontrol */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Tab mode */}
+            <div className="flex rounded-xl border border-line overflow-hidden text-xs font-semibold">
               <button
-                onClick={exportExcel}
-                className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700"
+                onClick={() => setDailyMode('days')}
+                className={`px-3 py-1.5 transition ${dailyMode === 'days' ? 'bg-primary text-white' : 'bg-surface text-muted hover:bg-slate-100 dark:hover:bg-slate-700'}`}
               >
-                <FileSpreadsheet className="h-4 w-4" />
-                Excel
+                N Hari
               </button>
               <button
-                onClick={exportPdf}
-                className="flex items-center gap-1.5 rounded-xl bg-red-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-red-700"
+                onClick={() => setDailyMode('month')}
+                className={`px-3 py-1.5 transition ${dailyMode === 'month' ? 'bg-primary text-white' : 'bg-surface text-muted hover:bg-slate-100 dark:hover:bg-slate-700'}`}
               >
-                <FileText className="h-4 w-4" />
-                PDF
+                Per Bulan
               </button>
             </div>
-          )}
+            {/* Kontrol sesuai mode */}
+            {dailyMode === 'days' ? (
+              <div className="flex gap-1.5">
+                {([7, 14, 30] as const).map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setDailyDays(d)}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                      dailyDays === d
+                        ? 'bg-primary text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'
+                    }`}
+                  >
+                    {d} hari
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <input
+                type="month"
+                value={dailyMonth}
+                onChange={(e) => setDailyMonth(e.target.value)}
+                className="rounded-xl border border-line bg-surface px-3 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800"
+              />
+            )}
+          </div>
         </div>
 
         {dailyRekapLoading && <Skeleton className="h-32 w-full" />}
