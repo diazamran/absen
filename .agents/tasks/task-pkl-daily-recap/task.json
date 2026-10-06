@@ -1,0 +1,7 @@
+{
+  "task_id": "task-pkl-daily-recap",
+  "task_description": "Tambahkan fitur Rekap Absensi Harian di halaman Monitor PKL: endpoint GET /pkl/daily-recap di backend (pkl.ts) dan section tabel harian di frontend (PklDashboard.tsx).",
+  "status": "completed",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}
