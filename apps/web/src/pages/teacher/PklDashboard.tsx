@@ -18,7 +18,7 @@ interface DailyRekapData {
     id: string;
     name: string;
     class: string | null;
-    location: string;
+    location: string | null;
     attendance: Record<string, string>;
   }[];
 }
@@ -474,7 +474,7 @@ export default function PklDashboard() {
                   >
                     <td className="sticky left-0 z-10 bg-surface px-3 py-2 dark:bg-slate-900">
                       <p className="font-semibold text-ink">{stu.name}</p>
-                      <p className="text-xs text-muted">{stu.class ?? '-'} · {stu.location}</p>
+                      <p className="text-xs text-muted">{stu.class ?? '-'} · {stu.location ?? '-'}</p>
                     </td>
                     {dailyRecap.dates.map((ds) => {
                       const status = stu.attendance[ds];
