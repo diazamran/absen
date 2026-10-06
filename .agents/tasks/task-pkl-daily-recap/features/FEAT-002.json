@@ -1,0 +1,38 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Frontend: tambah interface DailyRekapData, state rekapDays, useQuery dailyRecap, dan section Card 'Rekap Absensi Harian' di PklDashboard.tsx. Tabel horizontal dengan sticky kolom nama, highlight hari ini, color-coded status cells. Tidak mengubah section yang sudah ada.",
+  "status": "completed",
+  "steps": [
+    "Baca file d:\\WEBSITE\\presensiku\\apps\\web\\src\\pages\\teacher\\PklDashboard.tsx lengkap sebelum membuat perubahan apapun.",
+    "Tambah interface DailyRekapData tepat di atas `interface SupervisedStudent` (baris ~16): `interface DailyRekapData { dates: string[]; students: { id: string; name: string; class: string | null; location: string; attendance: Record<string, string>; }[]; }`",
+    "Di dalam fungsi PklDashboard, tambah `const [rekapDays, setRekapDays] = useState(7);` tepat setelah `const [month, setMonth] = useState(...)` (baris ~80 dalam komponen).",
+    "Tambah useQuery untuk dailyRecap tepat setelah query rekap bulanan yang sudah ada (setelah blok `const { data: rekap, isLoading: rekapLoading } = useQuery({...});`): `const { data: dailyRecap, isLoading: dailyRekapLoading } = useQuery({ queryKey: ['pkl-daily-recap', teacherId, rekapDays], queryFn: () => api<{ success: boolean; data: DailyRekapData }>(`/pkl/daily-recap?days=${rekapDays}`).then((r) => r.data), enabled: !!teacherId, });`",
+    "Tambah Card JSX setelah `</Card>` penutup dari section 'Rekap bulanan', sebelum `</div>` penutup return statement. Card harus memiliki className='mt-4'.",
+    "Header Card: teks '📅 Rekap Absensi Harian' di kiri, 3 tombol [7,14,30] hari di kanan. Tombol aktif: bg-primary text-white; tombol inaktif: bg-slate-100 text-slate-600 hover:bg-slate-200 dark variants.",
+    "Loading state: `{dailyRekapLoading && <Skeleton className='h-32 w-full' />}`",
+    "Empty state: `{!dailyRekapLoading && (!dailyRecap || dailyRecap.students.length === 0) && <p className='py-4 text-center text-sm text-muted'>Belum ada data rekap harian.</p>}`",
+    "Tabel: div overflow-x-auto > table w-full text-left text-xs. Header row: kolom sticky 'Nama Siswa' (sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/60) + kolom per tanggal. Format kolom tanggal: `const dayNames = ['Min','Sen','Sel','Rab','Kam','Jum','Sab']; const dayIdx = new Date(ds + 'T00:00:00+07:00').getDay(); const [,mm,dd] = ds.split('-');` → 2 baris: nama hari dan DD/MM. Highlight hari ini: `ds === todayJakartaKey()` → bg-primary/10 text-primary.",
+    "Body row: kolom sticky nama (sticky left-0 z-10 bg-surface dark:bg-slate-900) dengan nama font-semibold dan class·lokasi text-xs text-muted. Kolom status: span h-7 w-7 rounded-lg inline-flex items-center justify-center. Status mapping: hadir→✅ bg-emerald-100 text-emerald-700; tidak_hadir→❌ bg-red-100 text-red-600; izin/sakit→📝 bg-amber-100 text-amber-700; libur→🏖️ bg-slate-100 text-slate-400; fallback→— bg-slate-50 text-slate-300.",
+    "Pastikan tidak ada perubahan pada section 'Kehadiran Hari Ini' dan 'Rekap bulanan' yang sudah ada."
+  ],
+  "acceptance_criteria": [
+    "File PklDashboard.tsx dapat dicompile tanpa error TypeScript",
+    "Interface DailyRekapData ada sebelum interface SupervisedStudent",
+    "State rekapDays ada di dalam fungsi PklDashboard",
+    "useQuery dailyRecap dikonfigurasi dengan queryKey ['pkl-daily-recap', teacherId, rekapDays]",
+    "Card Rekap Absensi Harian muncul setelah Card Rekap Bulanan",
+    "3 tombol 7/14/30 hari berfungsi mengubah state rekapDays",
+    "Tabel menampilkan baris per siswa dan kolom per tanggal",
+    "Kolom nama siswa sticky saat scroll horizontal",
+    "Hari ini di-highlight dengan bg-primary/10",
+    "Status cells warna-warni sesuai mapping",
+    "Section sebelumnya (Kehadiran Hari Ini dan Rekap Bulanan) tidak berubah"
+  ],
+  "verification": [
+    "cd d:\\WEBSITE\\presensiku\\apps\\web && npx tsc --noEmit — harus 0 errors",
+    "cd d:\\WEBSITE\\presensiku\\apps\\web && npm run build — harus sukses tanpa error"
+  ],
+  "blocked_reason": null,
+  "findings": "Implemented successfully. Added DailyRekapData interface, rekapDays state, dailyRecap useQuery, and Rekap Absensi Harian Card with 7/14/30 day toggle, sticky nama column, today highlight, and color-coded status cells. tsc --noEmit: 0 errors. npm run build: success."
+}
