@@ -92,7 +92,6 @@ function statusColorClass(s: string): string {
 
 export default function PklDashboard() {
   const [month, setMonth] = useState(() => todayJakartaKey().slice(0, 7));
-  const [rekapDays, setRekapDays] = useState(7);
   const navigate = useNavigate();
   const { branding } = useTheme();
   const schoolName = branding?.schoolName || 'Sekolah';
@@ -118,9 +117,9 @@ export default function PklDashboard() {
   });
 
   const { data: dailyRecap, isLoading: dailyRekapLoading } = useQuery({
-    queryKey: ['pkl-daily-recap', teacherId, rekapDays],
+    queryKey: ['pkl-daily-recap', teacherId, month],
     queryFn: () =>
-      api<{ success: boolean; data: DailyRekapData }>(`/pkl/daily-recap?days=${rekapDays}`)
+      api<{ success: boolean; data: DailyRekapData }>(`/pkl/daily-recap?month=${month}`)
         .then((r) => r.data),
     enabled: !!teacherId,
   });
@@ -130,15 +129,33 @@ export default function PklDashboard() {
   const belumPulang = students?.filter((s) => s.todayAttendance.checkIn && !s.todayAttendance.checkOut).length ?? 0;
 
   // ===== Export helpers =====
-  const exportBaseName = `monitor-pkl-${todayJakartaKey()}`;
+  const exportBaseName = `monitor-pkl-${month}`;
+
+  // Label bulan Indonesia untuk header export
+  const monthLabel = (() => {
+    const [y, m] = month.split('-');
+    const names = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    return `${names[Number(m)]} ${y}`;
+  })();
 
   function exportExcel() {
     if (!students) return;
     const rekapRows = rekap?.rows ?? [];
+    const dailyStudents = dailyRecap?.students ?? [];
+    const dailyDates = dailyRecap?.dates ?? [];
+
+    const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+    const statusLabel: Record<string, string> = {
+      hadir: 'Hadir', tidak_hadir: 'Alpa', izin: 'Izin', sakit: 'Sakit', libur: 'Libur',
+    };
+
+    // Sheet 1: Rekap ringkasan + kehadiran hari ini
     const aoa: (string | number)[][] = [
-      ['Monitor PKL — Kehadiran Hari Ini'],
+      ['Monitor PKL — Rekap Absensi'],
       [schoolName],
-      [`Tanggal: ${formatLongDate(todayJakartaKey())}`],
+      [`Bulan: ${monthLabel}`],
+      [],
+      ['Kehadiran Hari Ini', formatLongDate(todayJakartaKey())],
       [],
       ['No', 'Nama Siswa', 'NIS', 'Kelas', 'Lokasi PKL', 'Jam Datang', 'Jam Pulang', 'Status', 'Metode'],
       ...students.map((s, i) => [
@@ -153,7 +170,8 @@ export default function PklDashboard() {
         methodText(s.todayAttendance.method),
       ]),
       [],
-      [`Rekap Bulanan - ${formatLongDate(`${month}-01`).replace(/^\d+ /, '')}${rekap?.schoolDays ? ` · ${rekap.schoolDays} hari kerja` : ''}`],
+      [`Rekap Bulanan — ${monthLabel}${rekap?.schoolDays ? ` · ${rekap.schoolDays} hari kerja` : ''}`],
+      [],
       ['No', 'Nama Siswa', 'NIS', 'Kelas', 'Lokasi PKL', 'Tgl Mulai', 'Tgl Selesai', 'Hadir', 'Terlambat', 'Sakit', 'Izin', 'Alpa', '%'],
       ...rekapRows.map((r, i) => [
         i + 1,
@@ -171,56 +189,73 @@ export default function PklDashboard() {
         r.percentage !== null ? `${r.percentage}%` : '—',
       ]),
     ];
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [{ wch: 4 }, { wch: 28 }, { wch: 14 }, { wch: 12 }, { wch: 24 }, { wch: 11 }, { wch: 11 }, { wch: 8 }, { wch: 10 }, { wch: 7 }, { wch: 7 }, { wch: 7 }, { wch: 7 }];
+    const ws1 = XLSX.utils.aoa_to_sheet(aoa);
+    ws1['!cols'] = [{ wch: 4 }, { wch: 28 }, { wch: 14 }, { wch: 12 }, { wch: 24 }, { wch: 11 }, { wch: 11 }, { wch: 8 }, { wch: 10 }, { wch: 7 }, { wch: 7 }, { wch: 7 }, { wch: 7 }];
+
+    // Sheet 2: Absensi Harian per tanggal
+    const dateHeaders = dailyDates.map((ds) => {
+      const dayIdx = new Date(ds + 'T00:00:00+07:00').getDay();
+      const [, mm, dd] = ds.split('-');
+      return `${dayNames[dayIdx]} ${dd}/${mm}`;
+    });
+    const aoa2: (string | number)[][] = [
+      [`Absensi Harian — ${monthLabel}`],
+      [schoolName],
+      [],
+      ['No', 'Nama Siswa', 'Kelas', 'Lokasi PKL', ...dateHeaders, 'Hadir', 'Tidak Hadir'],
+      ...dailyStudents.map((stu, i) => {
+        const hadirCount = dailyDates.filter((ds) => stu.attendance[ds] === 'hadir').length;
+        const absenCount = dailyDates.filter((ds) => stu.attendance[ds] === 'tidak_hadir').length;
+        return [
+          i + 1,
+          stu.name,
+          stu.class ?? '',
+          stu.location ?? '',
+          ...dailyDates.map((ds) => statusLabel[stu.attendance[ds]] ?? '-'),
+          hadirCount,
+          absenCount,
+        ];
+      }),
+    ];
+    const ws2 = XLSX.utils.aoa_to_sheet(aoa2);
+    ws2['!cols'] = [
+      { wch: 4 }, { wch: 28 }, { wch: 12 }, { wch: 22 },
+      ...dailyDates.map(() => ({ wch: 8 })),
+      { wch: 8 }, { wch: 10 },
+    ];
+
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Monitor PKL');
+    XLSX.utils.book_append_sheet(wb, ws1, 'Rekap Bulanan');
+    if (dailyStudents.length > 0) XLSX.utils.book_append_sheet(wb, ws2, 'Absensi Harian');
     XLSX.writeFile(wb, `${exportBaseName}.xlsx`, { bookType: 'xlsx' });
   }
 
   function exportPdf() {
     if (!students) return;
     const rekapRows = rekap?.rows ?? [];
+    const dailyStudents = dailyRecap?.students ?? [];
+    const dailyDates = dailyRecap?.dates ?? [];
+
+    const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+    const statusLabel: Record<string, string> = {
+      hadir: 'H', tidak_hadir: 'A', izin: 'I', sakit: 'S', libur: '-',
+    };
+
     const doc = new jsPDF({ orientation: 'landscape' });
     const pageWidth = doc.internal.pageSize.getWidth();
 
+    // — Halaman 1: Rekap ringkasan bulanan —
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('Monitor PKL - Kehadiran Siswa', pageWidth / 2, 15, { align: 'center' });
+    doc.text('Monitor PKL - Rekap Absensi', pageWidth / 2, 15, { align: 'center' });
     doc.setFontSize(11);
     doc.text(schoolName, pageWidth / 2, 21, { align: 'center' });
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text(`Tanggal: ${formatLongDate(todayJakartaKey())}`, pageWidth / 2, 27, { align: 'center' });
+    doc.text(`Bulan: ${monthLabel}`, pageWidth / 2, 27, { align: 'center' });
 
     autoTable(doc, {
-      startY: 32,
-      head: [['No', 'Nama Siswa', 'NIS', 'Kelas', 'Lokasi PKL', 'Jam Datang', 'Jam Pulang', 'Status', 'Metode']],
-      body: students.map((s, i) => [
-        String(i + 1),
-        s.fullName,
-        s.nis ?? '',
-        s.className ?? '',
-        s.location.name,
-        s.todayAttendance.checkIn ?? '-',
-        s.todayAttendance.checkOut ?? (s.todayAttendance.checkIn ? '(belum pulang)' : '-'),
-        statusText(s.todayAttendance.status),
-        methodText(s.todayAttendance.method),
-      ]),
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [13, 148, 136], fontSize: 8 },
-      alternateRowStyles: { fillColor: [245, 250, 249] },
-    });
-
-    let y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
-    if (y > doc.internal.pageSize.getHeight() - 80) { doc.addPage(); y = 24; }
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Rekap Bulanan - ${formatLongDate(`${month}-01`).replace(/^\d+ /, '')}`, 14, y);
-
-    autoTable(doc, {
-      startY: y + 3,
+      startY: 35,
       head: [['No', 'Nama Siswa', 'NIS', 'Kelas', 'Lokasi PKL', 'Tgl Mulai', 'Tgl Selesai', 'Hadir', 'Terlambat', 'Sakit', 'Izin', 'Alpa', '%']],
       body: rekapRows.map((r, i) => [
         String(i + 1),
@@ -241,6 +276,52 @@ export default function PklDashboard() {
       headStyles: { fillColor: [13, 148, 136], fontSize: 8 },
       alternateRowStyles: { fillColor: [245, 250, 249] },
     });
+
+    // — Halaman 2: Absensi Harian per tanggal —
+    if (dailyStudents.length > 0 && dailyDates.length > 0) {
+      doc.addPage('landscape');
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Absensi Harian PKL — ${monthLabel}`, pageWidth / 2, 15, { align: 'center' });
+      doc.setFontSize(10);
+      doc.text(schoolName, pageWidth / 2, 21, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text('H=Hadir  A=Alpa  I=Izin  S=Sakit  -=Libur', pageWidth / 2, 27, { align: 'center' });
+
+      const dateHeaders = dailyDates.map((ds) => {
+        const dayIdx = new Date(ds + 'T00:00:00+07:00').getDay();
+        const [, mm, dd] = ds.split('-');
+        return `${dayNames[dayIdx]}\n${dd}/${mm}`;
+      });
+
+      autoTable(doc, {
+        startY: 32,
+        head: [['No', 'Nama Siswa', 'Kelas', 'Lokasi', ...dateHeaders, 'Hdr', 'Alpa']],
+        body: dailyStudents.map((stu, i) => {
+          const hadirCount = dailyDates.filter((ds) => stu.attendance[ds] === 'hadir').length;
+          const absenCount = dailyDates.filter((ds) => stu.attendance[ds] === 'tidak_hadir').length;
+          return [
+            String(i + 1),
+            stu.name,
+            stu.class ?? '-',
+            stu.location ?? '-',
+            ...dailyDates.map((ds) => statusLabel[stu.attendance[ds]] ?? '-'),
+            String(hadirCount),
+            String(absenCount),
+          ];
+        }),
+        styles: { fontSize: 7, cellPadding: 1.5, halign: 'center' },
+        headStyles: { fillColor: [13, 148, 136], fontSize: 7, halign: 'center' },
+        columnStyles: {
+          0: { cellWidth: 8 },
+          1: { cellWidth: 30, halign: 'left' },
+          2: { cellWidth: 18, halign: 'left' },
+          3: { cellWidth: 22, halign: 'left' },
+        },
+        alternateRowStyles: { fillColor: [245, 250, 249] },
+      });
+    }
 
     doc.save(`${exportBaseName}.pdf`);
   }
@@ -286,24 +367,6 @@ export default function PklDashboard() {
       <Card className="mb-4">
         <div className="mb-3 flex items-center justify-between gap-2">
           <p className="font-bold text-ink">📍 Kehadiran Hari Ini</p>
-          {canExport && (
-            <div className="flex gap-2">
-              <button
-                onClick={exportExcel}
-                className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700"
-              >
-                <FileSpreadsheet className="h-4 w-4" />
-                Excel
-              </button>
-              <button
-                onClick={exportPdf}
-                className="flex items-center gap-1.5 rounded-xl bg-red-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-red-700"
-              >
-                <FileText className="h-4 w-4" />
-                PDF
-              </button>
-            </div>
-          )}
         </div>
         {isLoading && <Skeleton className="h-24 w-full" />}
         {!isLoading && students && students.length === 0 && (
@@ -419,22 +482,28 @@ export default function PklDashboard() {
       {/* Rekap Absensi Harian */}
       <Card className="mt-4">
         <div className="mb-3 flex items-center justify-between gap-2">
-          <p className="font-bold text-ink">📅 Rekap Absensi Harian</p>
-          <div className="flex gap-1.5">
-            {([7, 14, 30] as const).map((d) => (
-              <button
-                key={d}
-                onClick={() => setRekapDays(d)}
-                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                  rekapDays === d
-                    ? 'bg-primary text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'
-                }`}
-              >
-                {d} hari
-              </button>
-            ))}
+          <div>
+            <p className="font-bold text-ink">📅 Absensi Harian</p>
+            <p className="text-xs text-muted">{monthLabel} · {dailyRecap ? `${dailyRecap.dates.length} hari` : '...'}</p>
           </div>
+          {canExport && (
+            <div className="flex gap-2">
+              <button
+                onClick={exportExcel}
+                className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                Excel
+              </button>
+              <button
+                onClick={exportPdf}
+                className="flex items-center gap-1.5 rounded-xl bg-red-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-red-700"
+              >
+                <FileText className="h-4 w-4" />
+                PDF
+              </button>
+            </div>
+          )}
         </div>
 
         {dailyRekapLoading && <Skeleton className="h-32 w-full" />}

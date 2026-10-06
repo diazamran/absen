@@ -1318,8 +1318,7 @@ export async function pklRoutes(app: FastifyInstance) {
   // Monitor: grid tanggal × siswa, N hari terakhir (default 7, max 30).
   // Permission: pkl:attendance (TEACHER / ADMIN / MONITOR_PKL)
   app.get('/pkl/daily-recap', { preHandler: app.requirePermission(PERMISSION_KEYS.pklAttendance) }, async (request, reply) => {
-    const { days } = request.query as { days?: string };
-    const daysCount = Math.min(Math.max(1, Number(days) || 7), 30);
+    const { days, month } = request.query as { days?: string; month?: string };
 
     // Scope: admin lihat semua, supervisor hanya siswa bimbingannya
     const scope = await getPklScope(request.user!.id);
@@ -1342,15 +1341,31 @@ export async function pklRoutes(app: FastifyInstance) {
       orderBy: { student: { user: { fullName: 'asc' } } },
     });
 
-    // Hitung array tanggal WIB: dateStrings[0] = hari ini, descending
-    const todayStr = dateKey();
-    const [ty, tm, td] = todayStr.split('-').map(Number);
+    // Hitung array tanggal WIB
     const dateStrings: string[] = [];
-    for (let i = 0; i < daysCount; i++) {
-      const d = new Date(Date.UTC(ty, tm - 1, td - i));
-      dateStrings.push(
-        `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`,
-      );
+    const todayStr = dateKey();
+
+    if (month && /^\d{4}-\d{2}$/.test(month)) {
+      // Mode bulan: semua hari di bulan tsb, ascending (01 → akhir bulan)
+      // Tidak melewati hari ini (bulan berjalan hanya sampai hari ini)
+      const [my, mm] = month.split('-').map(Number);
+      const daysInMonth = new Date(Date.UTC(my, mm, 0)).getUTCDate(); // last day of month
+      const lastDay = month === todayStr.slice(0, 7)
+        ? Number(todayStr.split('-')[2])   // bulan ini: hanya sampai hari ini
+        : daysInMonth;                      // bulan lalu: semua hari
+      for (let d = 1; d <= lastDay; d++) {
+        dateStrings.push(`${month}-${String(d).padStart(2, '0')}`);
+      }
+    } else {
+      // Mode N hari: dateStrings[0] = hari ini, descending
+      const daysCount = Math.min(Math.max(1, Number(days) || 7), 31);
+      const [ty, tm, td] = todayStr.split('-').map(Number);
+      for (let i = 0; i < daysCount; i++) {
+        const d = new Date(Date.UTC(ty, tm - 1, td - i));
+        dateStrings.push(
+          `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`,
+        );
+      }
     }
 
     // Hitung nilai UTC yang tersimpan di kolom @db.Date (= WIB - 1 hari karena UTC+7)
