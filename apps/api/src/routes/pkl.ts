@@ -1368,8 +1368,12 @@ export async function pklRoutes(app: FastifyInstance) {
       }
     }
 
-    // Hitung nilai UTC untuk query range (min/max tidak bergantung urutan dateStrings)
-    const dateUTCValues = dateStrings.map((ds) => startOfLocalDay(ds));
+    // Konversi dateStrings WIB ke nilai UTC tersimpan di @db.Date (= WIB date - 1 hari, UTC midnight)
+    // Pola sama dengan /pkl/report/daily: new Date(Date.UTC(yy, mm-1, dd-1))
+    const dateUTCValues = dateStrings.map((ds) => {
+      const [yy, mm, dd] = ds.split('-').map(Number);
+      return new Date(Date.UTC(yy, mm - 1, dd - 1));
+    });
     // min = tanggal terkecil, max = tanggal terbesar (tidak bergantung urutan array)
     const sortedUTC = [...dateUTCValues].sort((a, b) => a.getTime() - b.getTime());
     const minDate = sortedUTC[0];
@@ -1392,15 +1396,15 @@ export async function pklRoutes(app: FastifyInstance) {
     });
 
     // Index: studentId → (dateStr WIB "YYYY-MM-DD" → status)
-    // Gunakan cara yang sama dengan rekap bulanan yang sudah terbukti benar:
-    // att.date (@db.Date) dari Prisma = startOfLocalDay = mis. 2026-10-05T17:00:00.000Z
-    // Tambah 7 jam → 2026-10-06T00:00:00.000Z, ambil 10 karakter pertama ISO = "2026-10-06" ✓
+    // Sistem menyimpan @db.Date sebagai tanggal UTC = tanggal WIB MINUS 1 hari
+    // (startOfLocalDay("2026-10-06") = 2026-10-05T17:00:00Z → PostgreSQL DATE = 2026-10-05).
+    // Prisma mengembalikan kolom DATE sebagai 2026-10-05T00:00:00.000Z (midnight UTC).
+    // Untuk mendapat kembali tanggal WIB yang benar: +24 jam → 2026-10-06T00:00:00Z → slice.
     const attIndex = new Map<string, Map<string, string>>();
     for (const att of attendances) {
       if (!att.studentId) continue;
       if (!attIndex.has(att.studentId)) attIndex.set(att.studentId, new Map());
-      // Shift +7 jam (WIB offset) untuk mendapat tengah malam UTC di tanggal WIB yang benar
-      const ds = new Date(att.date.getTime() + 7 * 3600_000).toISOString().slice(0, 10);
+      const ds = new Date(att.date.getTime() + 24 * 3600_000).toISOString().slice(0, 10);
       attIndex.get(att.studentId)!.set(ds, att.status);
     }
 
@@ -1448,10 +1452,10 @@ export async function pklRoutes(app: FastifyInstance) {
           continue;
         }
 
-        // (2) Cek izin yang overlap — konversi leave dates dengan cara sama (+7h slice)
+        // (2) Cek izin yang overlap — konversi leave dates dengan +24h (pola sama dengan att.date)
         const hasLeave = studentLeaves.some((lv) => {
-          const lvStart = new Date(lv.startDate.getTime() + 7 * 3600_000).toISOString().slice(0, 10);
-          const lvEnd   = new Date(lv.endDate.getTime()   + 7 * 3600_000).toISOString().slice(0, 10);
+          const lvStart = new Date(lv.startDate.getTime() + 24 * 3600_000).toISOString().slice(0, 10);
+          const lvEnd   = new Date(lv.endDate.getTime()   + 24 * 3600_000).toISOString().slice(0, 10);
           return lvStart <= dateStr && dateStr <= lvEnd;
         });
         if (hasLeave) {
