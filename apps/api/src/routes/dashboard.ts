@@ -498,4 +498,25 @@ export async function homeroomRoutes(app: FastifyInstance) {
       },
     });
   });
+
+  app.get('/dashboard/homeroom/classes', { preHandler: app.requirePermission(PERMISSION_KEYS.attendanceRead) }, async (request, reply) => {
+    const user = request.user!;
+    const teacher = await prisma.teacher.findUnique({ where: { userId: user.id } });
+    if (!teacher) return reply.status(403).send({ success: false, message: 'Bukan akun guru' });
+    const classes = await prisma.class.findMany({
+      where: { homeroomTeacherId: teacher.id, isActive: true },
+      include: {
+        major: { select: { name: true } },
+        students: {
+          select: {
+            id: true, nis: true, gender: true, faceRegistered: true, isActive: true,
+            user: { select: { fullName: true } },
+          },
+          orderBy: { nis: 'asc' },
+        },
+      },
+      orderBy: [{ grade: 'asc' }, { name: 'asc' }],
+    });
+    return reply.send({ success: true, data: classes });
+  });
 }

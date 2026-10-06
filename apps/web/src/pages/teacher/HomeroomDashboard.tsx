@@ -47,7 +47,7 @@ export default function HomeroomDashboard() {
   const myClasses = useQuery({
     queryKey: ['homeroom-classes'],
     queryFn: () =>
-      api<{ success: boolean; data: ClassData[] }>('/classes?homeroomOnly=true').then((r) => r.data),
+      api<{ success: boolean; data: ClassData[] }>('/dashboard/homeroom/classes').then((r) => r.data),
   });
 
   // Get attendance summary for selected date
