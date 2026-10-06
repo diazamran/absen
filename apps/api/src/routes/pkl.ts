@@ -1082,7 +1082,7 @@ export async function pklRoutes(app: FastifyInstance) {
   app.post('/pkl/manual-attendance/bulk', { preHandler: app.requirePermission(PERMISSION_KEYS.pklAttendance) }, async (request, reply) => {
     const body = validate(z.object({
       studentIds: z.array(z.string().min(1)).min(1).max(100),
-      status: z.enum(['PRESENT', 'LATE', 'SICK', 'EXCUSED', 'OFFICIAL_DUTY', 'ABSENT', 'HOLIDAY']),
+      status: z.enum(['PRESENT', 'LATE', 'SICK', 'EXCUSED', 'OFFICIAL_DUTY', 'ABSENT', 'HOLIDAY', 'LEAVE']),
       type: z.enum(['CHECK_IN', 'CHECK_OUT']).default('CHECK_IN'),
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       checkIn: z.string().regex(/^\d{2}:\d{2}$/).optional(),
@@ -1211,7 +1211,7 @@ export async function pklRoutes(app: FastifyInstance) {
   app.post('/pkl/manual-attendance', { preHandler: app.requirePermission(PERMISSION_KEYS.pklAttendance) }, async (request, reply) => {
     const body = validate(z.object({
       studentId: z.string().min(1),
-      status: z.enum(['PRESENT', 'LATE', 'SICK', 'EXCUSED', 'OFFICIAL_DUTY', 'ABSENT', 'HOLIDAY']),
+      status: z.enum(['PRESENT', 'LATE', 'SICK', 'EXCUSED', 'OFFICIAL_DUTY', 'ABSENT', 'HOLIDAY', 'LEAVE']),
       type: z.enum(['CHECK_IN', 'CHECK_OUT']).default('CHECK_IN'),
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // default: hari ini
       checkIn: z.string().regex(/^\d{2}:\d{2}$/).optional(),    // HH:MM
@@ -1434,6 +1434,10 @@ export async function pklRoutes(app: FastifyInstance) {
       SICK: 'sakit',
       EXCUSED: 'izin',
       ABSENT: 'tidak_hadir',
+      OFFICIAL_DUTY: 'hadir',
+      LEAVE: 'cuti',
+      HOLIDAY: 'libur',
+      DISPENSATION: 'izin',
     };
 
     // Build response per siswa

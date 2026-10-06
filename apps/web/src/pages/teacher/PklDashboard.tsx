@@ -162,7 +162,7 @@ export default function PklDashboard() {
 
     const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
     const statusLabel: Record<string, string> = {
-      hadir: 'Hadir', tidak_hadir: 'Alpa', izin: 'Izin', sakit: 'Sakit', libur: 'Libur',
+      hadir: 'Hadir', tidak_hadir: 'Alpa', izin: 'Izin', sakit: 'Sakit', libur: 'Libur', cuti: 'Cuti',
     };
 
     // Sheet 1: Rekap ringkasan + kehadiran hari ini
@@ -254,7 +254,7 @@ export default function PklDashboard() {
 
     const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
     const statusLabel: Record<string, string> = {
-      hadir: 'H', tidak_hadir: 'A', izin: 'I', sakit: 'S', libur: '-',
+      hadir: 'H', tidak_hadir: 'A', izin: 'I', sakit: 'S', libur: '-', cuti: 'C',
     };
 
     const doc = new jsPDF({ orientation: 'landscape' });
@@ -303,7 +303,7 @@ export default function PklDashboard() {
       doc.text(schoolName, pageWidth / 2, 21, { align: 'center' });
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      doc.text('H=Hadir  A=Alpa  I=Izin  S=Sakit  -=Libur', pageWidth / 2, 27, { align: 'center' });
+      doc.text('H=Hadir  A=Alpa  I=Izin  S=Sakit  C=Cuti  -=Libur', pageWidth / 2, 27, { align: 'center' });
 
       const dateHeaders = dailyDates.map((ds) => {
         const dayIdx = new Date(ds + 'T00:00:00+07:00').getDay();
@@ -615,6 +615,9 @@ export default function PklDashboard() {
                       } else if (status === 'izin' || status === 'sakit') {
                         icon = '📝';
                         cellClass = 'bg-amber-100 text-amber-700';
+                      } else if (status === 'cuti') {
+                        icon = '🏝️';
+                        cellClass = 'bg-indigo-100 text-indigo-600';
                       } else if (status === 'libur') {
                         icon = '🏖️';
                         cellClass = 'bg-slate-100 text-slate-400';

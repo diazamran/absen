@@ -25,12 +25,14 @@ interface SupervisedStudent {
 }
 
 const STATUS_OPTIONS: { value: string; label: string; colorClass: string }[] = [
-  { value: 'PRESENT',       label: 'Hadir',    colorClass: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20' },
+  { value: 'PRESENT',       label: 'Hadir',     colorClass: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20' },
   { value: 'LATE',          label: 'Terlambat', colorClass: 'border-amber-200   bg-amber-50   text-amber-700   dark:bg-amber-900/20'   },
-  { value: 'SICK',          label: 'Sakit',    colorClass: 'border-blue-200    bg-blue-50    text-blue-700    dark:bg-blue-900/20'    },
-  { value: 'EXCUSED',       label: 'Izin',     colorClass: 'border-purple-200  bg-purple-50  text-purple-700  dark:bg-purple-900/20'  },
-  { value: 'OFFICIAL_DUTY', label: 'Dinas',    colorClass: 'border-cyan-200    bg-cyan-50    text-cyan-700    dark:bg-cyan-900/20'    },
-  { value: 'ABSENT',        label: 'Alpa',     colorClass: 'border-red-200     bg-red-50     text-red-700     dark:bg-red-900/20'     },
+  { value: 'SICK',          label: 'Sakit',     colorClass: 'border-blue-200    bg-blue-50    text-blue-700    dark:bg-blue-900/20'    },
+  { value: 'EXCUSED',       label: 'Izin',      colorClass: 'border-purple-200  bg-purple-50  text-purple-700  dark:bg-purple-900/20'  },
+  { value: 'OFFICIAL_DUTY', label: 'Dinas',     colorClass: 'border-cyan-200    bg-cyan-50    text-cyan-700    dark:bg-cyan-900/20'    },
+  { value: 'ABSENT',        label: 'Alpa',      colorClass: 'border-red-200     bg-red-50     text-red-700     dark:bg-red-900/20'     },
+  { value: 'LEAVE',         label: 'Cuti',      colorClass: 'border-indigo-200  bg-indigo-50  text-indigo-700  dark:bg-indigo-900/20'  },
+  { value: 'HOLIDAY',       label: 'Libur',     colorClass: 'border-slate-200   bg-slate-100  text-slate-600   dark:bg-slate-700/40'   },
 ];
 
 const TYPE_OPTIONS = [
@@ -46,6 +48,8 @@ function statusBadgeClass(s: string): string {
     case 'EXCUSED':       return 'bg-purple-100 text-purple-600';
     case 'OFFICIAL_DUTY': return 'bg-cyan-100 text-cyan-600';
     case 'ABSENT':        return 'bg-red-100 text-red-600';
+    case 'LEAVE':         return 'bg-indigo-100 text-indigo-600';
+    case 'HOLIDAY':       return 'bg-slate-100 text-slate-500';
     default:              return 'bg-slate-100 text-slate-400';
   }
 }
@@ -194,7 +198,7 @@ export default function PklManualAttendance() {
         : true
     ), [students, tab]);
 
-  const presentCount = students?.filter((s) => ['PRESENT', 'LATE', 'SICK', 'EXCUSED', 'OFFICIAL_DUTY'].includes(s.todayAttendance.status)).length ?? 0;
+  const presentCount = students?.filter((s) => ['PRESENT', 'LATE', 'SICK', 'EXCUSED', 'OFFICIAL_DUTY', 'LEAVE', 'HOLIDAY'].includes(s.todayAttendance.status)).length ?? 0;
   const belumCount   = students?.filter((s) => ['NOT_YET', 'ABSENT'].includes(s.todayAttendance.status)).length ?? 0;
   const allSelected  = !!filtered?.length && selectedIds.size === filtered.length;
   const someSelected = selectedIds.size > 0 && !allSelected;
@@ -303,7 +307,7 @@ export default function PklManualAttendance() {
 
         {filtered?.map((s) => {
           const att = s.todayAttendance;
-          const hadir = ['PRESENT', 'LATE', 'SICK', 'EXCUSED', 'OFFICIAL_DUTY'].includes(att.status);
+          const hadir = ['PRESENT', 'LATE', 'SICK', 'EXCUSED', 'OFFICIAL_DUTY', 'LEAVE', 'HOLIDAY'].includes(att.status);
           const isChecked = selectedIds.has(s.studentId);
 
           return (
