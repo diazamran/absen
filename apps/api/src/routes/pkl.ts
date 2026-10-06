@@ -5,7 +5,7 @@ import { validate } from '../utils/validate.js';
 import { ApiError } from '../utils/errors.js';
 import { audit } from '../lib/audit.js';
 import { PERMISSION_KEYS } from '../rbac/permissions.js';
-import { localTime, todayStart, todayEnd, dateKey, monthRange, currentMonthKey, localMinutesOf, startOfLocalDay } from '../lib/time.js';
+import { localTime, todayStart, todayEnd, dateKey, monthRange, currentMonthKey, localMinutesOf, startOfLocalDay, localDateKeyOfStoredDate } from '../lib/time.js';
 import { getAttendanceRules } from '../services/settings.js';
 import { haversineMeters } from '../services/attendance.js';
 
@@ -1374,12 +1374,17 @@ export async function pklRoutes(app: FastifyInstance) {
       select: { studentId: true, date: true, status: true },
     });
 
-    // Index: studentId → (dateISO → status)
+    // Index: studentId → (dateStr WIB "YYYY-MM-DD" → status)
+    // PENTING: att.date dari Prisma (@db.Date) = tengah malam UTC = "2026-10-06T00:00:00.000Z"
+    // sedangkan startOfLocalDay("2026-10-06") = "2026-10-05T17:00:00.000Z" (tengah malam WIB).
+    // Keduanya tidak cocok jika dibandingkan via ISO string. Gunakan localDateKeyOfStoredDate()
+    // untuk konversi ke dateStr WIB yang benar, lalu index pakai dateStr bukan ISO UTC.
     const attIndex = new Map<string, Map<string, string>>();
     for (const att of attendances) {
       if (!att.studentId) continue;
       if (!attIndex.has(att.studentId)) attIndex.set(att.studentId, new Map());
-      attIndex.get(att.studentId)!.set(att.date.toISOString(), att.status);
+      const ds = localDateKeyOfStoredDate(att.date);
+      attIndex.get(att.studentId)!.set(ds, att.status);
     }
 
     // Query 3: izin yang disetujui dengan overlap rentang tanggal
@@ -1419,10 +1424,9 @@ export async function pklRoutes(app: FastifyInstance) {
       for (let i = 0; i < dateStrings.length; i++) {
         const dateStr = dateStrings[i];
         const dateUTC = dateUTCValues[i];
-        const dateUTCIso = dateUTC.toISOString();
 
-        // (1) Cek record absensi
-        const attStatus = attMap?.get(dateUTCIso);
+        // (1) Cek record absensi — index pakai dateStr WIB (bukan ISO UTC)
+        const attStatus = attMap?.get(dateStr);
         if (attStatus) {
           attendance[dateStr] = statusMap[attStatus] ?? 'tidak_hadir';
           continue;
