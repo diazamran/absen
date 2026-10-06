@@ -12,6 +12,17 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+interface DailyRekapData {
+  dates: string[];
+  students: {
+    id: string;
+    name: string;
+    class: string | null;
+    location: string;
+    attendance: Record<string, string>;
+  }[];
+}
+
 interface SupervisedStudent {
   assignmentId: string;
   studentId: string;
@@ -81,6 +92,7 @@ function statusColorClass(s: string): string {
 
 export default function PklDashboard() {
   const [month, setMonth] = useState(() => todayJakartaKey().slice(0, 7));
+  const [rekapDays, setRekapDays] = useState(7);
   const navigate = useNavigate();
   const { branding } = useTheme();
   const schoolName = branding?.schoolName || 'Sekolah';
@@ -102,6 +114,14 @@ export default function PklDashboard() {
   const { data: rekap, isLoading: rekapLoading } = useQuery({
     queryKey: ['pkl-rekap', teacherId, month],
     queryFn: () => api<{ success: boolean; data: RekapData }>(`/pkl/supervisor/${teacherId}/rekap?month=${month}`).then((r) => r.data),
+    enabled: !!teacherId,
+  });
+
+  const { data: dailyRecap, isLoading: dailyRekapLoading } = useQuery({
+    queryKey: ['pkl-daily-recap', teacherId, rekapDays],
+    queryFn: () =>
+      api<{ success: boolean; data: DailyRekapData }>(`/pkl/daily-recap?days=${rekapDays}`)
+        .then((r) => r.data),
     enabled: !!teacherId,
   });
 
@@ -390,6 +410,101 @@ export default function PklDashboard() {
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* Rekap Absensi Harian */}
+      <Card className="mt-4">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <p className="font-bold text-ink">📅 Rekap Absensi Harian</p>
+          <div className="flex gap-1.5">
+            {([7, 14, 30] as const).map((d) => (
+              <button
+                key={d}
+                onClick={() => setRekapDays(d)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                  rekapDays === d
+                    ? 'bg-primary text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'
+                }`}
+              >
+                {d} hari
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {dailyRekapLoading && <Skeleton className="h-32 w-full" />}
+        {!dailyRekapLoading && (!dailyRecap || dailyRecap.students.length === 0) && (
+          <p className="py-4 text-center text-sm text-muted">Belum ada data rekap harian.</p>
+        )}
+        {!dailyRekapLoading && dailyRecap && dailyRecap.students.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-line bg-slate-50 text-xs text-muted dark:border-slate-600 dark:bg-slate-800/60">
+                  <th className="sticky left-0 z-10 bg-slate-50 px-3 py-2 font-semibold dark:bg-slate-800/60">
+                    Nama Siswa
+                  </th>
+                  {dailyRecap.dates.map((ds) => {
+                    const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+                    const dayIdx = new Date(ds + 'T00:00:00+07:00').getDay();
+                    const [, mm, dd] = ds.split('-');
+                    const isToday = ds === todayJakartaKey();
+                    return (
+                      <th
+                        key={ds}
+                        className={`px-1.5 py-2 text-center font-semibold ${isToday ? 'bg-primary/10 text-primary' : ''}`}
+                      >
+                        <div>{dayNames[dayIdx]}</div>
+                        <div>{dd}/{mm}</div>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {dailyRecap.students.map((stu) => (
+                  <tr
+                    key={stu.id}
+                    className="border-b border-line/50 last:border-0 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/40"
+                  >
+                    <td className="sticky left-0 z-10 bg-surface px-3 py-2 dark:bg-slate-900">
+                      <p className="font-semibold text-ink">{stu.name}</p>
+                      <p className="text-xs text-muted">{stu.class ?? '-'} · {stu.location}</p>
+                    </td>
+                    {dailyRecap.dates.map((ds) => {
+                      const status = stu.attendance[ds];
+                      let icon = '—';
+                      let cellClass = 'bg-slate-50 text-slate-300 dark:bg-slate-800/30';
+                      if (status === 'hadir') {
+                        icon = '✅';
+                        cellClass = 'bg-emerald-100 text-emerald-700';
+                      } else if (status === 'tidak_hadir') {
+                        icon = '❌';
+                        cellClass = 'bg-red-100 text-red-600';
+                      } else if (status === 'izin' || status === 'sakit') {
+                        icon = '📝';
+                        cellClass = 'bg-amber-100 text-amber-700';
+                      } else if (status === 'libur') {
+                        icon = '🏖️';
+                        cellClass = 'bg-slate-100 text-slate-400';
+                      }
+                      return (
+                        <td key={ds} className="px-1.5 py-2 text-center">
+                          <span
+                            className={`inline-flex h-7 w-7 items-center justify-center rounded-lg text-xs ${cellClass}`}
+                          >
+                            {icon}
+                          </span>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
