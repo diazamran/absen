@@ -1313,4 +1313,151 @@ export async function pklRoutes(app: FastifyInstance) {
       },
     });
   });
+
+  // ===== REKAP ABSENSI HARIAN PKL =====
+  // Monitor: grid tanggal × siswa, N hari terakhir (default 7, max 30).
+  // Permission: pkl:attendance (TEACHER / ADMIN / MONITOR_PKL)
+  app.get('/pkl/daily-recap', { preHandler: app.requirePermission(PERMISSION_KEYS.pklAttendance) }, async (request, reply) => {
+    const { days } = request.query as { days?: string };
+    const daysCount = Math.min(Math.max(1, Number(days) || 7), 30);
+
+    // Scope: admin lihat semua, supervisor hanya siswa bimbingannya
+    const scope = await getPklScope(request.user!.id);
+
+    // Query 1: assignments aktif (+ relasi student, class, location)
+    const assignments = await prisma.pklAssignment.findMany({
+      where: {
+        isActive: true,
+        ...(!scope.isAdmin && scope.teacherId ? { supervisorId: scope.teacherId } : {}),
+      },
+      include: {
+        student: {
+          include: {
+            user: { select: { fullName: true } },
+            class: { select: { name: true } },
+          },
+        },
+        pklLocation: { select: { id: true, name: true } },
+      },
+      orderBy: { student: { user: { fullName: 'asc' } } },
+    });
+
+    // Hitung array tanggal WIB: dateStrings[0] = hari ini, descending
+    const todayStr = dateKey();
+    const [ty, tm, td] = todayStr.split('-').map(Number);
+    const dateStrings: string[] = [];
+    for (let i = 0; i < daysCount; i++) {
+      const d = new Date(Date.UTC(ty, tm - 1, td - i));
+      dateStrings.push(
+        `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`,
+      );
+    }
+
+    // Hitung nilai UTC yang tersimpan di kolom @db.Date (= WIB - 1 hari karena UTC+7)
+    const dateUTCValues = dateStrings.map((ds) => startOfLocalDay(ds));
+    const minDate = dateUTCValues[dateUTCValues.length - 1];
+    const maxDate = dateUTCValues[0];
+
+    const studentIds = assignments.map((a) => a.studentId);
+
+    if (studentIds.length === 0) {
+      return reply.send({ success: true, data: { dates: dateStrings, students: [] } });
+    }
+
+    // Query 2: attendance CHECK_IN dalam rentang tanggal
+    const attendances = await prisma.attendance.findMany({
+      where: {
+        studentId: { in: studentIds },
+        date: { gte: minDate, lte: maxDate },
+        type: 'CHECK_IN',
+      },
+      select: { studentId: true, date: true, status: true },
+    });
+
+    // Index: studentId → (dateISO → status)
+    const attIndex = new Map<string, Map<string, string>>();
+    for (const att of attendances) {
+      if (!att.studentId) continue;
+      if (!attIndex.has(att.studentId)) attIndex.set(att.studentId, new Map());
+      attIndex.get(att.studentId)!.set(att.date.toISOString(), att.status);
+    }
+
+    // Query 3: izin yang disetujui dengan overlap rentang tanggal
+    const leaves = await prisma.leaveRequest.findMany({
+      where: {
+        studentId: { in: studentIds },
+        startDate: { lte: maxDate },
+        endDate: { gte: minDate },
+        status: 'APPROVED',
+      },
+      select: { studentId: true, startDate: true, endDate: true },
+    });
+
+    // Index: studentId → list of {startDate, endDate}
+    const leaveIndex = new Map<string, Array<{ startDate: Date; endDate: Date }>>();
+    for (const lv of leaves) {
+      if (!lv.studentId) continue;
+      if (!leaveIndex.has(lv.studentId)) leaveIndex.set(lv.studentId, []);
+      leaveIndex.get(lv.studentId)!.push({ startDate: lv.startDate, endDate: lv.endDate });
+    }
+
+    // Map status Prisma ke label Indonesia
+    const statusMap: Record<string, string> = {
+      PRESENT: 'hadir',
+      LATE: 'hadir',
+      SICK: 'sakit',
+      EXCUSED: 'izin',
+      ABSENT: 'tidak_hadir',
+    };
+
+    // Build response per siswa
+    const students = assignments.map((a) => {
+      const attMap = attIndex.get(a.studentId);
+      const studentLeaves = leaveIndex.get(a.studentId) ?? [];
+
+      const attendance: Record<string, string> = {};
+      for (let i = 0; i < dateStrings.length; i++) {
+        const dateStr = dateStrings[i];
+        const dateUTC = dateUTCValues[i];
+        const dateUTCIso = dateUTC.toISOString();
+
+        // (1) Cek record absensi
+        const attStatus = attMap?.get(dateUTCIso);
+        if (attStatus) {
+          attendance[dateStr] = statusMap[attStatus] ?? 'tidak_hadir';
+          continue;
+        }
+
+        // (2) Cek izin yang overlap
+        const hasLeave = studentLeaves.some(
+          (lv) => lv.startDate.getTime() <= dateUTC.getTime() && lv.endDate.getTime() >= dateUTC.getTime(),
+        );
+        if (hasLeave) {
+          attendance[dateStr] = 'izin';
+          continue;
+        }
+
+        // (3) Cek hari Minggu — gunakan dateStr WIB bukan startOfLocalDay
+        const [ry, rm, rd] = dateStr.split('-').map(Number);
+        const datePlain = new Date(Date.UTC(ry, rm - 1, rd));
+        if (datePlain.getUTCDay() === 0) {
+          attendance[dateStr] = 'libur';
+          continue;
+        }
+
+        // (4) Default: belum absen
+        attendance[dateStr] = 'tidak_hadir';
+      }
+
+      return {
+        id: a.studentId,
+        name: a.student.user?.fullName ?? '-',
+        class: a.student.class?.name ?? null,
+        location: a.pklLocation?.name ?? null,
+        attendance,
+      };
+    });
+
+    return reply.send({ success: true, data: { dates: dateStrings, students } });
+  });
 }
