@@ -98,13 +98,13 @@ function roleMenu(user: MeData | null, pklRole?: { isSupervisor: boolean; isPklA
     const isForceManual = user?.student?.allowManualAttendance === true;
     const isPklActive = user?.student?.pklActive === true;
 
-    if (isPklActive && !isForceManual) {
-      // Siswa PKL dengan absen wajah — menu Absen PKL (kamera)
-      add({ to: '/app/pkl-absent', label: 'Absen PKL', icon: <MapPin className="h-5 w-5" /> });
-    }
-    if (isPklActive && isForceManual) {
-      // Siswa PKL yang diaktifkan absen manual — hanya menu Absen Manual
+    // Menu Absen Manual PKL muncul jika admin mengaktifkan flag — tidak perlu pklActive
+    // (siswa mungkin belum di-assign ke lokasi PKL tapi admin sudah set manual)
+    if (isForceManual) {
       add({ to: '/app/pkl-manual-student', label: 'Absen Manual PKL', icon: <MapPin className="h-5 w-5" /> });
+    } else if (isPklActive) {
+      // Siswa PKL normal — menu Absen PKL dengan kamera wajah
+      add({ to: '/app/pkl-absent', label: 'Absen PKL', icon: <MapPin className="h-5 w-5" /> });
     }
     add({ to: '/app/face-me', label: 'Registrasi Wajah', icon: <ScanFace className="h-5 w-5" /> });
     add({ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-5 w-5" /> });
@@ -184,10 +184,11 @@ function buildBottomNav(user: MeData | null, pklRole?: { isSupervisor: boolean; 
     const isPklActive  = user?.student?.pklActive === true;
     return [
       { to: '/app/home',       label: 'Beranda', icon: <Home className="h-6 w-6" /> },
-      // Jika siswa PKL absen manual → shortcut Absen Manual di bottom nav
-      // Jika siswa PKL absen wajah  → shortcut Absen PKL (kamera)
-      // Jika bukan siswa PKL        → shortcut Absen biasa
-      ...(isPklActive && isForceManual
+      // Bottom nav shortcut:
+      // - allowManualAttendance=true → Absen Manual PKL (tidak perlu pklActive)
+      // - pklActive=true normal      → Absen PKL (kamera wajah)
+      // - siswa biasa                → Absen sekolah biasa
+      ...(isForceManual
         ? [{ to: '/app/pkl-manual-student', label: 'Absen PKL', icon: <MapPin className="h-6 w-6" /> }]
         : isPklActive
         ? [{ to: '/app/pkl-absent', label: 'Absen PKL', icon: <MapPin className="h-6 w-6" /> }]
