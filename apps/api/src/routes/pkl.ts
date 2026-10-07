@@ -750,6 +750,7 @@ export async function pklRoutes(app: FastifyInstance) {
         { student: { nis: { contains: search, mode: 'insensitive' } } },
       ];
     }
+    const today = todayStart();
     const rows = await prisma.pklAssignment.findMany({
       where,
       include: {
@@ -757,30 +758,48 @@ export async function pklRoutes(app: FastifyInstance) {
           include: {
             user: { select: { fullName: true } },
             class: { select: { name: true } },
+            attendance: {
+              where: { date: today },
+              orderBy: { createdAt: 'asc' },
+            },
           },
         },
-        pklLocation: { select: { id: true, name: true, city: true } },
+        pklLocation: { select: { id: true, name: true, city: true, latitude: true, longitude: true, radiusMeter: true } },
         supervisor: { include: { user: { select: { fullName: true } } } },
       },
       orderBy: { createdAt: 'desc' },
     });
     return reply.send({
       success: true,
-      data: rows.map((r) => ({
-        id: r.id,
-        studentId: r.studentId,
-        fullName: r.student?.user?.fullName ?? '-',
-        nis: r.student?.nis ?? null,
-        className: r.student?.class?.name ?? null,
-        locationId: r.pklLocationId,
-        locationName: r.pklLocation.name,
-        locationCity: r.pklLocation.city,
-        supervisorId: r.supervisorId,
-        supervisorName: r.supervisor?.user?.fullName ?? null,
-        startDate: r.startDate,
-        endDate: r.endDate,
-        isActive: r.isActive,
-      })),
+      data: rows.map((r) => {
+        const atts = r.student?.attendance ?? [];
+        const inRow = atts.find((x) => x.type === 'CHECK_IN');
+        const outTime = atts.find((x) => x.type === 'CHECK_OUT')?.checkOut ?? inRow?.checkOut ?? null;
+        return {
+          id: r.id,
+          assignmentId: r.id,
+          studentId: r.studentId,
+          fullName: r.student?.user?.fullName ?? '-',
+          nis: r.student?.nis ?? null,
+          className: r.student?.class?.name ?? null,
+          locationId: r.pklLocationId,
+          locationName: r.pklLocation.name,
+          locationCity: r.pklLocation.city,
+          latitude: r.pklLocation.latitude,
+          longitude: r.pklLocation.longitude,
+          radiusMeter: r.pklLocation.radiusMeter,
+          supervisorId: r.supervisorId,
+          supervisorName: r.supervisor?.user?.fullName ?? null,
+          startDate: r.startDate,
+          endDate: r.endDate,
+          isActive: r.isActive,
+          todayAttendance: {
+            checkIn: inRow?.checkIn ? localTime(inRow.checkIn) : null,
+            checkOut: outTime ? localTime(outTime) : null,
+            status: inRow?.status ?? 'NOT_YET',
+          },
+        };
+      }),
     });
   });
 

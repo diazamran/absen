@@ -24,6 +24,11 @@ interface PklAssignment {
   radiusMeter: number;
   supervisorName: string | null;
   className: string | null;
+  todayAttendance?: {
+    checkIn: string | null;
+    checkOut: string | null;
+    status: string;
+  };
 }
 
 interface GeoPos {
@@ -67,6 +72,8 @@ export default function PklAbsent() {
   const [geo, setGeo] = useState<GeoPos | null>(null);
   const [type, setType] = useState<'CHECK_IN' | 'CHECK_OUT'>('CHECK_IN');
   const [modelsLoading, setModelsLoading] = useState(false);
+  const [mode, setMode] = useState<'face' | 'manual'>('face');
+  const [manualLoading, setManualLoading] = useState(false);
 
   // Fetch PKL assignment for this student
   const { data: assignments, isLoading } = useQuery({
@@ -90,6 +97,39 @@ export default function PklAbsent() {
     setGeo(res.position);
     return res.position;
   }, []);
+
+  // Absen manual dari tombol (tanpa wajah)
+  const handleManualAttendance = useCallback(async (attendanceType: 'CHECK_IN' | 'CHECK_OUT') => {
+    if (manualLoading || !assignment) return;
+    setManualLoading(true);
+    const gps = await getGeo();
+    try {
+      const res = await api<{ success: boolean; message: string; data: CheckResult }>('/pkl/attendance', {
+        method: 'POST',
+        body: {
+          type: attendanceType,
+          pklLocationId: assignment.locationId,
+          method: 'MANUAL',
+          ...(gps ? { latitude: gps.latitude, longitude: gps.longitude } : {}),
+        },
+      });
+      const d = res.data as CheckResult;
+      setResult({ ok: true, message: res.message, status: d.status, checkIn: d.checkIn, checkOut: d.checkOut, locationVerified: d.locationVerified });
+      feedbackSuccess();
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['pkl-my-assignment'] });
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'ALREADY_ATTENDANCE') {
+        setResult({ ok: true, message: e.message });
+      } else {
+        setResult({ ok: false, message: e instanceof ApiError ? e.message : 'Gagal absen.' });
+        feedbackError();
+      }
+    } finally {
+      setManualLoading(false);
+      setTimeout(() => setResult(null), 4000);
+    }
+  }, [assignment, manualLoading, getGeo, qc]);
 
   // Start camera — pakai startCamera() dari lib/camera.ts supaya koreksi rotasi
   // (captureFrame) dan mirror preview (CSS .camera-view) berlaku konsisten dengan
@@ -119,12 +159,37 @@ export default function PklAbsent() {
     };
   }, []);
 
+  // Stop/start kamera saat mode berganti
+  useEffect(() => {
+    if (mode === 'manual') {
+      stopCamera(streamRef.current);
+      streamRef.current = null;
+      setReady(false);
+    } else {
+      let cancelled = false;
+      const restart = async () => {
+        try {
+          setModelsLoading(true);
+          const stream = await startCamera(videoRef.current!, 'user');
+          streamRef.current = stream;
+          if (!cancelled) setReady(true);
+        } catch {
+          if (!cancelled) setError('Kamera tidak dapat diakses.');
+        } finally {
+          if (!cancelled) setModelsLoading(false);
+        }
+      };
+      restart();
+      return () => { cancelled = true; };
+    }
+  }, [mode]);
+
   // Scan loop: face auto-detect
   // Pakai captureFrame() → canvas yang sudah dikoreksi orientasinya → detectFaceDescriptor
   // dari canvas. Sebelumnya detectFaceDescriptor(video) langsung, tanpa koreksi rotasi
   // → wajah miring di Android tidak terdeteksi.
   useEffect(() => {
-    if (!ready || !assignment) return;
+    if (!ready || !assignment || mode !== 'face') return;
     let alive = true;
     const loop = async () => {
       if (!alive || busyRef.current) { setTimeout(loop, 500); return; }
@@ -176,7 +241,7 @@ export default function PklAbsent() {
     };
     void loop();
     return () => { alive = false; };
-  }, [ready, assignment, type, getGeo, qc]);
+  }, [ready, assignment, type, getGeo, qc, mode]);
 
   if (isLoading) return <div className="flex min-h-[50dvh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
@@ -234,23 +299,83 @@ export default function PklAbsent() {
         ))}
       </div>
 
-      {/* Camera */}
-      <div className="relative flex-1 overflow-hidden bg-black">
-        <video ref={videoRef} className="camera-view h-full w-full" muted playsInline />
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="relative h-52 w-52">
-            <div className="absolute inset-0 rounded-[2rem] border-2 border-white/40" />
-            <div className="absolute left-0 top-0 h-10 w-10 rounded-tl-[2rem] border-l-4 border-t-4 border-primary" />
-            <div className="absolute right-0 top-0 h-10 w-10 rounded-tr-[2rem] border-r-4 border-t-4 border-primary" />
-            <div className="absolute bottom-0 left-0 h-10 w-10 rounded-bl-[2rem] border-b-4 border-l-4 border-primary" />
-            <div className="absolute bottom-0 right-0 h-10 w-10 rounded-br-[2rem] border-b-4 border-r-4 border-primary" />
-            <div className="absolute inset-x-4 animate-scan h-0.5 rounded-full bg-primary shadow-[0_0_12px_rgba(13,148,136,.9)]" />
-          </div>
-        </div>
-        <p className="absolute inset-x-0 bottom-4 text-center text-sm text-white/90">
-          {modelsLoading ? 'Menyiapkan model wajah…' : 'Arahkan wajah ke kamera untuk absen PKL'}
-        </p>
+      {/* Mode selector */}
+      <div className="flex gap-2 bg-slate-800 px-4 py-2">
+        {(['face', 'manual'] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => setMode(m)}
+            className={`flex-1 rounded-xl py-2 text-sm font-bold transition ${
+              mode === m ? 'bg-primary text-white' : 'bg-slate-700 text-white/60'
+            }`}
+          >
+            {m === 'face' ? '🤳 Absen Wajah' : '✋ Absen Manual'}
+          </button>
+        ))}
       </div>
+
+      {/* Camera — hanya tampil saat mode wajah */}
+      {mode === 'face' && (
+        <div className="relative flex-1 overflow-hidden bg-black">
+          <video ref={videoRef} className="camera-view h-full w-full" muted playsInline />
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div className="relative h-52 w-52">
+              <div className="absolute inset-0 rounded-[2rem] border-2 border-white/40" />
+              <div className="absolute left-0 top-0 h-10 w-10 rounded-tl-[2rem] border-l-4 border-t-4 border-primary" />
+              <div className="absolute right-0 top-0 h-10 w-10 rounded-tr-[2rem] border-r-4 border-t-4 border-primary" />
+              <div className="absolute bottom-0 left-0 h-10 w-10 rounded-bl-[2rem] border-b-4 border-l-4 border-primary" />
+              <div className="absolute bottom-0 right-0 h-10 w-10 rounded-br-[2rem] border-b-4 border-r-4 border-primary" />
+              <div className="absolute inset-x-4 animate-scan h-0.5 rounded-full bg-primary shadow-[0_0_12px_rgba(13,148,136,.9)]" />
+            </div>
+          </div>
+          <p className="absolute inset-x-0 bottom-4 text-center text-sm text-white/90">
+            {modelsLoading ? 'Menyiapkan model wajah…' : 'Arahkan wajah ke kamera untuk absen PKL'}
+          </p>
+        </div>
+      )}
+
+      {/* Manual mode — tombol datang & pulang */}
+      {mode === 'manual' && (
+        <div className="flex flex-1 flex-col gap-4 bg-slate-900 px-4 py-6">
+          {/* Status hari ini */}
+          <div className="rounded-2xl bg-slate-800 p-4 text-sm">
+            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-white/50">Status Absensi Hari Ini</p>
+            {assignment.todayAttendance?.checkIn ? (
+              <div className="space-y-1 text-white">
+                <p>✅ Datang: <span className="font-mono font-bold">{assignment.todayAttendance.checkIn}</span></p>
+                {assignment.todayAttendance.checkOut
+                  ? <p>✅ Pulang: <span className="font-mono font-bold">{assignment.todayAttendance.checkOut}</span></p>
+                  : <p className="text-amber-400">⏳ Belum absen pulang</p>
+                }
+              </div>
+            ) : (
+              <p className="text-white/60">Belum absen hari ini</p>
+            )}
+          </div>
+
+          {/* Tombol Datang */}
+          <button
+            onClick={() => handleManualAttendance('CHECK_IN')}
+            disabled={manualLoading}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-5 text-lg font-bold text-white disabled:opacity-60 active:bg-emerald-600"
+          >
+            {manualLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
+            ✓ Absen Datang
+          </button>
+
+          {/* Tombol Pulang */}
+          <button
+            onClick={() => handleManualAttendance('CHECK_OUT')}
+            disabled={manualLoading}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-500 py-5 text-lg font-bold text-white disabled:opacity-60 active:bg-teal-600"
+          >
+            {manualLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
+            ↩ Absen Pulang
+          </button>
+
+          {geoLoading && <p className="text-center text-xs text-amber-400">📍 Mengambil lokasi GPS…</p>}
+        </div>
+      )}
 
       {/* Result overlay */}
       {result && (
