@@ -19,12 +19,19 @@ export default function Absent() {
   const { user } = useAuth();
   const isStaff = user?.roleKey !== 'STUDENT' && user?.roleKey !== 'PARENT';
   const isStudent = user?.roles?.includes('STUDENT') || user?.roleKey === 'STUDENT';
+  // Siswa yang diaktifkan absen manual PKL oleh admin
+  const allowManual = user?.student?.allowManualAttendance === true;
 
   // Siswa: tanpa Kartu/NFC, dan QR hanya untuk ditunjukkan ke gerbang (bukan memindai)
+  // Jika siswa punya allowManualAttendance: aktifkan menu Manual → arahkan ke pkl-manual-student
   const methods = isStudent
-    ? METHODS.filter((m) => m.key !== 'card').map((m) =>
-        m.key === 'qr' ? { ...m, label: 'QR Saya', desc: 'QR pribadi untuk absen di gerbang' } : m,
-      )
+    ? METHODS.filter((m) => m.key !== 'card').map((m) => {
+        if (m.key === 'qr') return { ...m, label: 'QR Saya', desc: 'QR pribadi untuk absen di gerbang' };
+        if (m.key === 'manual' && allowManual) {
+          return { ...m, label: 'Manual', desc: 'Tombol Datang/Pulang dengan GPS', to: '/app/pkl-manual-student', color: 'from-emerald-500 to-teal-500' };
+        }
+        return m;
+      })
     : METHODS;
 
   // Status registrasi wajah (khusus siswa)
@@ -126,18 +133,27 @@ export default function Absent() {
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        {methods.map((m) => (
-          <button key={m.key} onClick={() => m.to !== '/app/absent' && navigate(m.to)} disabled={m.key === 'manual' && !isStaff}>
-            <Card className={`h-full text-left transition-transform active:scale-[.98] ${m.key === 'manual' && !isStaff ? 'opacity-50' : ''}`}>
-              <div className={`mb-3 inline-flex rounded-2xl bg-gradient-to-br ${m.color} p-3 text-white`}>{m.icon}</div>
-              <p className="font-bold text-ink">{m.label}</p>
-              <p className="mt-0.5 text-xs text-muted">{m.desc}</p>
-            </Card>
-          </button>
-        ))}
+        {methods.map((m) => {
+          const isManual = m.key === 'manual';
+          const manualActive = isStaff || allowManual;
+          const disabled = isManual && !manualActive;
+          return (
+            <button
+              key={m.key}
+              onClick={() => !disabled && m.to !== '/app/absent' && navigate(m.to)}
+              disabled={disabled}
+            >
+              <Card className={`h-full text-left transition-transform active:scale-[.98] ${disabled ? 'opacity-50' : ''}`}>
+                <div className={`mb-3 inline-flex rounded-2xl bg-gradient-to-br ${m.color} p-3 text-white`}>{m.icon}</div>
+                <p className="font-bold text-ink">{m.label}</p>
+                <p className="mt-0.5 text-xs text-muted">{m.desc}</p>
+              </Card>
+            </button>
+          );
+        })}
       </div>
 
-      {isStudent && (
+      {isStudent && !allowManual && (
         <Card className="border-amber-200 bg-amber-50/60 text-sm text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
           Absensi manual hanya dapat dilakukan oleh guru atau petugas sekolah. Gunakan Wajah atau tunjukkan QR Saya ke petugas gerbang.
         </Card>

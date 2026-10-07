@@ -8,7 +8,7 @@ import { startCamera, stopCamera, captureFrame } from '../../lib/camera';
 import { detectFaceDescriptor, framesHaveMotion, initFaceModels, isFaceModelReady, resetFaceModelCaches } from '../../lib/face';
 import { getBestEffortPosition, invalidateGpsCache, warmUpGps, type GeoPosition } from '../../lib/geo';
 import { feedbackSuccess, feedbackInfo, feedbackError } from '../../lib/feedback';
-import { Segmented, Badge, Button } from '../../lib/ui';
+import { Badge, Button } from '../../lib/ui';
 import { STATUS_LABELS } from '../../lib/format';
 
 type Type = 'CHECK_IN' | 'CHECK_OUT';
@@ -422,25 +422,10 @@ export default function FaceScan() {
         </div>
       )}
 
-      <div className="flex justify-center px-4 pb-3">
-        <Segmented
-          value={type}
-          onChange={(t) => {
-            doneRef.current = false;
-            setDone(false);
-            setType(t);
-            setResult(null);
-            setHint('');
-            setLocBanner(null);
-          }}
-          options={[
-            ...(canCheckIn ? [{ value: 'CHECK_IN' as Type, label: 'Absen Datang' }] : []),
-            ...(canCheckOut ? [{ value: 'CHECK_OUT' as Type, label: 'Absen Pulang' }] : []),
-          ]}
-        />
-      </div>
+      {/* Tab Absen Datang / Pulang dihapus — scan otomatis berdasarkan waktu.
+          Info mode aktif ditampilkan sebagai teks di bawah bingkai kamera. */}
 
-      {/* Tip absen pulang: cahaya sore sering dari belakang → deteksi wajah gagal */}
+      {/* Tip absen pulang sore hari */}
       {type === 'CHECK_OUT' && (
         <div className="mx-4 mb-1 flex items-start gap-2 rounded-xl bg-amber-500/10 px-3 py-2">
           <span className="shrink-0 text-base">💡</span>
@@ -499,7 +484,9 @@ export default function FaceScan() {
               ) : modelsLoading ? (
                 'Menyiapkan model wajah… (±5 MB, sekali saja)'
               ) : auto ? (
-                'Otomatis: tatap kamera — absen datang langsung tercatat tanpa sentuh layar'
+                type === 'CHECK_IN'
+                  ? '📍 Mode Datang — tatap kamera, absen otomatis tercatat'
+                  : '🏠 Mode Pulang — tatap kamera, absen pulang tercatat'
               ) : (
                 'Posisikan wajah di dalam area, lalu tekan tombol'
               )}
