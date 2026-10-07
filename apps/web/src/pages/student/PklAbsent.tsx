@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, CheckCircle2, XCircle, Loader2, ArrowLeft, Navigation, Wifi, WifiOff } from 'lucide-react';
+import { MapPin, CheckCircle2, XCircle, Loader2, ArrowLeft, Navigation, WifiOff, Wrench } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../../lib/toast';
-import { Button, Card, Badge } from '../../lib/ui';
-import { detectFaceDescriptor, initFaceModels, isFaceModelReady } from '../../lib/face';
+import { Card } from '../../lib/ui';
+import {
+  detectFaceDescriptor, framesHaveMotion,
+  initFaceModels, isFaceModelReady, resetFaceModelCaches,
+} from '../../lib/face';
 import { startCamera, stopCamera, captureFrame } from '../../lib/camera';
 import { getBestEffortPosition, warmUpGps } from '../../lib/geo';
-import { feedbackSuccess, feedbackError } from '../../lib/feedback';
-import { STATUS_LABELS } from '../../lib/format';
+import { feedbackSuccess, feedbackError, feedbackInfo } from '../../lib/feedback';
 
 interface PklAssignment {
   assignmentId: string;
@@ -32,13 +34,8 @@ interface PklAssignment {
   };
 }
 
-interface GeoPos {
-  latitude: number;
-  longitude: number;
-  accuracy: number;
-}
+interface GeoPos { latitude: number; longitude: number; accuracy: number; }
 
-/** Jarak haversine (meter) — untuk indikator "berapa jauh dari titik PKL". */
 function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000;
   const toRad = (d: number) => (d * Math.PI) / 180;
@@ -49,12 +46,16 @@ function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number)
 }
 
 interface CheckResult {
-  ok: boolean;
-  message: string;
-  status?: string;
-  checkIn?: string;
-  checkOut?: string;
-  locationVerified?: boolean;
+  ok: boolean; message: string; status?: string;
+  checkIn?: string; checkOut?: string; locationVerified?: boolean;
+}
+
+/** Hitung menit sejak tengah malam lokal WIB. */
+function nowMinutesWIB(): number {
+  const now = new Date();
+  // Offset WIB +7 jam
+  const wib = new Date(now.getTime() + 7 * 3600_000);
+  return wib.getUTCHours() * 60 + wib.getUTCMinutes();
 }
 
 export default function PklAbsent() {
@@ -73,8 +74,15 @@ export default function PklAbsent() {
   const [geo, setGeo] = useState<GeoPos | null>(null);
   const [type, setType] = useState<'CHECK_IN' | 'CHECK_OUT'>('CHECK_IN');
   const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelError, setModelError] = useState(false);
+  const [repairing, setRepairing] = useState(false);
   const [manualLoading, setManualLoading] = useState(false);
   const [mode, setMode] = useState<'face' | 'manual'>('face');
+  const [hint, setHint] = useState('');
+
+  // Jadwal absensi PKL — fetch dari /api/settings/public, sama persis dengan FaceScan.tsx
+  const [rules, setRules] = useState<Record<string, unknown> | null>(null);
+  const [nowTick, setNowTick] = useState(0);
 
   // Fetch PKL assignment for this student
   const { data: assignments, isLoading } = useQuery({
@@ -86,12 +94,59 @@ export default function PklAbsent() {
       return (r.data ?? []).filter((s) => s.studentId === myStudentId || s.nis === myNis);
     },
     enabled: !!user,
-    refetchInterval: 30_000, // refresh status absensi tiap 30 detik agar tidak stale
+    refetchInterval: 30_000,
   });
 
   const assignment = assignments?.[0];
 
-  // Get GPS position — best-effort via modul geo bersama (fallback akurasi + cache)
+  // forceManual: siswa dengan allowManualAttendance=true langsung ke mode manual
+  const forceManual = assignment?.allowManualAttendance === true;
+  useEffect(() => {
+    if (forceManual) setMode('manual');
+  }, [forceManual]);
+
+  // Fetch jadwal + refresh tiap 30 detik + saat halaman kembali visible
+  useEffect(() => {
+    const fetchRules = () => {
+      fetch('/api/settings/public')
+        .then((r) => r.json())
+        .then((d) => setRules(d?.data?.rules ?? null))
+        .catch(() => {});
+    };
+    fetchRules();
+    const id = setInterval(() => setNowTick((t) => t + 1), 30_000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') { fetchRules(); setNowTick((t) => t + 1); }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
+  }, []);
+
+  // Kalkulasi canCheckIn / canCheckOut dari jadwal PKL (per-lokasi → PKL global → sekolah)
+  // Sama persis dengan pola FaceScan.tsx. nowTick memicu re-kalkulasi tiap 30 detik.
+  void nowTick;
+  const num = (v: unknown, d: number) => (typeof v === 'number' ? v : d);
+  const nowMin = nowMinutesWIB();
+
+  const isPklStudent = true; // halaman ini khusus siswa PKL
+  const canCheckIn = rules
+    ? nowMin <= (num(isPklStudent && (rules.pklCheckInDeadlineHour != null) ? rules.pklCheckInDeadlineHour : rules.checkInDeadlineHour, 23) * 60 +
+        num(isPklStudent && (rules.pklCheckInDeadlineHour != null) ? rules.pklCheckInDeadlineMinute : rules.checkInDeadlineMinute, 59))
+    : true;
+  const earlyH = num(isPklStudent && (rules?.pklEarlyLeaveBeforeHour != null) ? rules.pklEarlyLeaveBeforeHour : (rules?.earlyLeaveBeforeHour ?? rules?.checkOutAfterHour), 15);
+  const earlyM = num(isPklStudent && (rules?.pklEarlyLeaveBeforeHour != null) ? rules.pklEarlyLeaveBeforeMinute : (rules?.earlyLeaveBeforeMinute ?? rules?.checkOutAfterMinute), 0);
+  const canCheckOut = rules ? nowMin >= earlyH * 60 + earlyM : true;
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  const checkInDeadlineH = num(isPklStudent && (rules?.pklCheckInDeadlineHour != null) ? rules.pklCheckInDeadlineHour : rules?.checkInDeadlineHour, 23);
+  const checkInDeadlineM = num(isPklStudent && (rules?.pklCheckInDeadlineHour != null) ? rules.pklCheckInDeadlineMinute : rules?.checkInDeadlineMinute, 59);
+
+  // Auto-switch tab jika waktu berubah dan tab aktif tidak lagi tersedia
+  useEffect(() => {
+    if (!rules) return;
+    if (type === 'CHECK_IN' && !canCheckIn && canCheckOut) setType('CHECK_OUT');
+    else if (type === 'CHECK_OUT' && !canCheckOut && canCheckIn) setType('CHECK_IN');
+  }, [rules, canCheckIn, canCheckOut, type]);
+
   const getGeo = useCallback(async (): Promise<GeoPos | null> => {
     setGeoLoading(true);
     const res = await getBestEffortPosition();
@@ -99,14 +154,6 @@ export default function PklAbsent() {
     setGeo(res.position);
     return res.position;
   }, []);
-
-  // Absen manual dari tombol (tanpa wajah)
-  // forceManual: jika siswa diizinkan absen manual (allowManualAttendance=true),
-  // paksa ke mode manual dan sembunyikan toggle agar tidak membingungkan.
-  const forceManual = assignment?.allowManualAttendance === true;
-  useEffect(() => {
-    if (forceManual) setMode('manual');
-  }, [forceManual]);
 
   const handleManualAttendance = useCallback(async (attendanceType: 'CHECK_IN' | 'CHECK_OUT') => {
     if (manualLoading || !assignment) return;
@@ -130,6 +177,7 @@ export default function PklAbsent() {
     } catch (e) {
       if (e instanceof ApiError && e.code === 'ALREADY_ATTENDANCE') {
         setResult({ ok: true, message: e.message });
+        feedbackInfo();
       } else {
         setResult({ ok: false, message: e instanceof ApiError ? e.message : 'Gagal absen.' });
         feedbackError();
@@ -140,10 +188,34 @@ export default function PklAbsent() {
     }
   }, [assignment, manualLoading, getGeo, qc]);
 
-  // Start camera — pakai startCamera() dari lib/camera.ts supaya koreksi rotasi
-  // (captureFrame) dan mirror preview (CSS .camera-view) berlaku konsisten dengan
-  // FaceScan.tsx. Sebelumnya kamera dibuka manual → frame tidak dikoreksi orientasinya
-  // → face-api.js gagal mendeteksi wajah yang miring di Android.
+  // Perbaiki model wajah (hapus cache korup, unduh ulang)
+  const repairModels = useCallback(async () => {
+    setRepairing(true);
+    setModelError(false);
+    await resetFaceModelCaches();
+    try {
+      await initFaceModels();
+      toast('success', 'Model wajah berhasil diperbaiki. Silakan coba absen lagi.');
+    } catch {
+      setModelError(true);
+      toast('error', 'Gagal memperbaiki model. Periksa koneksi lalu coba lagi.');
+    } finally {
+      setRepairing(false);
+    }
+  }, [toast]);
+
+  // Helper: tunggu frame video benar-benar siap (videoWidth > 0) sebelum setReady.
+  // Tanpa ini, scan loop berjalan di 2–3 iterasi pertama dengan frame hitam di Android.
+  const waitForFrame = (video: HTMLVideoElement) =>
+    new Promise<void>((resolve) => {
+      const check = () => {
+        if (video.videoWidth > 0) resolve();
+        else requestAnimationFrame(check);
+      };
+      requestAnimationFrame(check);
+    });
+
+  // Init kamera pertama kali (hanya saat mode face atau belum ada stream)
   useEffect(() => {
     let cancelled = false;
     const init = async () => {
@@ -153,7 +225,9 @@ export default function PklAbsent() {
         void warmUpGps();
         const stream = await startCamera(videoRef.current!, 'user');
         streamRef.current = stream;
-        if (!cancelled) setReady(true);
+        // FIX 1: Tunggu frame pertama siap sebelum enable scan loop
+        if (videoRef.current) await waitForFrame(videoRef.current);
+        if (!cancelled) { setReady(true); setError(''); }
       } catch {
         if (!cancelled) setError('Kamera tidak dapat diakses.');
       } finally {
@@ -168,16 +242,13 @@ export default function PklAbsent() {
     };
   }, []);
 
-  // Stop/start kamera saat mode berganti
+  // Stop/restart kamera saat mode berganti
   useEffect(() => {
     if (mode === 'manual') {
       stopCamera(streamRef.current);
       streamRef.current = null;
       setReady(false);
-      // Reset busyRef: jika request face sedang in-flight saat pengguna beralih ke manual,
-      // busyRef.current akan tetap true ketika kembali ke face dan scan loop tidak akan
-      // pernah memproses frame. Reset di sini menjamin scan loop baru bisa berjalan.
-      busyRef.current = false;
+      busyRef.current = false; // reset agar scan loop tidak terkunci saat kembali ke face
     } else {
       let cancelled = false;
       const restart = async () => {
@@ -185,7 +256,9 @@ export default function PklAbsent() {
           setModelsLoading(true);
           const stream = await startCamera(videoRef.current!, 'user');
           streamRef.current = stream;
-          if (!cancelled) setReady(true);
+          // FIX 1: Tunggu frame pertama siap sebelum enable scan loop
+          if (videoRef.current) await waitForFrame(videoRef.current);
+          if (!cancelled) { setReady(true); setError(''); }
         } catch {
           if (!cancelled) setError('Kamera tidak dapat diakses.');
         } finally {
@@ -197,66 +270,105 @@ export default function PklAbsent() {
     }
   }, [mode]);
 
-  // Scan loop: face auto-detect
-  // Pakai captureFrame() → canvas yang sudah dikoreksi orientasinya → detectFaceDescriptor
-  // dari canvas. Sebelumnya detectFaceDescriptor(video) langsung, tanpa koreksi rotasi
-  // → wajah miring di Android tidak terdeteksi.
+  // Scan loop face — auto-detect dengan liveness check + guard waktu
   useEffect(() => {
     if (!ready || !assignment || mode !== 'face') return;
     let alive = true;
+
     const loop = async () => {
       if (!alive || busyRef.current) { setTimeout(loop, 500); return; }
+
+      // FIX 5: Guard waktu — skip scan jika tab yang aktif tidak tersedia
+      if ((type === 'CHECK_IN' && !canCheckIn) || (type === 'CHECK_OUT' && !canCheckOut)) {
+        setHint(type === 'CHECK_IN'
+          ? `Absen datang sudah tutup pukul ${pad2(checkInDeadlineH)}:${pad2(checkInDeadlineM)}`
+          : `Absen pulang dibuka pukul ${pad2(earlyH)}:${pad2(earlyM)}`);
+        setTimeout(loop, 1000);
+        return;
+      }
+
       const video = videoRef.current;
-      if (video && video.readyState >= 2) {
+      if (!video || video.readyState < 2) { setTimeout(loop, 500); return; }
+
+      try {
+        // FIX 2: Liveness check — cegah spoofing foto & frame beku (0.003 = lebih longgar)
+        let motion = false;
+        for (let attempt = 0; attempt < 2 && !motion; attempt++) {
+          const f1 = captureFrame(video);
+          await new Promise((r) => setTimeout(r, 150));
+          const f2 = captureFrame(video);
+          if (f1 && f2) motion = await framesHaveMotion(f1, f2, 0.003);
+        }
+        if (!motion) {
+          setHint('Gerakkan kepala sedikit…');
+          setTimeout(loop, 800);
+          return;
+        }
+
+        // Ambil frame dikoreksi rotasi → decode → detect descriptor
+        const frameDataUrl = captureFrame(video);
+        if (!frameDataUrl || busyRef.current) { setTimeout(loop, 800); return; }
+
+        const img = new Image();
+        img.src = frameDataUrl;
+        await img.decode();
+        const descriptor = await detectFaceDescriptor(img);
+
+        if (!descriptor) {
+          setHint('Posisikan wajah di dalam bingkai');
+          setTimeout(loop, 800);
+          return;
+        }
+
+        if (busyRef.current) { setTimeout(loop, 500); return; }
+        busyRef.current = true;
+        setHint('');
+        const gps = await getGeo();
+
         try {
-          // Ambil frame lewat captureFrame agar koreksi rotasi diterapkan
-          const frameDataUrl = captureFrame(video);
-          if (frameDataUrl && !busyRef.current) {
-            // Buat HTMLImageElement dari frame yang sudah dikoreksi orientasinya
-            const img = new Image();
-            img.src = frameDataUrl;
-            await img.decode();
-            const descriptor = await detectFaceDescriptor(img);
-            if (descriptor && !busyRef.current) {
-              busyRef.current = true;
-              const gps = await getGeo();
-              try {
-                const res = await api<{ success: boolean; message: string; data: CheckResult }>('/pkl/attendance', {
-                  method: 'POST',
-                  body: {
-                    type,
-                    pklLocationId: assignment.locationId,
-                    method: 'FACE',
-                    descriptor: Array.from(descriptor),
-                    ...(gps ? { latitude: gps.latitude, longitude: gps.longitude } : {}),
-                  },
-                });
-                const d = res.data as CheckResult;
-                setResult({ ok: true, message: res.message, status: d.status, checkIn: d.checkIn, checkOut: d.checkOut, locationVerified: d.locationVerified });
-                feedbackSuccess();
-                qc.invalidateQueries({ queryKey: ['dashboard'] });
-              } catch (e) {
-                if (e instanceof ApiError && e.code === 'ALREADY_ATTENDANCE') {
-                  setResult({ ok: true, message: e.message });
-                } else {
-                  setResult({ ok: false, message: e instanceof ApiError ? e.message : 'Gagal absen.' });
-                  feedbackError();
-                }
-              } finally {
-                busyRef.current = false;
-                setTimeout(() => setResult(null), 4000);
-              }
-            }
+          const res = await api<{ success: boolean; message: string; data: CheckResult }>('/pkl/attendance', {
+            method: 'POST',
+            body: {
+              type,
+              pklLocationId: assignment.locationId,
+              method: 'FACE',
+              descriptor: Array.from(descriptor),
+              ...(gps ? { latitude: gps.latitude, longitude: gps.longitude } : {}),
+            },
+          });
+          const d = res.data as CheckResult;
+          setResult({ ok: true, message: res.message, status: d.status, checkIn: d.checkIn, checkOut: d.checkOut, locationVerified: d.locationVerified });
+          feedbackSuccess();
+          qc.invalidateQueries({ queryKey: ['dashboard'] });
+          qc.invalidateQueries({ queryKey: ['pkl-my-assignment'] });
+        } catch (e) {
+          if (e instanceof ApiError && e.code === 'ALREADY_ATTENDANCE') {
+            setResult({ ok: true, message: e.message });
+            feedbackInfo();
+          } else {
+            setResult({ ok: false, message: e instanceof ApiError ? e.message : 'Gagal absen.' });
+            feedbackError();
           }
-        } catch { /* skip frame */ }
+        } finally {
+          busyRef.current = false;
+          setTimeout(() => setResult(null), 4000);
+        }
+      } catch {
+        // FIX 6: Model error handling
+        if (!isFaceModelReady()) setModelError(true);
       }
       setTimeout(loop, 800);
     };
+
     void loop();
     return () => { alive = false; };
-  }, [ready, assignment, type, getGeo, qc, mode]);
+  }, [ready, assignment, type, getGeo, qc, mode, canCheckIn, canCheckOut, earlyH, earlyM, checkInDeadlineH, checkInDeadlineM, pad2]);
 
-  if (isLoading) return <div className="flex min-h-[50dvh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (isLoading) return (
+    <div className="flex min-h-[50dvh] items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
 
   if (!assignment) {
     return (
@@ -274,7 +386,9 @@ export default function PklAbsent() {
     <div className="-mx-4 -mt-5 flex min-h-[calc(100dvh-0px)] flex-col lg:mx-0 lg:mt-0">
       {/* Header */}
       <div className="flex items-center justify-between bg-slate-950 px-4 py-3 text-white">
-        <button onClick={() => navigate(-1)} className="rounded-xl p-2 hover:bg-white/10"><ArrowLeft className="h-5 w-5" /></button>
+        <button onClick={() => navigate(-1)} className="rounded-xl p-2 hover:bg-white/10">
+          <ArrowLeft className="h-5 w-5" />
+        </button>
         <div className="text-center">
           <p className="text-sm font-bold">{assignment.locationName}</p>
           <p className="text-[10px] uppercase tracking-widest text-white/60">Absensi PKL</p>
@@ -285,15 +399,13 @@ export default function PklAbsent() {
         </span>
       </div>
 
-      {/* Indikator jarak ke titik PKL — hijau = dalam radius, merah = di luar radius */}
+      {/* Indikator jarak ke titik PKL */}
       {geo && assignment.latitude != null && assignment.longitude != null && (
-        <div
-          className={`px-4 py-2 text-center text-xs font-semibold ${
-            haversineMeters(geo.latitude, geo.longitude, assignment.latitude, assignment.longitude) <= assignment.radiusMeter
-              ? 'bg-emerald-500/15 text-emerald-300'
-              : 'bg-red-500/15 text-red-300'
-          }`}
-        >
+        <div className={`px-4 py-2 text-center text-xs font-semibold ${
+          haversineMeters(geo.latitude, geo.longitude, assignment.latitude, assignment.longitude) <= assignment.radiusMeter
+            ? 'bg-emerald-500/15 text-emerald-300'
+            : 'bg-red-500/15 text-red-300'
+        }`}>
           {(() => {
             const d = Math.round(haversineMeters(geo.latitude, geo.longitude, assignment.latitude, assignment.longitude));
             return d <= assignment.radiusMeter
@@ -303,20 +415,34 @@ export default function PklAbsent() {
         </div>
       )}
 
-      {/* Type selector — hanya relevan di mode wajah (scan loop pakai state `type`) */}
+      {/* Type selector (mode wajah) — hanya tampilkan tombol sesuai waktu */}
       {mode === 'face' && (
         <div className="flex gap-2 bg-slate-900 px-4 py-2">
-          {(['CHECK_IN', 'CHECK_OUT'] as const).map((t) => (
-            <button key={t} onClick={() => setType(t)} className={`flex-1 rounded-xl py-2 text-sm font-bold transition ${type === t ? 'bg-primary text-white' : 'bg-slate-700 text-white/60'}`}>
-              {t === 'CHECK_IN' ? '📍 Absen Datang' : '🏠 Absen Pulang'}
+          {canCheckIn && (
+            <button
+              onClick={() => setType('CHECK_IN')}
+              className={`flex-1 rounded-xl py-2 text-sm font-bold transition ${type === 'CHECK_IN' ? 'bg-primary text-white' : 'bg-slate-700 text-white/60'}`}
+            >
+              📍 Absen Datang
             </button>
-          ))}
+          )}
+          {canCheckOut && (
+            <button
+              onClick={() => setType('CHECK_OUT')}
+              className={`flex-1 rounded-xl py-2 text-sm font-bold transition ${type === 'CHECK_OUT' ? 'bg-primary text-white' : 'bg-slate-700 text-white/60'}`}
+            >
+              🏠 Absen Pulang
+            </button>
+          )}
+          {!canCheckIn && !canCheckOut && (
+            <p className="flex-1 rounded-xl bg-slate-700 py-2 text-center text-xs text-white/50">
+              Di luar jam absensi PKL
+            </p>
+          )}
         </div>
       )}
 
-      {/* Mode selector — hanya tampil jika siswa bisa pilih kedua mode.
-          Jika admin mengaktifkan allowManualAttendance untuk siswa ini,
-          toggle disembunyikan dan halaman langsung masuk mode manual. */}
+      {/* Mode selector — hanya tampil jika bukan forceManual */}
       {!forceManual && (
         <div className="flex gap-2 bg-slate-800 px-4 py-2">
           {(['face', 'manual'] as const).map((m) => (
@@ -333,10 +459,11 @@ export default function PklAbsent() {
         </div>
       )}
 
-      {/* Camera — hanya tampil saat mode wajah */}
+      {/* ── MODE WAJAH ── */}
       {mode === 'face' && (
         <div className="relative flex-1 overflow-hidden bg-black">
           <video ref={videoRef} className="camera-view h-full w-full" muted playsInline />
+          {/* Bingkai scan */}
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div className="relative h-52 w-52">
               <div className="absolute inset-0 rounded-[2rem] border-2 border-white/40" />
@@ -347,13 +474,35 @@ export default function PklAbsent() {
               <div className="absolute inset-x-4 animate-scan h-0.5 rounded-full bg-primary shadow-[0_0_12px_rgba(13,148,136,.9)]" />
             </div>
           </div>
+          {/* Hint / status teks */}
           <p className="absolute inset-x-0 bottom-4 text-center text-sm text-white/90">
-            {modelsLoading ? 'Menyiapkan model wajah…' : 'Arahkan wajah ke kamera untuk absen PKL'}
+            {hint ? (
+              <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-amber-300">{hint}</span>
+            ) : modelsLoading ? (
+              'Menyiapkan model wajah…'
+            ) : !canCheckIn && !canCheckOut ? (
+              <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-white/60">Di luar jam absensi PKL</span>
+            ) : (
+              'Arahkan wajah ke kamera untuk absen PKL'
+            )}
           </p>
+          {/* FIX 6: Tombol perbaiki model jika error */}
+          {modelError && (
+            <div className="absolute inset-x-0 bottom-16 flex justify-center">
+              <button
+                onClick={() => void repairModels()}
+                disabled={repairing}
+                className="flex items-center gap-2 rounded-full bg-red-500/80 px-4 py-2 text-xs font-bold text-white backdrop-blur disabled:opacity-50"
+              >
+                {repairing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+                Perbaiki Model Wajah
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Manual mode — tombol datang & pulang */}
+      {/* ── MODE MANUAL ── */}
       {mode === 'manual' && (
         <div className="flex flex-1 flex-col gap-4 bg-slate-900 px-4 py-6">
           {/* Status hari ini */}
@@ -372,25 +521,47 @@ export default function PklAbsent() {
             )}
           </div>
 
-          {/* Tombol Datang */}
-          <button
-            onClick={() => handleManualAttendance('CHECK_IN')}
-            disabled={manualLoading || !!assignment.todayAttendance?.checkIn}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-5 text-lg font-bold text-white disabled:opacity-50 active:bg-emerald-600"
-          >
-            {manualLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
-            {assignment.todayAttendance?.checkIn ? '✓ Sudah Absen Datang' : '✓ Absen Datang'}
-          </button>
+          {/* Tombol Datang — hanya tampil saat canCheckIn */}
+          {canCheckIn && (
+            <button
+              onClick={() => handleManualAttendance('CHECK_IN')}
+              disabled={manualLoading || !!assignment.todayAttendance?.checkIn}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-5 text-lg font-bold text-white disabled:opacity-50 active:bg-emerald-600"
+            >
+              {manualLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
+              {assignment.todayAttendance?.checkIn ? '✓ Sudah Absen Datang' : '✓ Absen Datang'}
+            </button>
+          )}
 
-          {/* Tombol Pulang — hanya aktif setelah ada catatan datang */}
-          <button
-            onClick={() => handleManualAttendance('CHECK_OUT')}
-            disabled={manualLoading || !assignment.todayAttendance?.checkIn || !!assignment.todayAttendance?.checkOut}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-500 py-5 text-lg font-bold text-white disabled:opacity-50 active:bg-teal-600"
-          >
-            {manualLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
-            {assignment.todayAttendance?.checkOut ? '✓ Sudah Absen Pulang' : !assignment.todayAttendance?.checkIn ? '↩ Absen Pulang (absen datang dulu)' : '↩ Absen Pulang'}
-          </button>
+          {/* Pesan jika cakupan datang sudah habis */}
+          {!canCheckIn && !assignment.todayAttendance?.checkIn && (
+            <div className="rounded-2xl bg-amber-500/15 p-4 text-center text-sm text-amber-300">
+              ⏰ Absen datang sudah ditutup pukul {pad2(checkInDeadlineH)}:{pad2(checkInDeadlineM)}
+            </div>
+          )}
+
+          {/* Tombol Pulang — tampil saat canCheckOut dan sudah ada datang */}
+          {canCheckOut && (
+            <button
+              onClick={() => handleManualAttendance('CHECK_OUT')}
+              disabled={manualLoading || !assignment.todayAttendance?.checkIn || !!assignment.todayAttendance?.checkOut}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-500 py-5 text-lg font-bold text-white disabled:opacity-50 active:bg-teal-600"
+            >
+              {manualLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
+              {assignment.todayAttendance?.checkOut
+                ? '✓ Sudah Absen Pulang'
+                : !assignment.todayAttendance?.checkIn
+                ? '↩ Absen Pulang (absen datang dulu)'
+                : '↩ Absen Pulang'}
+            </button>
+          )}
+
+          {/* Pesan jika belum waktunya pulang */}
+          {!canCheckOut && (
+            <div className="rounded-2xl bg-slate-800 p-4 text-center text-sm text-white/50">
+              🕐 Absen pulang dibuka pukul {pad2(earlyH)}:{pad2(earlyM)}
+            </div>
+          )}
 
           {geoLoading && <p className="text-center text-xs text-amber-400">📍 Mengambil lokasi GPS…</p>}
         </div>
@@ -401,7 +572,9 @@ export default function PklAbsent() {
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           {result.ok ? (
             <div className="mx-4 w-full max-w-sm rounded-3xl bg-surface p-6 text-center shadow-float animate-pop dark:bg-slate-800">
-              <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 animate-pulse-ring"><CheckCircle2 className="h-9 w-9" /></div>
+              <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 animate-pulse-ring">
+                <CheckCircle2 className="h-9 w-9" />
+              </div>
               <p className="text-xs font-bold uppercase tracking-widest text-emerald-600">✓ {result.message}</p>
               {result.checkIn && <p className="mt-2 font-mono text-3xl font-extrabold text-ink">{result.checkIn}</p>}
               {result.checkOut && <p className="mt-2 font-mono text-3xl font-extrabold text-ink">{result.checkOut}</p>}
@@ -409,29 +582,31 @@ export default function PklAbsent() {
                 <p className="mt-2 text-xs font-semibold text-muted">
                   {result.locationVerified
                     ? geo && assignment.latitude != null && assignment.longitude != null
-                      ? `✅ Absen berhasil — ${Math.round(haversineMeters(geo.latitude, geo.longitude, assignment.latitude, assignment.longitude))} m dari titik PKL`
-                      : '✅ Absen berhasil — lokasi terverifikasi'
-                    : '⚠️ Absen tercatat, namun di luar radius lokasi PKL'}
+                      ? `✅ ${Math.round(haversineMeters(geo.latitude, geo.longitude, assignment.latitude, assignment.longitude))} m dari titik PKL`
+                      : '✅ Lokasi terverifikasi'
+                    : '⚠️ Di luar radius lokasi PKL'}
                 </p>
               )}
             </div>
           ) : (
             <div className="mx-4 w-full max-w-sm rounded-3xl bg-surface p-6 text-center shadow-float animate-pop dark:bg-slate-800">
-              <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 text-red-500"><XCircle className="h-9 w-9" /></div>
+              <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 text-red-500">
+                <XCircle className="h-9 w-9" />
+              </div>
               <p className="font-bold text-ink">{result.message}</p>
             </div>
           )}
         </div>
       )}
 
-      {/* Info */}
+      {/* Info lokasi */}
       <div className="bg-surface px-4 py-3 dark:bg-slate-900">
         <div className="flex items-center gap-2 text-sm text-muted">
           <MapPin className="h-4 w-4" />
           <span>{assignment.locationName}{assignment.locationCity ? `, ${assignment.locationCity}` : ''}</span>
         </div>
         {assignment.supervisorName && (
-          <p className="mt-1 text-xs text-muted">👨‍🏫 Guru pembimbing: {assignment.supervisorName}</p>
+          <p className="mt-1 text-xs text-muted">👨‍🏫 {assignment.supervisorName}</p>
         )}
         {geoLoading && <p className="mt-1 text-xs text-amber-500">📍 Mengambil lokasi GPS…</p>}
       </div>
