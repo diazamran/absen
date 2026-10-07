@@ -274,6 +274,7 @@ export async function authRoutes(app: FastifyInstance) {
               grade: user.student.class?.grade ?? null,
               major: user.student.major?.name ?? null,
               pklActive,
+              allowManualAttendance: user.student.allowManualAttendance ?? false,
             }
           : null,
         teacher: user.teacher ? { id: user.teacher.id, nip: user.teacher.nip, position: user.teacher.position, isPiket: user.teacher.isPiket } : null,

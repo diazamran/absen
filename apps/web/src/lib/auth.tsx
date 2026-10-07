@@ -13,7 +13,7 @@ export interface MeData {
   roleName: string;
   roles?: string[]; // primary + additional roles
   preferences?: Record<string, unknown> | null;
-  student?: { id: string; nis: string; className?: string | null; grade?: string | null; major?: string | null; pklActive?: boolean } | null;
+  student?: { id: string; nis: string; className?: string | null; grade?: string | null; major?: string | null; pklActive?: boolean; allowManualAttendance?: boolean } | null;
   teacher?: { id: string; nip?: string | null; position?: string | null; isPiket?: boolean } | null;
   staff?: { id: string; nip?: string | null; position?: string | null } | null;
   parent?: {

@@ -415,32 +415,9 @@ export default function PklAbsent() {
         </div>
       )}
 
-      {/* Type selector (mode wajah) — hanya tampilkan tombol sesuai waktu */}
-      {mode === 'face' && (
-        <div className="flex gap-2 bg-slate-900 px-4 py-2">
-          {canCheckIn && (
-            <button
-              onClick={() => setType('CHECK_IN')}
-              className={`flex-1 rounded-xl py-2 text-sm font-bold transition ${type === 'CHECK_IN' ? 'bg-primary text-white' : 'bg-slate-700 text-white/60'}`}
-            >
-              📍 Absen Datang
-            </button>
-          )}
-          {canCheckOut && (
-            <button
-              onClick={() => setType('CHECK_OUT')}
-              className={`flex-1 rounded-xl py-2 text-sm font-bold transition ${type === 'CHECK_OUT' ? 'bg-primary text-white' : 'bg-slate-700 text-white/60'}`}
-            >
-              🏠 Absen Pulang
-            </button>
-          )}
-          {!canCheckIn && !canCheckOut && (
-            <p className="flex-1 rounded-xl bg-slate-700 py-2 text-center text-xs text-white/50">
-              Di luar jam absensi PKL
-            </p>
-          )}
-        </div>
-      )}
+      {/* Type selector (mode wajah) — DIHAPUS: tab datang/pulang tidak ditampilkan.
+          Scan loop otomatis memilih CHECK_IN atau CHECK_OUT berdasarkan waktu (canCheckIn/canCheckOut).
+          Siswa tidak perlu memilih manual — halaman otomatis scan tipe yang sesuai jam sekarang. */}
 
       {/* Mode selector — hanya tampil jika bukan forceManual */}
       {!forceManual && (
@@ -482,8 +459,10 @@ export default function PklAbsent() {
               'Menyiapkan model wajah…'
             ) : !canCheckIn && !canCheckOut ? (
               <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-white/60">Di luar jam absensi PKL</span>
+            ) : canCheckIn ? (
+              <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-emerald-300">📍 Mode: Absen Datang — arahkan wajah ke kamera</span>
             ) : (
-              'Arahkan wajah ke kamera untuk absen PKL'
+              <span className="inline-block rounded-full bg-black/60 px-3 py-1 text-teal-300">🏠 Mode: Absen Pulang — arahkan wajah ke kamera</span>
             )}
           </p>
           {/* FIX 6: Tombol perbaiki model jika error */}

@@ -43,6 +43,7 @@ const CardTap = lazy(() => import('./pages/student/CardTap'));
 const History = lazy(() => import('./pages/shared/History'));
 const Leave = lazy(() => import('./pages/shared/Leave'));
 const PklAbsent = lazy(() => import('./pages/student/PklAbsent'));
+const PklManualStudent = lazy(() => import('./pages/student/PklManualStudent'));
 const PklDashboard = lazy(() => import('./pages/teacher/PklDashboard'));
 const PklManualAttendance = lazy(() => import('./pages/teacher/PklManualAttendance'));
 
@@ -120,6 +121,7 @@ export default function App() {
 
         {/* Siswa PKL */}
         <Route path="pkl-absent" element={<Page><PklAbsent /></Page>} />
+        <Route path="pkl-manual-student" element={<Page><PklManualStudent /></Page>} />
         <Route path="pkl-monitor" element={<Page><PklDashboard /></Page>} />
         <Route path="pkl-manual" element={<Page><PklManualAttendance /></Page>} />
 

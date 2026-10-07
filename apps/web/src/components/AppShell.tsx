@@ -95,7 +95,17 @@ function roleMenu(user: MeData | null, pklRole?: { isSupervisor: boolean; isPklA
 
   // 2. Student-specific
   if (has('STUDENT')) {
-    add({ to: '/app/pkl-absent', label: 'Absen PKL', icon: <MapPin className="h-5 w-5" /> });
+    const isForceManual = user?.student?.allowManualAttendance === true;
+    const isPklActive = user?.student?.pklActive === true;
+
+    if (isPklActive && !isForceManual) {
+      // Siswa PKL dengan absen wajah — menu Absen PKL (kamera)
+      add({ to: '/app/pkl-absent', label: 'Absen PKL', icon: <MapPin className="h-5 w-5" /> });
+    }
+    if (isPklActive && isForceManual) {
+      // Siswa PKL yang diaktifkan absen manual — hanya menu Absen Manual
+      add({ to: '/app/pkl-manual-student', label: 'Absen Manual PKL', icon: <MapPin className="h-5 w-5" /> });
+    }
     add({ to: '/app/face-me', label: 'Registrasi Wajah', icon: <ScanFace className="h-5 w-5" /> });
     add({ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-5 w-5" /> });
     add({ to: '/app/leave/mine', label: 'Ajukan Izin', icon: <FilePlus2 className="h-5 w-5" /> });
@@ -170,9 +180,19 @@ function buildBottomNav(user: MeData | null, pklRole?: { isSupervisor: boolean; 
 
   // Siswa
   if (has('STUDENT')) {
+    const isForceManual = user?.student?.allowManualAttendance === true;
+    const isPklActive  = user?.student?.pklActive === true;
     return [
       { to: '/app/home',       label: 'Beranda', icon: <Home className="h-6 w-6" /> },
-      { to: '/app/absent',     label: 'Absen',   icon: <ScanLine className="h-6 w-6" /> },
+      // Jika siswa PKL absen manual → shortcut Absen Manual di bottom nav
+      // Jika siswa PKL absen wajah  → shortcut Absen PKL (kamera)
+      // Jika bukan siswa PKL        → shortcut Absen biasa
+      ...(isPklActive && isForceManual
+        ? [{ to: '/app/pkl-manual-student', label: 'Absen PKL', icon: <MapPin className="h-6 w-6" /> }]
+        : isPklActive
+        ? [{ to: '/app/pkl-absent', label: 'Absen PKL', icon: <MapPin className="h-6 w-6" /> }]
+        : [{ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> }]
+      ),
       { to: '/app/history',    label: 'Riwayat', icon: <History className="h-6 w-6" /> },
       { to: '/app/leave/mine', label: 'Izin',    icon: <FilePlus2 className="h-6 w-6" /> },
       { to: '/app/profile',    label: 'Profil',  icon: <UserRound className="h-6 w-6" /> },
