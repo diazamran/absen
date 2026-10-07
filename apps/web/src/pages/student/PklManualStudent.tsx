@@ -232,18 +232,17 @@ export default function PklManualStudent() {
           </div>
         )}
 
-        {/* Tombol Pulang */}
+        {/* Tombol Pulang — aktif selama canCheckOut, tidak perlu datang dulu
+            Backend akan otomatis buat CHECK_IN jika belum ada (lupa absen datang) */}
         {canCheckOut ? (
           <button
             onClick={() => handleAbsen('CHECK_OUT')}
-            disabled={loading || !assignment.todayAttendance?.checkIn || !!assignment.todayAttendance?.checkOut}
+            disabled={loading || !!assignment.todayAttendance?.checkOut}
             className="flex w-full items-center justify-center gap-3 rounded-2xl bg-teal-500 py-5 text-xl font-bold text-white shadow-sm transition disabled:opacity-50 active:scale-[.98] active:bg-teal-600"
           >
             {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : null}
             {assignment.todayAttendance?.checkOut
               ? 'Sudah Absen Pulang ✓'
-              : !assignment.todayAttendance?.checkIn
-              ? 'Absen Pulang (datang dulu)'
               : 'Absen Pulang'}
           </button>
         ) : (
@@ -255,8 +254,17 @@ export default function PklManualStudent() {
 
       {/* Info lokasi */}
       <div className="mt-4 rounded-2xl border border-line/50 px-4 py-3 text-sm text-muted">
-        <p className="flex items-center gap-2"><MapPin className="h-4 w-4" /> {assignment.locationName}{assignment.locationCity ? `, ${assignment.locationCity}` : ''}</p>
+        <p className="flex items-center gap-2">
+          <MapPin className="h-4 w-4" />
+          {assignment.locationName}{assignment.locationCity ? `, ${assignment.locationCity}` : ''}
+        </p>
         {assignment.supervisorName && <p className="mt-1">👨‍🏫 Guru pembimbing: {assignment.supervisorName}</p>}
+        {/* Info validasi lokasi */}
+        {assignment.latitude != null && assignment.longitude != null ? (
+          <p className="mt-1 text-xs text-emerald-600">📍 Validasi lokasi: titik DUDI ({assignment.locationName})</p>
+        ) : (
+          <p className="mt-1 text-xs text-amber-500">⚠️ Koordinat DUDI belum diset — absen tetap tercatat tanpa validasi lokasi</p>
+        )}
       </div>
 
       {/* Result overlay */}

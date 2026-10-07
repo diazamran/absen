@@ -523,14 +523,12 @@ export default function PklAbsent() {
           {canCheckOut && (
             <button
               onClick={() => handleManualAttendance('CHECK_OUT')}
-              disabled={manualLoading || !assignment.todayAttendance?.checkIn || !!assignment.todayAttendance?.checkOut}
+              disabled={manualLoading || !!assignment.todayAttendance?.checkOut}
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-500 py-5 text-lg font-bold text-white disabled:opacity-50 active:bg-teal-600"
             >
               {manualLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
               {assignment.todayAttendance?.checkOut
                 ? '✓ Sudah Absen Pulang'
-                : !assignment.todayAttendance?.checkIn
-                ? '↩ Absen Pulang (absen datang dulu)'
                 : '↩ Absen Pulang'}
             </button>
           )}
