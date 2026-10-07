@@ -809,6 +809,71 @@ export async function pklRoutes(app: FastifyInstance) {
     });
   });
 
+  // ===== ASSIGNMENT SISWA (self) — untuk halaman absen manual PKL dari HP siswa =====
+  // Berbeda dari GET /pkl/students yang butuh pklRead (admin/guru).
+  // Endpoint ini memakai pklAttendance yang sudah dimiliki STUDENT.
+  app.get('/pkl/my-assignment', { preHandler: app.requirePermission(PERMISSION_KEYS.pklAttendance) }, async (request, reply) => {
+    // Cari student record dari userId yang sedang login
+    const student = await prisma.student.findUnique({
+      where: { userId: request.user!.id },
+      select: { id: true, nis: true },
+    });
+    if (!student) return reply.send({ success: true, data: [] });
+
+    const [yy, mm, dd] = dateKey().split('-').map(Number);
+    const todayDate = new Date(Date.UTC(yy, mm - 1, dd - 1));
+
+    const rows = await prisma.pklAssignment.findMany({
+      where: { studentId: student.id, isActive: true },
+      include: {
+        student: {
+          include: {
+            user: { select: { fullName: true } },
+            class: { select: { name: true } },
+            attendance: {
+              where: { date: todayDate },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+        },
+        pklLocation: { select: { id: true, name: true, city: true, latitude: true, longitude: true, radiusMeter: true } },
+        supervisor: { include: { user: { select: { fullName: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return reply.send({
+      success: true,
+      data: rows.map((r) => {
+        const atts = r.student?.attendance ?? [];
+        const inRow = atts.find((x) => x.type === 'CHECK_IN');
+        const outTime = atts.find((x) => x.type === 'CHECK_OUT')?.checkOut ?? inRow?.checkOut ?? null;
+        return {
+          id: r.id,
+          assignmentId: r.id,
+          studentId: r.studentId,
+          fullName: r.student?.user?.fullName ?? '-',
+          nis: r.student?.nis ?? null,
+          className: r.student?.class?.name ?? null,
+          locationId: r.pklLocationId,
+          locationName: r.pklLocation.name,
+          locationCity: r.pklLocation.city,
+          latitude: r.pklLocation.latitude,
+          longitude: r.pklLocation.longitude,
+          radiusMeter: r.pklLocation.radiusMeter,
+          supervisorId: r.supervisorId,
+          supervisorName: r.supervisor?.user?.fullName ?? null,
+          isActive: r.isActive,
+          todayAttendance: {
+            checkIn: inRow?.checkIn ? localTime(inRow.checkIn) : null,
+            checkOut: outTime ? localTime(outTime) : null,
+            status: inRow?.status ?? 'NOT_YET',
+          },
+        };
+      }),
+    });
+  });
+
   // ===== LAPORAN PKL =====
 
   // Laporan PKL harian — scoped by supervisor

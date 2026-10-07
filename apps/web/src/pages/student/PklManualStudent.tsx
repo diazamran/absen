@@ -66,14 +66,13 @@ export default function PklManualStudent() {
   const [rules, setRules] = useState<Record<string, unknown> | null>(null);
   const [nowTick, setNowTick] = useState(0);
 
-  // Fetch assignment
+  // Fetch assignment — pakai endpoint khusus siswa (/pkl/my-assignment)
+  // yang butuh pklAttendance (dimiliki STUDENT), bukan pklRead (hanya guru/admin)
   const { data: assignments, isLoading } = useQuery({
     queryKey: ['pkl-my-assignment'],
     queryFn: async () => {
-      const r = await api<{ success: boolean; data: PklAssignment[] }>('/pkl/students');
-      const myStudentId = user?.student?.id;
-      const myNis = user?.student?.nis;
-      return (r.data ?? []).filter((s) => s.studentId === myStudentId || s.nis === myNis);
+      const r = await api<{ success: boolean; data: PklAssignment[] }>('/pkl/my-assignment');
+      return r.data ?? [];
     },
     enabled: !!user,
     refetchInterval: 30_000,

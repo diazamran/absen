@@ -184,14 +184,11 @@ function buildBottomNav(user: MeData | null, pklRole?: { isSupervisor: boolean; 
     const isPklActive  = user?.student?.pklActive === true;
     return [
       { to: '/app/home',       label: 'Beranda', icon: <Home className="h-6 w-6" /> },
-      // Bottom nav shortcut:
-      // - allowManualAttendance=true → Absen Manual PKL (tidak perlu pklActive)
-      // - pklActive=true normal      → Absen PKL (kamera wajah)
-      // - siswa biasa                → Absen sekolah biasa
+      // Bottom nav shortcut — label selalu "Absen" agar konsisten
       ...(isForceManual
-        ? [{ to: '/app/pkl-manual-student', label: 'Absen PKL', icon: <MapPin className="h-6 w-6" /> }]
+        ? [{ to: '/app/pkl-manual-student', label: 'Absen', icon: <MapPin className="h-6 w-6" /> }]
         : isPklActive
-        ? [{ to: '/app/pkl-absent', label: 'Absen PKL', icon: <MapPin className="h-6 w-6" /> }]
+        ? [{ to: '/app/pkl-absent', label: 'Absen', icon: <MapPin className="h-6 w-6" /> }]
         : [{ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> }]
       ),
       { to: '/app/history',    label: 'Riwayat', icon: <History className="h-6 w-6" /> },
