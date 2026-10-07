@@ -180,17 +180,11 @@ function buildBottomNav(user: MeData | null, pklRole?: { isSupervisor: boolean; 
 
   // Siswa
   if (has('STUDENT')) {
-    const isForceManual = user?.student?.allowManualAttendance === true;
-    const isPklActive  = user?.student?.pklActive === true;
     return [
       { to: '/app/home',       label: 'Beranda', icon: <Home className="h-6 w-6" /> },
-      // Bottom nav shortcut — label selalu "Absen" agar konsisten
-      ...(isForceManual
-        ? [{ to: '/app/pkl-manual-student', label: 'Absen', icon: <MapPin className="h-6 w-6" /> }]
-        : isPklActive
-        ? [{ to: '/app/pkl-absent', label: 'Absen', icon: <MapPin className="h-6 w-6" /> }]
-        : [{ to: '/app/absent', label: 'Absen', icon: <ScanLine className="h-6 w-6" /> }]
-      ),
+      // Bottom nav "Absen" selalu ke /app/absent (halaman pilih metode)
+      // sama dengan menu Absen di sidebar — konsisten
+      { to: '/app/absent',     label: 'Absen',   icon: <ScanLine className="h-6 w-6" /> },
       { to: '/app/history',    label: 'Riwayat', icon: <History className="h-6 w-6" /> },
       { to: '/app/leave/mine', label: 'Izin',    icon: <FilePlus2 className="h-6 w-6" /> },
       { to: '/app/profile',    label: 'Profil',  icon: <UserRound className="h-6 w-6" /> },

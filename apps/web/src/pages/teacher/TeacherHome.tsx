@@ -128,12 +128,15 @@ export default function TeacherHome() {
     staleTime: 60_000,
   });
   const isPklSupervisor = !!(pklMe?.isSupervisor || pklMe?.isPklAdmin);
+  const allowManualPkl = isStudent && user?.student?.allowManualAttendance === true;
 
   const menu = isStudent
     ? [
         { label: 'Registrasi Wajah', icon: <ScanFace className="h-6 w-6" />, to: '/app/face-me' },
         { label: 'Absen Wajah', icon: <Camera className="h-6 w-6" />, to: '/app/absent/face' },
         { label: 'QR Saya', icon: <ScanLine className="h-6 w-6" />, to: '/app/absent/qr' },
+        // Shortcut Absen Manual PKL hanya muncul jika admin mengaktifkan flag
+        ...(allowManualPkl ? [{ label: 'Absen Manual PKL', icon: <MapPin className="h-6 w-6" />, to: '/app/pkl-manual-student' }] : []),
         { label: 'Ajukan Izin', icon: <FilePlus2 className="h-6 w-6" />, to: '/app/leave/mine' },
         { label: 'Riwayat', icon: <History className="h-6 w-6" />, to: '/app/history' },
       ]
