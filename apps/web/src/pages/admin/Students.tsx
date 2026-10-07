@@ -210,6 +210,7 @@ export default function Students() {
                   <td className="px-3 py-2.5">
                     <div className="flex flex-wrap gap-1">
                       {s.faceRegistered ? <Badge status="PRESENT" label="Wajah" /> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-muted dark:bg-slate-700">No wajah</span>}
+                      {s.allowManualAttendance && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">✋ Manual PKL</span>}
                       {!s.isActive && <Badge status="BLOCKED" label="Nonaktif" />}
                     </div>
                   </td>
