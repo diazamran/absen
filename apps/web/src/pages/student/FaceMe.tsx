@@ -20,6 +20,7 @@ interface FaceStatus {
 }
 
 const MAX_SAMPLES = 4;
+const MIN_SAMPLES = 3;
 
 export default function FaceMe() {
   const { user } = useAuth();
@@ -229,6 +230,28 @@ export default function FaceMe() {
                     ? 'Menyiapkan model wajah…'
                     : `Ambil Sampel (${descriptors.length}/${MAX_SAMPLES})`}
                 </Button>
+                {/* Progress sampel & panduan sudut */}
+                <div className="mt-2 space-y-1">
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: MAX_SAMPLES }).map((_, i) => (
+                      <div
+                        key={i}
+                        className={`h-2 flex-1 rounded-full transition-colors ${
+                          i < descriptors.length
+                            ? i < MIN_SAMPLES ? 'bg-primary' : 'bg-emerald-400'
+                            : 'bg-slate-200 dark:bg-slate-700'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <p className={`text-center text-[11px] font-semibold ${descriptors.length >= MIN_SAMPLES ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {descriptors.length < MIN_SAMPLES
+                      ? `Minimal ${MIN_SAMPLES} sampel — ambil dari sudut berbeda (lurus, sedikit kiri, sedikit kanan)`
+                      : descriptors.length < MAX_SAMPLES
+                      ? `${descriptors.length} sampel ✓ — boleh tambah 1 lagi untuk hasil terbaik`
+                      : `${MAX_SAMPLES} sampel ✓`}
+                  </p>
+                </div>
                 {modelError && (
                   <Button variant="outline" className="mt-3 w-full border-red-300 text-red-600" onClick={() => void repairModels()} disabled={modelsLoading}>
                     {modelsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />} Perbaiki Model Wajah
@@ -281,7 +304,7 @@ export default function FaceMe() {
                   Batal
                 </Button>
               )}
-              <Button onClick={() => submit.mutate()} disabled={descriptors.length === 0 || !consent || submit.isPending}>
+              <Button onClick={() => submit.mutate()} disabled={descriptors.length < MIN_SAMPLES || !consent || submit.isPending}>
                 {submit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanFace className="h-4 w-4" />}
                 Kirim untuk Persetujuan
               </Button>

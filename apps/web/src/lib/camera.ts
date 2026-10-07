@@ -102,7 +102,7 @@ export function captureFrame(video: HTMLVideoElement, maxSize = 480): string | n
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
   }
 
-  return canvas.toDataURL('image/jpeg', 0.75);
+  return canvas.toDataURL('image/jpeg', 0.85);
 }
 
 // ─── QR decode (optimized: cached jsQR + reusable canvas) ───

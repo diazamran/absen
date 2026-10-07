@@ -77,6 +77,19 @@ export default function FaceScan() {
     try {
       const stream = await startCamera(videoRef.current!, 'user');
       streamRef.current = stream;
+      // Fix: tunggu hingga frame video benar-benar siap (videoWidth > 0)
+      // sebelum mengaktifkan auto-scan. Tanpa ini, 2–3 iterasi pertama
+      // menghasilkan frame kosong/hitam di beberapa Android → scan sia-sia.
+      await new Promise<void>((resolve) => {
+        const check = () => {
+          if (videoRef.current && videoRef.current.videoWidth > 0) {
+            resolve();
+          } else {
+            requestAnimationFrame(check);
+          }
+        };
+        requestAnimationFrame(check);
+      });
       setReady(true);
     } catch {
       setError('Kamera tidak dapat diakses. Izinkan akses kamera di browser/HP, lalu ketuk "Mulai Kamera".');
@@ -186,7 +199,7 @@ export default function FaceScan() {
           await new Promise((r) => setTimeout(r, 150));
           const frame2 = captureFrame(video);
           if (!frame1 || !frame2) continue;
-          motion = await framesHaveMotion(frame1, frame2, 0.006);
+          motion = await framesHaveMotion(frame1, frame2, 0.003);
         }
         if (!motion) {
           if (manual) {
@@ -426,6 +439,16 @@ export default function FaceScan() {
           ]}
         />
       </div>
+
+      {/* Tip absen pulang: cahaya sore sering dari belakang → deteksi wajah gagal */}
+      {type === 'CHECK_OUT' && (
+        <div className="mx-4 mb-1 flex items-start gap-2 rounded-xl bg-amber-500/10 px-3 py-2">
+          <span className="shrink-0 text-base">💡</span>
+          <p className="text-[11px] leading-relaxed text-amber-200">
+            <b>Absen pulang sore:</b> pastikan cahaya dari <b>depan wajah</b>, bukan dari belakang. Hindari berdiri menghadap jendela atau matahari langsung.
+          </p>
+        </div>
+      )}
 
       {/* Kamera — langsung menyala otomatis (default Absen Datang) */}
       <div className="relative flex-1 overflow-hidden bg-slate-900">

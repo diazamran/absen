@@ -207,6 +207,16 @@ export const faceService: FaceRecognitionProvider = createProvider(
   process.env.FACE_RECOGNITION_PROVIDER || 'facenet-web',
 );
 
+/**
+ * Paksa reload embeddings dari DB pada verifikasi berikutnya.
+ * Dipanggil setelah admin menyetujui wajah agar siswa langsung bisa absen
+ * tanpa menunggu TTL cache 60 detik.
+ */
+export function invalidateFaceCache(): void {
+  cachedEmbeddings = null;
+  cachedEmbeddingsTime = 0;
+}
+
 /** Pilih field ip/user-agent dengan aman. */
 export function requestMeta(req: FastifyRequest) {
   return { ip: req.ip, ua: req.headers['user-agent'] || '' };

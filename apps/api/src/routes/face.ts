@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { faceService } from '../services/face.js';
+import { faceService, invalidateFaceCache } from '../services/face.js';
 import { validate } from '../utils/validate.js';
 import { ApiError } from '../utils/errors.js';
 import { audit } from '../lib/audit.js';
@@ -117,6 +117,8 @@ export async function faceRoutes(app: FastifyInstance) {
       data: { status: 'REGISTERED', registeredBy: request.user!.id },
     });
     await prisma.student.updateMany({ where: { userId }, data: { faceRegistered: true } });
+    // Invalidate in-memory cache agar siswa bisa langsung absen tanpa menunggu TTL 60s
+    invalidateFaceCache();
 
     await audit({
       userId: request.user!.id,

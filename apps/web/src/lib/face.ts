@@ -39,6 +39,12 @@ export async function initFaceModels(): Promise<void> {
       faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl),
     ]);
     modelsReady = true;
+
+    // Muat SSD MobileNet di background (lazy) sebagai fallback untuk HP budget.
+    // Tidak await — tidak memblokir UI. Akan dipakai di detectFaceDescriptor bila TinyFaceDetector gagal.
+    faceapi.nets.ssdMobilenetv1.loadFromUri(modelUrl).catch(() => {
+      // Tidak fatal — SSD hanya dipakai sebagai fallback, bukan model utama.
+    });
   })().finally(() => {
     loadingPromise = null;
   });
@@ -92,6 +98,7 @@ export async function detectFaceDescriptor(
   input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement,
 ): Promise<Float32Array | null> {
   await initFaceModels();
+  // Coba TinyFaceDetector dengan beberapa konfigurasi (cepat, ringan)
   for (const attempt of DETECT_ATTEMPTS) {
     const detection = await faceapi
       .detectSingleFace(input, new faceapi.TinyFaceDetectorOptions(attempt))
@@ -101,6 +108,19 @@ export async function detectFaceDescriptor(
       return detection.descriptor;
     }
   }
+
+  // Fallback: SSD MobileNet (lebih akurat di kondisi backlit/HP budget)
+  // Hanya dipakai bila model sudah dimuat lazy di background oleh initFaceModels.
+  if (faceapi.nets.ssdMobilenetv1.isLoaded) {
+    const detection = await faceapi
+      .detectSingleFace(input, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+    if (detection?.descriptor && detection.descriptor.length === FACE_DESCRIPTOR_SIZE) {
+      return detection.descriptor;
+    }
+  }
+
   return null;
 }
 
