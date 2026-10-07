@@ -85,6 +85,7 @@ export default function PklAbsent() {
       return (r.data ?? []).filter((s) => s.studentId === myStudentId || s.nis === myNis);
     },
     enabled: !!user,
+    refetchInterval: 30_000, // refresh status absensi tiap 30 detik agar tidak stale
   });
 
   const assignment = assignments?.[0];
@@ -294,14 +295,16 @@ export default function PklAbsent() {
         </div>
       )}
 
-      {/* Type selector */}
-      <div className="flex gap-2 bg-slate-900 px-4 py-2">
-        {(['CHECK_IN', 'CHECK_OUT'] as const).map((t) => (
-          <button key={t} onClick={() => setType(t)} className={`flex-1 rounded-xl py-2 text-sm font-bold transition ${type === t ? 'bg-primary text-white' : 'bg-slate-700 text-white/60'}`}>
-            {t === 'CHECK_IN' ? '📍 Absen Datang' : '🏠 Absen Pulang'}
-          </button>
-        ))}
-      </div>
+      {/* Type selector — hanya relevan di mode wajah (scan loop pakai state `type`) */}
+      {mode === 'face' && (
+        <div className="flex gap-2 bg-slate-900 px-4 py-2">
+          {(['CHECK_IN', 'CHECK_OUT'] as const).map((t) => (
+            <button key={t} onClick={() => setType(t)} className={`flex-1 rounded-xl py-2 text-sm font-bold transition ${type === t ? 'bg-primary text-white' : 'bg-slate-700 text-white/60'}`}>
+              {t === 'CHECK_IN' ? '📍 Absen Datang' : '🏠 Absen Pulang'}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Mode selector */}
       <div className="flex gap-2 bg-slate-800 px-4 py-2">
@@ -360,21 +363,21 @@ export default function PklAbsent() {
           {/* Tombol Datang */}
           <button
             onClick={() => handleManualAttendance('CHECK_IN')}
-            disabled={manualLoading}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-5 text-lg font-bold text-white disabled:opacity-60 active:bg-emerald-600"
+            disabled={manualLoading || !!assignment.todayAttendance?.checkIn}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-5 text-lg font-bold text-white disabled:opacity-50 active:bg-emerald-600"
           >
             {manualLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
-            ✓ Absen Datang
+            {assignment.todayAttendance?.checkIn ? '✓ Sudah Absen Datang' : '✓ Absen Datang'}
           </button>
 
-          {/* Tombol Pulang */}
+          {/* Tombol Pulang — hanya aktif setelah ada catatan datang */}
           <button
             onClick={() => handleManualAttendance('CHECK_OUT')}
-            disabled={manualLoading}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-500 py-5 text-lg font-bold text-white disabled:opacity-60 active:bg-teal-600"
+            disabled={manualLoading || !assignment.todayAttendance?.checkIn || !!assignment.todayAttendance?.checkOut}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-500 py-5 text-lg font-bold text-white disabled:opacity-50 active:bg-teal-600"
           >
             {manualLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
-            ↩ Absen Pulang
+            {assignment.todayAttendance?.checkOut ? '✓ Sudah Absen Pulang' : !assignment.todayAttendance?.checkIn ? '↩ Absen Pulang (absen datang dulu)' : '↩ Absen Pulang'}
           </button>
 
           {geoLoading && <p className="text-center text-xs text-amber-400">📍 Mengambil lokasi GPS…</p>}
