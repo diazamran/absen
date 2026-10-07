@@ -165,6 +165,10 @@ export default function PklAbsent() {
       stopCamera(streamRef.current);
       streamRef.current = null;
       setReady(false);
+      // Reset busyRef: jika request face sedang in-flight saat pengguna beralih ke manual,
+      // busyRef.current akan tetap true ketika kembali ke face dan scan loop tidak akan
+      // pernah memproses frame. Reset di sini menjamin scan loop baru bisa berjalan.
+      busyRef.current = false;
     } else {
       let cancelled = false;
       const restart = async () => {

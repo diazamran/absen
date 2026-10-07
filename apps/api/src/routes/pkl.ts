@@ -750,7 +750,12 @@ export async function pklRoutes(app: FastifyInstance) {
         { student: { nis: { contains: search, mode: 'insensitive' } } },
       ];
     }
-    const today = todayStart();
+    // Kolom date adalah @db.Date — tersimpan sebagai UTC midnight H-1 (WIB H = UTC H-1).
+    // todayStart() menghasilkan 2026-10-06T00:00:00+07:00 = 2026-10-05T17:00:00Z,
+    // sedangkan tanggal 6 Oktober tersimpan sebagai 2026-10-05T00:00:00Z — tidak sama.
+    // Gunakan Date.UTC(yy, mm-1, dd-1) seperti yang dipakai di /pkl/report/daily.
+    const [yy, mm, dd] = dateKey().split('-').map(Number);
+    const todayDate = new Date(Date.UTC(yy, mm - 1, dd - 1));
     const rows = await prisma.pklAssignment.findMany({
       where,
       include: {
@@ -759,7 +764,7 @@ export async function pklRoutes(app: FastifyInstance) {
             user: { select: { fullName: true } },
             class: { select: { name: true } },
             attendance: {
-              where: { date: today },
+              where: { date: todayDate },
               orderBy: { createdAt: 'asc' },
             },
           },
