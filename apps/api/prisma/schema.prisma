@@ -183,6 +183,7 @@ model Student {
   address         String?
   cardUidHash     String? @unique
   faceRegistered  Boolean  @default(false)
+  allowManualAttendance Boolean @default(false) // HP rusak/tidak support — izinkan absen manual
   isActive        Boolean  @default(true)
   classId         String?
   majorId         String?

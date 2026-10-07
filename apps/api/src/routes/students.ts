@@ -33,6 +33,7 @@ const studentUpdateSchema = z.object({
   majorId: z.string().optional(),
   academicYearId: z.string().optional(),
   isActive: z.boolean().optional(),
+  allowManualAttendance: z.boolean().optional(),
   parentName: z.string().optional(),
   parentPhone: z.string().optional(),
   cardUid: z.string().optional(),
@@ -85,6 +86,7 @@ export async function studentRoutes(app: FastifyInstance) {
         className: s.class?.name ?? null,
         majorName: s.major?.name ?? null,
         faceRegistered: s.faceRegistered,
+        allowManualAttendance: s.allowManualAttendance,
         hasCard: !!s.cardUidHash,
         isActive: s.user?.isActive ?? false,
         parents: s.parentLinks.map((l) => ({ id: l.parent.id, name: l.parent.name, phone: l.parent.phone, relation: l.relation })),
@@ -253,6 +255,7 @@ export async function studentRoutes(app: FastifyInstance) {
         classId: body.classId,
         majorId: body.majorId,
         academicYearId: body.academicYearId,
+        allowManualAttendance: body.allowManualAttendance,
         updatedById: request.user!.id,
       },
     });

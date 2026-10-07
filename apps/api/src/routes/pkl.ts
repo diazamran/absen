@@ -798,6 +798,7 @@ export async function pklRoutes(app: FastifyInstance) {
           startDate: r.startDate,
           endDate: r.endDate,
           isActive: r.isActive,
+          allowManualAttendance: r.student?.allowManualAttendance ?? false,
           todayAttendance: {
             checkIn: inRow?.checkIn ? localTime(inRow.checkIn) : null,
             checkOut: outTime ? localTime(outTime) : null,

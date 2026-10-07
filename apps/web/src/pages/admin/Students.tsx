@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 
 interface StudentRow {
   id: string; userId: string; nis: string; fullName: string; className: string | null; classId: string | null; majorName: string | null;
-  faceRegistered: boolean; hasCard: boolean; isActive: boolean; gender: string; birthDate?: string | null;
+  faceRegistered: boolean; hasCard: boolean; isActive: boolean; allowManualAttendance?: boolean; gender: string; birthDate?: string | null;
   parents?: { id: string; name: string; phone: string }[];
 }
 
@@ -378,6 +378,7 @@ function StudentEdit({ student, classes, onClose }: { student: StudentRow; class
     birthDate: student.birthDate ? student.birthDate.slice(0, 10) : '',
     classId: student.classId || '',
     isActive: student.isActive,
+    allowManualAttendance: student.allowManualAttendance ?? false,
     parentName: parent?.name || '',
     parentPhone: parent?.phone || '',
     cardUid: '',
@@ -393,6 +394,7 @@ function StudentEdit({ student, classes, onClose }: { student: StudentRow; class
         birthDate: form.birthDate,
         classId: form.classId,
         isActive: form.isActive,
+        allowManualAttendance: form.allowManualAttendance,
       };
       if (form.parentName && form.parentPhone) {
         body.parentName = form.parentName;
@@ -437,6 +439,19 @@ function StudentEdit({ student, classes, onClose }: { student: StudentRow; class
             <option value="true">Aktif</option>
             <option value="false">Nonaktif</option>
           </Select>
+        </Field>
+        <Field label="Absen Manual PKL" hint="Aktifkan untuk siswa yang HP-nya tidak bisa absen wajah (kamera rusak/tidak support). Siswa hanya akan melihat tombol Datang/Pulang tanpa kamera.">
+          <label className="flex cursor-pointer items-center gap-3">
+            <div
+              className={`relative h-6 w-11 rounded-full transition-colors ${form.allowManualAttendance ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'}`}
+              onClick={() => setForm({ ...form, allowManualAttendance: !form.allowManualAttendance })}
+            >
+              <div className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${form.allowManualAttendance ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </div>
+            <span className="text-sm font-medium text-ink">
+              {form.allowManualAttendance ? 'Aktif — siswa hanya bisa absen manual' : 'Nonaktif — siswa absen via wajah (default)'}
+            </span>
+          </label>
         </Field>
       </div>
       <div className="mt-5 flex justify-end gap-2">

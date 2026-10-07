@@ -24,6 +24,7 @@ interface PklAssignment {
   radiusMeter: number;
   supervisorName: string | null;
   className: string | null;
+  allowManualAttendance?: boolean;
   todayAttendance?: {
     checkIn: string | null;
     checkOut: string | null;
@@ -72,8 +73,8 @@ export default function PklAbsent() {
   const [geo, setGeo] = useState<GeoPos | null>(null);
   const [type, setType] = useState<'CHECK_IN' | 'CHECK_OUT'>('CHECK_IN');
   const [modelsLoading, setModelsLoading] = useState(false);
-  const [mode, setMode] = useState<'face' | 'manual'>('face');
   const [manualLoading, setManualLoading] = useState(false);
+  const [mode, setMode] = useState<'face' | 'manual'>('face');
 
   // Fetch PKL assignment for this student
   const { data: assignments, isLoading } = useQuery({
@@ -100,6 +101,13 @@ export default function PklAbsent() {
   }, []);
 
   // Absen manual dari tombol (tanpa wajah)
+  // forceManual: jika siswa diizinkan absen manual (allowManualAttendance=true),
+  // paksa ke mode manual dan sembunyikan toggle agar tidak membingungkan.
+  const forceManual = assignment?.allowManualAttendance === true;
+  useEffect(() => {
+    if (forceManual) setMode('manual');
+  }, [forceManual]);
+
   const handleManualAttendance = useCallback(async (attendanceType: 'CHECK_IN' | 'CHECK_OUT') => {
     if (manualLoading || !assignment) return;
     setManualLoading(true);
@@ -306,20 +314,24 @@ export default function PklAbsent() {
         </div>
       )}
 
-      {/* Mode selector */}
-      <div className="flex gap-2 bg-slate-800 px-4 py-2">
-        {(['face', 'manual'] as const).map((m) => (
-          <button
-            key={m}
-            onClick={() => setMode(m)}
-            className={`flex-1 rounded-xl py-2 text-sm font-bold transition ${
-              mode === m ? 'bg-primary text-white' : 'bg-slate-700 text-white/60'
-            }`}
-          >
-            {m === 'face' ? '🤳 Absen Wajah' : '✋ Absen Manual'}
-          </button>
-        ))}
-      </div>
+      {/* Mode selector — hanya tampil jika siswa bisa pilih kedua mode.
+          Jika admin mengaktifkan allowManualAttendance untuk siswa ini,
+          toggle disembunyikan dan halaman langsung masuk mode manual. */}
+      {!forceManual && (
+        <div className="flex gap-2 bg-slate-800 px-4 py-2">
+          {(['face', 'manual'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`flex-1 rounded-xl py-2 text-sm font-bold transition ${
+                mode === m ? 'bg-primary text-white' : 'bg-slate-700 text-white/60'
+              }`}
+            >
+              {m === 'face' ? '🤳 Absen Wajah' : '✋ Absen Manual'}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Camera — hanya tampil saat mode wajah */}
       {mode === 'face' && (
