@@ -68,7 +68,10 @@ export async function studentRoutes(app: FastifyInstance) {
           major: { select: { name: true } },
           parentLinks: { include: { parent: { select: { id: true, name: true, phone: true } } } },
         },
-        orderBy: { nis: 'asc' },
+        orderBy: [
+          { class: { name: 'asc' } },         // urut kelas dulu (X → XI → XII, A → B dst)
+          { user: { fullName: 'asc' } },       // lalu nama alfabet dalam kelas
+        ],
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
