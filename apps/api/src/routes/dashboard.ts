@@ -512,7 +512,7 @@ export async function homeroomRoutes(app: FastifyInstance) {
             id: true, nis: true, gender: true, faceRegistered: true, isActive: true,
             user: { select: { fullName: true } },
           },
-          orderBy: { nis: 'asc' },
+          orderBy: { user: { fullName: 'asc' } },
         },
       },
       orderBy: [{ grade: 'asc' }, { name: 'asc' }],
