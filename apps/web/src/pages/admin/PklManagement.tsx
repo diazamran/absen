@@ -962,7 +962,7 @@ export default function PklManagement() {
                           {/* Tampilkan ringkasan jadwal jika ada */}
                           {loc.schedule && (
                             <p className="text-xs text-teal-700 dark:text-teal-400">
-                              🕐 Masuk: {pad2(loc.schedule.lateAfterHour)}:{pad2(loc.schedule.lateAfterMinute)} · Pulang: {pad2(loc.schedule.checkOutAfterHour)}:{pad2(loc.schedule.checkOutAfterMinute)}
+                              🕐 Terlambat stlh: {pad2(loc.schedule.lateAfterHour)}:{pad2(loc.schedule.lateAfterMinute)} · Deadline: {pad2(loc.schedule.checkInDeadlineHour)}:{pad2(loc.schedule.checkInDeadlineMinute)} · Pulang: {pad2(loc.schedule.checkOutAfterHour)}:{pad2(loc.schedule.checkOutAfterMinute)}
                             </p>
                           )}
                           <p className="mt-1 text-xs font-semibold text-primary">{loc.studentCount} siswa ditugaskan</p>

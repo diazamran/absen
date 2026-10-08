@@ -392,19 +392,33 @@ export async function pklRoutes(app: FastifyInstance) {
     } | null ?? null;
     const nowMinutes = localMinutesOf(new Date());
 
-    // lateH/lateM: prioritas (1) jadwal lokasi, (2) jadwal PKL global, (3) jam sekolah
-    const lateH = locSched?.lateAfterHour ?? rules.pklLateAfterHour ?? rules.lateAfterHour;
-    const lateM = locSched?.lateAfterHour != null
-      ? (locSched.lateAfterMinute ?? 0)
-      : rules.pklLateAfterHour !== null ? (rules.pklLateAfterMinute ?? 0) : rules.lateAfterMinute;
-    const inDeadlineH = locSched?.checkInDeadlineHour ?? rules.pklCheckInDeadlineHour ?? rules.checkInDeadlineHour;
-    const inDeadlineM = locSched?.checkInDeadlineHour != null
-      ? (locSched.checkInDeadlineMinute ?? 59)
-      : rules.pklCheckInDeadlineHour !== null ? (rules.pklCheckInDeadlineMinute ?? 0) : rules.checkInDeadlineMinute;
-    const earlyH = locSched?.earlyLeaveBeforeHour ?? rules.pklEarlyLeaveBeforeHour ?? rules.earlyLeaveBeforeHour;
-    const earlyM = locSched?.earlyLeaveBeforeHour != null
-      ? (locSched.earlyLeaveBeforeMinute ?? 0)
-      : rules.pklEarlyLeaveBeforeHour !== null ? (rules.pklEarlyLeaveBeforeMinute ?? 0) : rules.earlyLeaveBeforeMinute;
+    // Helper: ambil nilai jam dari locSched → pklGlobal → sekolah
+    // Jika locSched aktif (tidak null), field yang tidak diisi di locSched
+    // fallback ke PKL global, BUKAN langsung ke sekolah.
+    // Ini mencegah jam sekolah (07:00) dipakai sebagai batas terlambat PKL.
+    const pickTime = (
+      locVal: number | undefined,
+      pklVal: number | null,
+      schoolVal: number,
+      noConstraintVal = schoolVal, // nilai jika semua null (berarti tidak dibatasi)
+    ): number => {
+      if (locSched !== null && locVal !== undefined) return locVal;  // per-lokasi
+      if (pklVal !== null) return pklVal;                             // PKL global
+      if (locSched !== null) return noConstraintVal;                  // locSched ada tapi field ini kosong → pakai noConstraintVal
+      return schoolVal;                                               // tidak ada jadwal khusus → jadwal sekolah
+    };
+
+    // lateAfterHour/Minute — batas terlambat:
+    //   jika locSched aktif & tidak di-set: default 23:59 (tidak pernah terlambat)
+    //   jika tidak ada locSched & pklGlobal null: fallback ke jam sekolah
+    const lateH = pickTime(locSched?.lateAfterHour, rules.pklLateAfterHour, rules.lateAfterHour, 23);
+    const lateM = pickTime(locSched?.lateAfterMinute, rules.pklLateAfterMinute, rules.lateAfterMinute, 59);
+
+    const inDeadlineH = pickTime(locSched?.checkInDeadlineHour, rules.pklCheckInDeadlineHour, rules.checkInDeadlineHour, 23);
+    const inDeadlineM = pickTime(locSched?.checkInDeadlineMinute, rules.pklCheckInDeadlineMinute, rules.checkInDeadlineMinute, 59);
+
+    const earlyH = pickTime(locSched?.earlyLeaveBeforeHour, rules.pklEarlyLeaveBeforeHour, rules.earlyLeaveBeforeHour);
+    const earlyM = pickTime(locSched?.earlyLeaveBeforeMinute, rules.pklEarlyLeaveBeforeMinute, rules.earlyLeaveBeforeMinute);
 
     if (body.type === 'CHECK_IN') {
       // Cek apakah sudah ada check-in hari ini
