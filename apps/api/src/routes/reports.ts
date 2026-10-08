@@ -132,7 +132,10 @@ export async function reportRoutes(app: FastifyInstance) {
         user: { select: { fullName: true } },
         student: { include: { class: true } },
       },
-      orderBy: { checkIn: 'asc' },
+      orderBy: [
+          { student: { class: { name: 'asc' } } },
+          { user: { fullName: 'asc' } },
+        ],
     });
     // Gabungkan jam pulang dari catatan CHECK_OUT hari yang sama
     const outs = await checkOutMap(dayStart, dayEnd, classId);
@@ -210,7 +213,11 @@ export async function reportRoutes(app: FastifyInstance) {
         user: { select: { fullName: true } },
         student: { include: { class: true } },
       },
-      orderBy: { date: 'asc' },
+      orderBy: [
+          { date: 'asc' },
+          { student: { class: { name: 'asc' } } },
+          { user: { fullName: 'asc' } },
+        ],
     });
     // Gabungkan jam pulang dari catatan CHECK_OUT bulan yang sama
     const outs = await checkOutMap(start, end, classId);
