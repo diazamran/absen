@@ -52,14 +52,14 @@ export async function leaveRoutes(app: FastifyInstance) {
   // ===== Semua pengajuan (admin/wali/piket) — scoped by role =====
   app.get('/leave', { preHandler: app.requirePermission(PERMISSION_KEYS.leaveRead) }, async (request, reply) => {
     const q = request.query as { status?: string; classId?: string };
-    const roleKey = request.user!.roleKey;
-    const additionalRoles: string[] = (request.user as any)?.additionalRoles ?? [];
-    const allRoles = [roleKey, ...additionalRoles];
+    // request.user.roles berisi semua role: primary + additional (dari JWT token)
+    const allRoles = request.user!.roles ?? [request.user!.roleKey];
 
     const where: Record<string, unknown> = {};
     if (q.status) where.status = q.status;
 
     // HOMEROOM_TEACHER: hanya tampilkan izin siswa di kelas yang dia bimbing
+    // Kecuali jika user juga punya role ADMIN/SUPER_ADMIN/HEADMASTER/PIKET
     const isHomeroomOnly =
       allRoles.includes('HOMEROOM_TEACHER') &&
       !allRoles.some((r) => ['ADMIN', 'SUPER_ADMIN', 'HEADMASTER', 'PIKET'].includes(r));
