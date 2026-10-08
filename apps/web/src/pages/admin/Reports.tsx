@@ -492,7 +492,7 @@ function ClassDetailModal({ className, date, tab, onClose }: { className: string
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-800" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-5xl rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-800" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h3 className="text-lg font-bold text-ink">Detail Kelas {className}</h3>
@@ -515,36 +515,36 @@ function ClassDetailModal({ className, date, tab, onClose }: { className: string
         ) : rows.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted">Tidak ada data absensi untuk kelas ini.</p>
         ) : tab === 'daily' ? (
-          <div className="max-h-[24rem] overflow-y-auto rounded-2xl border border-line">
+          <div className="max-h-[60vh] overflow-y-auto rounded-2xl border border-line">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-surface text-left text-xs uppercase text-muted dark:bg-slate-800">
                 <tr>
-                  <th className="px-3 py-2">No</th>
-                  <th className="px-3 py-2">Nama</th>
-                  <th className="px-3 py-2">NISN</th>
-                  <th className="px-3 py-2">Datang</th>
-                  <th className="px-3 py-2">Lokasi Datang</th>
-                  <th className="px-3 py-2">Pulang</th>
-                  <th className="px-3 py-2">Lokasi Pulang</th>
-                  <th className="px-3 py-2">Status</th>
+                  <th className="px-2 py-2">No</th>
+                  <th className="px-2 py-2">Nama</th>
+                  <th className="px-2 py-2">NISN</th>
+                  <th className="px-2 py-2">Datang</th>
+                  <th className="px-2 py-2">Lokasi Datang</th>
+                  <th className="px-2 py-2">Pulang</th>
+                  <th className="px-2 py-2">Lokasi Pulang</th>
+                  <th className="px-2 py-2">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {rows.map((r: any, i: number) => (
                   <tr key={i}>
-                    <td className="px-3 py-2 text-muted">{i + 1}</td>
-                    <td className="px-3 py-2 font-medium text-ink">{r.name}</td>
-                    <td className="px-3 py-2 text-muted">{r.nis || '—'}</td>
-                    <td className="px-3 py-2 font-mono text-muted">{r.time || '—'}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-2 py-2 text-muted">{i + 1}</td>
+                    <td className="px-2 py-2 font-medium text-ink">{r.name}</td>
+                    <td className="px-2 py-2 font-mono text-xs text-muted">{r.nis || '—'}</td>
+                    <td className="px-2 py-2 font-mono text-muted">{r.time || '—'}</td>
+                    <td className="px-2 py-2">
                       <LocationCell loc={r.checkInLocation} />
                     </td>
-                    <td className="px-3 py-2 font-mono text-muted">{r.checkOut || '—'}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-2 py-2 font-mono text-muted">{r.checkOut || '—'}</td>
+                    <td className="px-2 py-2">
                       <LocationCell loc={r.checkOutLocation} />
                     </td>
-                    <td className="px-3 py-2">
-                      <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: `${STATUS_COLORS[r.status]}1a`, color: STATUS_COLORS[r.status] }}>
+                    <td className="px-2 py-2">
+                      <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: `${STATUS_COLORS[r.status]}1a`, color: STATUS_COLORS[r.status] }}>
                         {STATUS_LABELS[r.status]}{r.status === 'LATE' && r.lateMinutes ? ` (${r.lateMinutes}m)` : ''}
                       </span>
                     </td>
@@ -554,31 +554,31 @@ function ClassDetailModal({ className, date, tab, onClose }: { className: string
             </table>
           </div>
         ) : (
-          <div className="max-h-[24rem] overflow-y-auto rounded-2xl border border-line">
+          <div className="max-h-[60vh] overflow-y-auto rounded-2xl border border-line">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-surface text-left text-xs uppercase text-muted dark:bg-slate-800">
                 <tr>
-                  <th className="px-3 py-2">No</th>
-                  <th className="px-3 py-2">Nama</th>
-                  <th className="px-3 py-2">NISN</th>
-                  <th className="px-3 py-2">Hadir</th>
-                  <th className="px-3 py-2">Terlambat</th>
-                  <th className="px-3 py-2">Izin/Sakit</th>
-                  <th className="px-3 py-2">Absen</th>
-                  <th className="px-3 py-2">%</th>
+                  <th className="px-2 py-2">No</th>
+                  <th className="px-2 py-2">Nama</th>
+                  <th className="px-2 py-2">NISN</th>
+                  <th className="px-2 py-2">Hadir</th>
+                  <th className="px-2 py-2">Terlambat</th>
+                  <th className="px-2 py-2">Izin/Sakit</th>
+                  <th className="px-2 py-2">Absen</th>
+                  <th className="px-2 py-2">%</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {rows.map((r: any, i: number) => (
                   <tr key={i}>
-                    <td className="px-3 py-2 text-muted">{i + 1}</td>
-                    <td className="px-3 py-2 font-medium text-ink">{r.name}</td>
-                    <td className="px-3 py-2 text-muted">{r.nis || '—'}</td>
-                    <td className="px-3 py-2 font-semibold text-emerald-600">{r.present}</td>
-                    <td className="px-3 py-2 font-semibold text-amber-600">{r.late}</td>
-                    <td className="px-3 py-2 font-semibold text-sky-600">{r.excused}</td>
-                    <td className="px-3 py-2 font-semibold text-red-500">{r.absent}</td>
-                    <td className="px-3 py-2 text-muted">{r.attendanceRate}%</td>
+                    <td className="px-2 py-2 text-muted">{i + 1}</td>
+                    <td className="px-2 py-2 font-medium text-ink">{r.name}</td>
+                    <td className="px-2 py-2 font-mono text-xs text-muted">{r.nis || '—'}</td>
+                    <td className="px-2 py-2 font-semibold text-emerald-600">{r.present}</td>
+                    <td className="px-2 py-2 font-semibold text-amber-600">{r.late}</td>
+                    <td className="px-2 py-2 font-semibold text-sky-600">{r.excused}</td>
+                    <td className="px-2 py-2 font-semibold text-red-500">{r.absent}</td>
+                    <td className="px-2 py-2 text-muted">{r.attendanceRate}%</td>
                   </tr>
                 ))}
               </tbody>
