@@ -49,12 +49,44 @@ export async function leaveRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: rows });
   });
 
-  // ===== Semua pengajuan (admin/wali) =====
+  // ===== Semua pengajuan (admin/wali/piket) — scoped by role =====
   app.get('/leave', { preHandler: app.requirePermission(PERMISSION_KEYS.leaveRead) }, async (request, reply) => {
     const q = request.query as { status?: string; classId?: string };
+    const roleKey = request.user!.roleKey;
+    const additionalRoles: string[] = (request.user as any)?.additionalRoles ?? [];
+    const allRoles = [roleKey, ...additionalRoles];
+
     const where: Record<string, unknown> = {};
     if (q.status) where.status = q.status;
-    if (q.classId) where.student = { classId: q.classId };
+
+    // HOMEROOM_TEACHER: hanya tampilkan izin siswa di kelas yang dia bimbing
+    const isHomeroomOnly =
+      allRoles.includes('HOMEROOM_TEACHER') &&
+      !allRoles.some((r) => ['ADMIN', 'SUPER_ADMIN', 'HEADMASTER', 'PIKET'].includes(r));
+
+    if (isHomeroomOnly) {
+      // Cari kelas yang dibimbing guru ini
+      const teacher = await prisma.teacher.findUnique({
+        where: { userId: request.user!.id },
+        select: { id: true },
+      });
+      if (teacher) {
+        const myClasses = await prisma.class.findMany({
+          where: { homeroomTeacherId: teacher.id },
+          select: { id: true },
+        });
+        const classIds = myClasses.map((c) => c.id);
+        if (classIds.length === 0) {
+          return reply.send({ success: true, data: [] });
+        }
+        where.student = { classId: { in: classIds } };
+      } else {
+        return reply.send({ success: true, data: [] });
+      }
+    } else if (q.classId) {
+      where.student = { classId: q.classId };
+    }
+
     const rows = await prisma.leaveRequest.findMany({
       where,
       include: {
@@ -62,7 +94,7 @@ export async function leaveRoutes(app: FastifyInstance) {
         student: { include: { class: true } },
       },
       orderBy: { createdAt: 'desc' },
-      take: 100,
+      take: 200,
     });
     return reply.send({
       success: true,
