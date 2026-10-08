@@ -1277,6 +1277,9 @@ export async function pklRoutes(app: FastifyInstance) {
     // Update yang sudah ada — masih per-baris karena checkIn berbeda tiap siswa
     // tapi jumlahnya jauh lebih kecil (hanya yang duplicate)
     for (const row of toUpdate) {
+      // lateMinutes: PRESENT/non-LATE → 0; LATE → pertahankan existing (tidak recalculate)
+      // Guru yang ingin set LATE dengan menit yang benar bisa input via catatan
+      const lateMinutesNew = body.status === 'LATE' ? (row.existingLateMinutes ?? 0) : 0;
       await prisma.attendance.update({
         where: { id: row.id },
         data: {
@@ -1285,7 +1288,7 @@ export async function pklRoutes(app: FastifyInstance) {
           checkIn:  body.type === 'CHECK_IN'  ? checkInTime  : row.existingCheckIn,
           checkOut: body.type === 'CHECK_OUT' ? checkOutTime : undefined,
           notes: body.notes,
-          lateMinutes: body.status === 'LATE' ? (row.existingLateMinutes ?? 0) : 0,
+          lateMinutes: lateMinutesNew,
         },
       });
     }
