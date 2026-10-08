@@ -380,7 +380,7 @@ export async function pklRoutes(app: FastifyInstance) {
     }
 
     const today = todayStart();
-    const todayKey = today.toISOString().slice(0, 10);
+    const todayKey = dateKey(); // HARUS pakai dateKey() WIB, bukan today.toISOString() yang menghasilkan tanggal UTC (H-1)
 
     // ===== Jadwal PKL: per-lokasi (location.schedule) → global PKL → jam sekolah =====
     const rules = await getAttendanceRules();
