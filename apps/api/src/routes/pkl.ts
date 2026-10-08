@@ -642,7 +642,10 @@ export async function pklRoutes(app: FastifyInstance) {
         },
         pklLocation: true,
       },
-      orderBy: { student: { user: { fullName: 'asc' } } },
+      orderBy: [
+          { student: { class: { name: 'asc' } } },
+          { student: { user: { fullName: 'asc' } } },
+        ],
     });
 
     // Kumpulkan workDays dari semua lokasi terlibat
@@ -926,10 +929,10 @@ export async function pklRoutes(app: FastifyInstance) {
         pklLocation: true,
         supervisor: { include: { user: { select: { fullName: true } } } },
       },
-      orderBy: { student: { user: { fullName: 'asc' } } },
-    });
-
-    // Jam pulang disimpan sebagai catatan CHECK_OUT TERPISAH (bukan kolom baris CHECK_IN),
+      orderBy: [
+          { student: { class: { name: 'asc' } } },  // urut kelas dulu
+          { student: { user: { fullName: 'asc' } } }, // lalu nama alfabet
+        ],
     // jadi harus diambil lewat query kedua lalu dipasangkan per siswa — tanpa ini kolom
     // Pulang di laporan selalu kosong walau siswa sudah absen pulang.
     const outs = await prisma.attendance.findMany({
@@ -1034,7 +1037,10 @@ export async function pklRoutes(app: FastifyInstance) {
         pklLocation: true,
         supervisor: { include: { user: { select: { fullName: true } } } },
       },
-      orderBy: { student: { user: { fullName: 'asc' } } },
+      orderBy: [
+          { student: { class: { name: 'asc' } } },
+          { student: { user: { fullName: 'asc' } } },
+        ],
     });
 
     // Tanggal mulai PKL — dari query param bila admin isi manual,
@@ -1445,7 +1451,10 @@ export async function pklRoutes(app: FastifyInstance) {
         },
         pklLocation: { select: { id: true, name: true } },
       },
-      orderBy: { student: { user: { fullName: 'asc' } } },
+      orderBy: [
+          { student: { class: { name: 'asc' } } },
+          { student: { user: { fullName: 'asc' } } },
+        ],
     });
 
     // Hitung array tanggal WIB
