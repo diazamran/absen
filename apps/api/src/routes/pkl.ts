@@ -930,9 +930,10 @@ export async function pklRoutes(app: FastifyInstance) {
         supervisor: { include: { user: { select: { fullName: true } } } },
       },
       orderBy: [
-          { student: { class: { name: 'asc' } } },  // urut kelas dulu
-          { student: { user: { fullName: 'asc' } } }, // lalu nama alfabet
+          { student: { class: { name: 'asc' } } },
+          { student: { user: { fullName: 'asc' } } },
         ],
+    });
     // jadi harus diambil lewat query kedua lalu dipasangkan per siswa — tanpa ini kolom
     // Pulang di laporan selalu kosong walau siswa sudah absen pulang.
     const outs = await prisma.attendance.findMany({
