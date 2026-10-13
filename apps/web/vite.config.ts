@@ -57,6 +57,11 @@ export default defineConfig({
         // Chunk pengenalan wajah (face-api + TensorFlow.js) lebih besar dari default 2 MiB
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         navigateFallback: '/index.html',
+        // Aktifkan SW baru langsung tanpa tunggu tab lama ditutup
+        skipWaiting: true,
+        clientsClaim: true,
+        // Hapus cache SW lama otomatis
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             urlPattern: /^https?:\/\/.*\/api\/(settings|meta|health)/,
