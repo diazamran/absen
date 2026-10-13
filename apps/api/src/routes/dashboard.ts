@@ -64,6 +64,7 @@ async function schoolStats(dayStart: Date, dayEnd: Date) {
 
   const classCounts = await prisma.class.findMany({
     where: { isActive: true },
+    orderBy: { name: 'asc' },
     select: {
       id: true,
       name: true,
