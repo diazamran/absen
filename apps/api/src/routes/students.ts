@@ -231,6 +231,32 @@ export async function studentRoutes(app: FastifyInstance) {
     });
   });
 
+  // Bulk set allowManualAttendance untuk banyak siswa sekaligus
+  app.patch('/students/bulk-manual-pkl', {
+    preHandler: app.requirePermission(PERMISSION_KEYS.studentsUpdate),
+  }, async (request, reply) => {
+    const body = validate(
+      z.object({
+        studentIds: z.array(z.string()).min(1, 'Minimal 1 siswa.').max(200, 'Maksimal 200 siswa.'),
+        allowManualAttendance: z.boolean(),
+      }),
+      request.body,
+    );
+    const result = await prisma.student.updateMany({
+      where: { id: { in: body.studentIds } },
+      data: { allowManualAttendance: body.allowManualAttendance },
+    });
+    await audit({
+      userId: request.user!.id,
+      action: body.allowManualAttendance ? 'STUDENTS_BULK_MANUAL_PKL_ENABLED' : 'STUDENTS_BULK_MANUAL_PKL_DISABLED',
+      entity: 'Student',
+      entityId: null,
+      newValue: { count: result.count, studentIds: body.studentIds },
+      request,
+    });
+    return reply.send({ success: true, updated: result.count });
+  });
+
   app.put('/students/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.studentsUpdate) }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = validate(studentUpdateSchema, request.body);

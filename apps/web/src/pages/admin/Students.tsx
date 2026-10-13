@@ -111,6 +111,20 @@ export default function Students() {
     onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal reset password.'),
   });
 
+  const bulkManualPkl = useMutation<unknown, ApiError, boolean>({
+    mutationFn: (allowManualAttendance: boolean) =>
+      api('/students/bulk-manual-pkl', {
+        method: 'PATCH',
+        body: { studentIds: [...selected], allowManualAttendance },
+      }),
+    onSuccess: (_data, allowManualAttendance) => {
+      toast('success', `${selected.size} siswa: Absen Manual PKL ${allowManualAttendance ? 'diaktifkan' : 'dinonaktifkan'}.`);
+      setSelected(new Set());
+      qc.invalidateQueries({ queryKey: ['students'] });
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal mengubah setting absen manual.'),
+  });
+
   return (
     <div>
       <PageHeader title="Siswa" subtitle="Kelola data siswa" />
@@ -145,6 +159,23 @@ export default function Students() {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-line/70 bg-primary-soft/60 px-4 py-2.5 dark:bg-primary-500/10">
           <p className="text-sm font-semibold text-ink">{selected.size} siswa dipilih</p>
           <div className="flex flex-wrap gap-2">
+            <Button
+              className="!px-3 !py-1.5 text-xs"
+              onClick={() => bulkManualPkl.mutate(true)}
+              disabled={bulkManualPkl.isPending}
+            >
+              {bulkManualPkl.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '✋'}
+              Aktifkan Manual PKL
+            </Button>
+            <Button
+              variant="outline"
+              className="!px-3 !py-1.5 text-xs"
+              onClick={() => bulkManualPkl.mutate(false)}
+              disabled={bulkManualPkl.isPending}
+            >
+              {bulkManualPkl.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '🤳'}
+              Nonaktifkan Manual PKL
+            </Button>
             <Button
               className="!px-3 !py-1.5 text-xs"
               onClick={() => {
