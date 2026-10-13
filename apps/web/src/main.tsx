@@ -13,7 +13,7 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
-      staleTime: 15_000,
+      staleTime: 60_000, // 1 menit — cukup untuk navigasi bolak-balik tanpa refetch sia-sia
     },
   },
 });

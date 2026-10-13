@@ -316,6 +316,14 @@ function Sidebar({ onClose, pklRole, adminGroups }: { onClose?: () => void; pklR
     <NavLink
       key={item.to}
       to={item.to}
+      onMouseEnter={() => {
+        // Prefetch chunk JS halaman saat hover — chunk sudah siap sebelum klik
+        if (item.to === '/app/dashboard') void import('../pages/admin/AdminDashboard');
+        else if (item.to === '/app/students') void import('../pages/admin/Students');
+        else if (item.to === '/app/attendance') void import('../pages/admin/AttendanceList');
+        else if (item.to === '/app/absent') void import('../pages/student/FaceScan');
+        else if (item.to === '/app/pkl-absent') void import('../pages/student/PklAbsent');
+      }}
       className={({ isActive }) =>
         cn(
           'flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors',
@@ -434,6 +442,7 @@ export function AppShell() {
   const { data: notifData } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => api<{ success: boolean; data: { unread: number } }>('/notifications').then((r) => r.data),
+    staleTime: 25_000, // sedikit di bawah refetchInterval agar polling tetap jalan tapi tidak refetch saat navigasi
     refetchInterval: 30_000,
   });
   const unreadCount = notifData?.unread ?? 0;
