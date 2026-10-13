@@ -417,8 +417,8 @@ export default function PklAbsent() {
           Scan loop otomatis memilih CHECK_IN atau CHECK_OUT berdasarkan waktu (canCheckIn/canCheckOut).
           Siswa tidak perlu memilih manual — halaman otomatis scan tipe yang sesuai jam sekarang. */}
 
-      {/* Mode selector — hanya tampil jika bukan forceManual */}
-      {!forceManual && (
+      {/* Mode selector — hanya tampil jika allowManualAttendance aktif (dan bukan forceManual yg langsung masuk manual) */}
+      {!forceManual && assignment.allowManualAttendance && (
         <div className="flex gap-2 bg-slate-800 px-4 py-2">
           {(['face', 'manual'] as const).map((m) => (
             <button
