@@ -59,16 +59,30 @@ export default function Students() {
   const safePage = meta?.page || page;
   const paged = students || [];
 
+  // Apakah semua allIds sudah terpilih (select-all-class aktif)?
+  const allClassSelected = !!allIds?.length && allIds.every((id) => selected.has(id));
+
   const togglePageAll = () => {
     const ids = paged.map((s) => s.id);
     if (!ids.length) return;
     setSelected((prev) => {
-      const allSelected = ids.every((id) => prev.has(id));
+      // Jika semua halaman ini sudah dipilih, deselect semua (termasuk lintas halaman)
+      const allPageSelected = ids.every((id) => prev.has(id));
       const next = new Set(prev);
-      if (allSelected) ids.forEach((id) => next.delete(id));
-      else ids.forEach((id) => next.add(id));
+      if (allPageSelected) {
+        // Jika sebelumnya select-all-class, clear semua; kalau tidak, clear halaman ini saja
+        if (allClassSelected && allIds) allIds.forEach((id) => next.delete(id));
+        else ids.forEach((id) => next.delete(id));
+      } else {
+        ids.forEach((id) => next.add(id));
+      }
       return next;
     });
+  };
+
+  const selectAllClass = () => {
+    if (!allIds) return;
+    setSelected(new Set(allIds));
   };
 
   const deleteOne = useMutation({
@@ -156,48 +170,67 @@ export default function Students() {
 
 
       {selected.size > 0 && (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-line/70 bg-primary-soft/60 px-4 py-2.5 dark:bg-primary-500/10">
-          <p className="text-sm font-semibold text-ink">{selected.size} siswa dipilih</p>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              className="!px-3 !py-1.5 text-xs"
-              onClick={() => bulkManualPkl.mutate(true)}
-              disabled={bulkManualPkl.isPending}
-            >
-              {bulkManualPkl.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '✋'}
-              Aktifkan Manual PKL
-            </Button>
-            <Button
-              variant="outline"
-              className="!px-3 !py-1.5 text-xs"
-              onClick={() => bulkManualPkl.mutate(false)}
-              disabled={bulkManualPkl.isPending}
-            >
-              {bulkManualPkl.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '🤳'}
-              Nonaktifkan Manual PKL
-            </Button>
-            <Button
-              className="!px-3 !py-1.5 text-xs"
-              onClick={() => {
-                if (window.confirm(`Reset password ${selected.size} siswa terpilih ke smkn1kras? Siswa bisa langsung login dengan NISN + smkn1kras.`)) resetPassword.mutate([...selected]);
-              }}
-              disabled={resetPassword.isPending}
-            >
-              {resetPassword.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
-              Reset Password
-            </Button>
-            <Button
-              variant="danger"
-              className="!px-3 !py-1.5 text-xs"
-              onClick={() => {
-                if (window.confirm(`Hapus PERMANEN ${selected.size} siswa terpilih? Riwayat absen, izin, dan data wajah ikut terhapus dari database dan tidak bisa dikembalikan.`)) bulkDelete.mutate();
-              }}
-              disabled={bulkDelete.isPending}
-            >
-              {bulkDelete.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-              Hapus Terpilih
-            </Button>
+        <div className="mb-3 flex flex-col gap-2 rounded-2xl border border-line/70 bg-primary-soft/60 px-4 py-2.5 dark:bg-primary-500/10">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-ink">{selected.size} siswa dipilih</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                className="!px-3 !py-1.5 text-xs"
+                onClick={() => bulkManualPkl.mutate(true)}
+                disabled={bulkManualPkl.isPending}
+              >
+                {bulkManualPkl.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '✋'}
+                Aktifkan Manual PKL
+              </Button>
+              <Button
+                variant="outline"
+                className="!px-3 !py-1.5 text-xs"
+                onClick={() => bulkManualPkl.mutate(false)}
+                disabled={bulkManualPkl.isPending}
+              >
+                {bulkManualPkl.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '🤳'}
+                Nonaktifkan Manual PKL
+              </Button>
+              <Button
+                className="!px-3 !py-1.5 text-xs"
+                onClick={() => {
+                  if (window.confirm(`Reset password ${selected.size} siswa terpilih ke smkn1kras? Siswa bisa langsung login dengan NISN + smkn1kras.`)) resetPassword.mutate([...selected]);
+                }}
+                disabled={resetPassword.isPending}
+              >
+                {resetPassword.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}
+                Reset Password
+              </Button>
+              <Button
+                variant="danger"
+                className="!px-3 !py-1.5 text-xs"
+                onClick={() => {
+                  if (window.confirm(`Hapus PERMANEN ${selected.size} siswa terpilih? Riwayat absen, izin, dan data wajah ikut terhapus dari database dan tidak bisa dikembalikan.`)) bulkDelete.mutate();
+                }}
+                disabled={bulkDelete.isPending}
+              >
+                {bulkDelete.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                Hapus Terpilih
+              </Button>
+            </div>
           </div>
+          {/* Banner select-all-class — muncul jika semua halaman dipilih tapi belum semua kelas */}
+          {allIds && selected.size > 0 && !allClassSelected && paged.length > 0 && paged.every((s) => selected.has(s.id)) && allIds.length > paged.length && (
+            <p className="text-xs text-primary">
+              Hanya {paged.length} siswa di halaman ini yang dipilih.{' '}
+              <button onClick={selectAllClass} className="font-bold underline hover:opacity-80">
+                Pilih semua {allIds.length} siswa{classId ? ' di kelas ini' : ' (semua kelas)'}
+              </button>
+            </p>
+          )}
+          {allClassSelected && allIds && (
+            <p className="text-xs text-primary">
+              Semua {allIds.length} siswa{classId ? ' di kelas ini' : ''} dipilih.{' '}
+              <button onClick={() => setSelected(new Set())} className="font-bold underline hover:opacity-80">
+                Batalkan pilihan
+              </button>
+            </p>
+          )}
         </div>
       )}
 
@@ -209,9 +242,10 @@ export default function Students() {
                 <th className="w-10 px-3 py-2.5">
                   <input
                     type="checkbox"
-                    checked={paged.length > 0 && paged.every((s) => selected.has(s.id))}
+                    checked={allClassSelected || (paged.length > 0 && paged.every((s) => selected.has(s.id)))}
                     onChange={togglePageAll}
                     className="h-4 w-4 accent-[var(--primary)]"
+                    title={allClassSelected ? 'Batalkan pilihan semua' : 'Pilih semua di halaman ini'}
                   />
                 </th>
                 <th className="px-3 py-2.5">Nama</th>
