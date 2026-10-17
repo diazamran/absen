@@ -39,23 +39,26 @@ export default function SsoCallback() {
       return;
     }
 
-    // Bersihkan semua token lama sebelum simpan token SSO baru,
-    // agar tidak ada sisa token dari sesi sebelumnya yang bisa menyebabkan konflik.
-    Object.keys(localStorage)
-      .filter((k) => k.startsWith('presensiku_'))
-      .forEach((k) => localStorage.removeItem(k));
-
-    // Simpan access token dan refresh token secara terpisah.
-    // refresh token dipakai oleh restoreSession() → tryRefresh() saat sesi dipulihkan.
-    // Kalau refresh token tidak ada di fragment (fallback), pakai access token saja
-    // tapi sesi tidak akan persisten (habis saat tab ditutup).
-    localStorage.setItem(TOKEN_KEY, access);
-    if (refresh) {
-      localStorage.setItem(REFRESH_KEY, refresh);
-    } else {
-      // Fallback: hapus refresh lama agar tidak ada token tidak valid yang tersimpan
-      localStorage.removeItem(REFRESH_KEY);
+    // Simpan token baru DULU sebelum hapus yang lama.
+    // Urutan ini penting: jika proses gagal di tengah jalan (tab ditutup, error JS),
+    // sesi lama masih valid — user tidak ter-logout secara tak terduga.
+    try {
+      localStorage.setItem(TOKEN_KEY, access);
+      if (refresh) {
+        localStorage.setItem(REFRESH_KEY, refresh);
+      } else {
+        localStorage.removeItem(REFRESH_KEY);
+      }
+    } catch (storageErr) {
+      // localStorage diblokir (WebView in-app, mode incognito ketat, dll.)
+      setError('Browser tidak mengizinkan penyimpanan sesi. Buka Absen di browser biasa (Chrome/Firefox).');
+      return;
     }
+
+    // Baru hapus sisa token lama (selain yang baru saja disimpan)
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith('presensiku_') && k !== TOKEN_KEY && k !== REFRESH_KEY)
+      .forEach((k) => localStorage.removeItem(k));
 
     // Tentukan halaman tujuan berdasarkan role
     let dest: string;

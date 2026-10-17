@@ -397,11 +397,10 @@ export async function authRoutes(app: FastifyInstance) {
         if (!roleRow) throw new Error(`Role ${targetRoleKey} tidak ditemukan`);
 
         const cryptoLib = await import('../lib/crypto.js');
-        // Siswa: password default smkn1kras agar bisa login manual juga
-        const { randomBytes: _rb } = await import('node:crypto');
-        const defaultPwd = targetRoleKey === 'STUDENT'
-          ? (process.env.STUDENT_DEFAULT_PASSWORD || 'smkn1kras')
-          : _rb(16).toString('hex');
+        // Semua role: gunakan password default yang diketahui agar login manual tetap bisa.
+        // Untuk guru/staff: default = NIP (username), bisa diubah setelah login pertama.
+        // Env DEFAULT_USER_PASSWORD bisa di-set di .env untuk override.
+        const defaultPwd = process.env.DEFAULT_USER_PASSWORD || sdmsPayload.username;
         user = await prisma.user.create({
           data: {
             username:     sdmsPayload.username,
