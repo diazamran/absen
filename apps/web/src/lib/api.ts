@@ -33,15 +33,31 @@ let refreshPromise: Promise<string | null> | null = null;
 /**
  * Pulihkan sesi saat aplikasi dibuka kembali:
  * - Tidak ada refresh token → tidak ada sesi (harus login)
- * - Refresh token ada → selalu berusaha pulih (refresh ulang akses token bila perlu)
- * sehingga pengguna tidak perlu login ulang setiap membuka aplikasi.
+ * - Ada token → validasi dulu dengan /auth/me, kalau gagal coba refresh,
+ *   kalau refresh juga gagal hapus semua token dan return false.
  */
 export async function restoreSession(): Promise<boolean> {
-  if (!getRefreshToken()) return false;
-  if (!getToken()) {
-    const newToken = await tryRefresh();
-    if (!newToken) return false;
+  if (!getRefreshToken()) {
+    clearTokens();
+    return false;
   }
+
+  // Kalau ada access token, coba validasi dulu
+  if (getToken()) {
+    try {
+      const res = await fetch(`${API_BASE}/auth/me`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (res.ok) return true; // token masih valid
+      // Token expired / invalid → coba refresh
+    } catch {
+      // network error, coba refresh
+    }
+  }
+
+  // Access token tidak ada atau tidak valid → coba refresh
+  const newToken = await tryRefresh();
+  if (!newToken) return false;
   return true;
 }
 

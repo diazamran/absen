@@ -39,6 +39,12 @@ export default function SsoCallback() {
       return;
     }
 
+    // Bersihkan semua token lama sebelum simpan token SSO baru,
+    // agar tidak ada sisa token dari sesi sebelumnya yang bisa menyebabkan konflik.
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith('presensiku_'))
+      .forEach((k) => localStorage.removeItem(k));
+
     // Simpan access token dan refresh token secara terpisah.
     // refresh token dipakai oleh restoreSession() → tryRefresh() saat sesi dipulihkan.
     // Kalau refresh token tidak ada di fragment (fallback), pakai access token saja
