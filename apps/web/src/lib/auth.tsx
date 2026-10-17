@@ -115,7 +115,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     clearTokens();
     setUser(null);
-    localStorage.removeItem('presensiku_device_id');
+    // Bersihkan semua key presensiku dari localStorage (termasuk token SSO)
+    const keysToRemove = Object.keys(localStorage).filter((k) => k.startsWith('presensiku_'));
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
   };
 
   return <Ctx.Provider value={{ user, loading, login, loginStudent, loginParentOtp, logout, refreshMe }}>{children}</Ctx.Provider>;

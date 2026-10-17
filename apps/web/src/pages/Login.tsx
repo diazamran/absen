@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ShieldCheck, Lock, User as UserIcon, KeyRound, MessageCircle, ArrowLeft, Clock, Hash, Check, Eye, EyeOff } from 'lucide-react';
+import { ShieldCheck, Lock, User as UserIcon, KeyRound, MessageCircle, ArrowLeft, Clock, Hash, Check, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth, deviceId } from '../lib/auth';
 import { useTheme } from '../lib/theme';
 import { useToast } from '../lib/toast';
@@ -38,7 +38,7 @@ const DEFAULT_FEATURES = [
 
 export default function Login() {
   const { branding, primary } = useTheme();
-  const { login, loginStudent, loginParentOtp, user } = useAuth();
+  const { login, loginStudent, loginParentOtp, user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -316,8 +316,8 @@ export default function Login() {
                       </button>
                     </div>
                   </Field>
-                  <Button className="w-full py-3" onClick={doStudentLogin} disabled={loading}>
-                    <UserIcon className="h-4 w-4" /> Masuk
+                  <Button className="w-full py-3" onClick={doStudentLogin} disabled={loading || authLoading}>
+                    {authLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Memuat sesi...</> : <><UserIcon className="h-4 w-4" /> Masuk</>}
                   </Button>
                 </>
               ) : role === 'parent' ? (
@@ -375,8 +375,8 @@ export default function Login() {
                       </button>
                     </div>
                   </Field>
-                  <Button className="w-full py-3" onClick={doLogin} disabled={loading}>
-                    <Lock className="h-4 w-4" /> Masuk
+                  <Button className="w-full py-3" onClick={doLogin} disabled={loading || authLoading}>
+                    {authLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Memuat sesi...</> : <><Lock className="h-4 w-4" /> Masuk</>}
                   </Button>
                   <button className="w-full text-center text-sm text-muted hover:text-ink" onClick={() => { setForgot(true); setRole('parent'); }}>
                     Lupa password?
