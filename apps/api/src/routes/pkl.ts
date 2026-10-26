@@ -393,19 +393,23 @@ export async function pklRoutes(app: FastifyInstance) {
     const nowMinutes = localMinutesOf(new Date());
 
     // Helper: ambil nilai jam dari locSched → pklGlobal → sekolah
-    // Jika locSched aktif (tidak null), field yang tidak diisi di locSched
-    // fallback ke PKL global, BUKAN langsung ke sekolah.
-    // Ini mencegah jam sekolah (07:00) dipakai sebagai batas terlambat PKL.
+    // Prioritas: jadwal per-lokasi → PKL global → jadwal sekolah.
+    // PENTING: jika locSched aktif (tidak null), jadwal lokasi sepenuhnya override PKL global.
+    // Field yang tidak diisi di jadwal lokasi → noConstraintVal (tidak dibatasi),
+    // BUKAN fallback ke PKL global — ini mencegah PKL global menimpa jadwal lokasi.
     const pickTime = (
       locVal: number | undefined,
       pklVal: number | null,
       schoolVal: number,
-      noConstraintVal = schoolVal, // nilai jika semua null (berarti tidak dibatasi)
+      noConstraintVal = schoolVal, // nilai jika tidak dibatasi (mis. 23 untuk jam, 59 untuk menit)
     ): number => {
-      if (locSched !== null && locVal !== undefined) return locVal;  // per-lokasi
-      if (pklVal !== null) return pklVal;                             // PKL global
-      if (locSched !== null) return noConstraintVal;                  // locSched ada tapi field ini kosong → pakai noConstraintVal
-      return schoolVal;                                               // tidak ada jadwal khusus → jadwal sekolah
+      if (locSched !== null) {
+        // Lokasi punya jadwal khusus — field yang diisi dipakai, field yang tidak diisi = no constraint
+        return locVal !== undefined ? locVal : noConstraintVal;
+      }
+      // Tidak ada jadwal per-lokasi → PKL global → jadwal sekolah
+      if (pklVal !== null) return pklVal;
+      return schoolVal;
     };
 
     // lateAfterHour/Minute — batas terlambat:
