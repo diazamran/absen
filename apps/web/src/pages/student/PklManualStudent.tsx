@@ -25,6 +25,7 @@ interface PklAssignment {
   radiusMeter: number;
   supervisorName: string | null;
   className: string | null;
+  schedule: Record<string, number> | null;
   todayAttendance?: {
     checkIn: string | null;
     checkOut: string | null;
@@ -94,15 +95,31 @@ export default function PklManualStudent() {
   void nowTick;
   const nowMin = nowMinutesWIB();
   const num = (v: unknown, d: number) => (typeof v === 'number' ? v : d);
+
+  // Jadwal per-lokasi DUDI (dari assignment) → PKL global → sekolah
+  // Konsisten dengan logika backend pickTime di pkl.ts dan attendance.ts
+  const locSched = assignment?.schedule ?? null;
+  const pickTimeUI = (
+    locVal: number | undefined,
+    pklVal: unknown,
+    schoolVal: unknown,
+    noConstraintVal: number,
+  ): number => {
+    if (locSched !== null) return locVal !== undefined ? locVal : noConstraintVal;
+    if (typeof pklVal === 'number') return pklVal;
+    if (typeof schoolVal === 'number') return schoolVal;
+    return noConstraintVal;
+  };
+
+  const checkInDeadlineH = pickTimeUI(locSched?.checkInDeadlineHour, rules?.pklCheckInDeadlineHour, rules?.checkInDeadlineHour, 23);
+  const checkInDeadlineM = pickTimeUI(locSched?.checkInDeadlineMinute, rules?.pklCheckInDeadlineMinute, rules?.checkInDeadlineMinute, 59);
+  const earlyH = pickTimeUI(locSched?.earlyLeaveBeforeHour, rules?.pklEarlyLeaveBeforeHour, rules?.earlyLeaveBeforeHour ?? rules?.checkOutAfterHour, 15);
+  const earlyM = pickTimeUI(locSched?.earlyLeaveBeforeMinute, rules?.pklEarlyLeaveBeforeMinute, rules?.earlyLeaveBeforeMinute ?? rules?.checkOutAfterMinute, 0);
+
   const canCheckIn = rules
-    ? nowMin <= (num(rules.pklCheckInDeadlineHour ?? rules.checkInDeadlineHour, 23) * 60 +
-        num(rules.pklCheckInDeadlineMinute ?? rules.checkInDeadlineMinute, 59))
+    ? nowMin <= (checkInDeadlineH * 60 + checkInDeadlineM)
     : true;
-  const earlyH = num(rules?.pklEarlyLeaveBeforeHour ?? rules?.earlyLeaveBeforeHour ?? rules?.checkOutAfterHour, 15);
-  const earlyM = num(rules?.pklEarlyLeaveBeforeMinute ?? rules?.earlyLeaveBeforeMinute ?? rules?.checkOutAfterMinute, 0);
   const canCheckOut = rules ? nowMin >= earlyH * 60 + earlyM : true;
-  const checkInDeadlineH = num(rules?.pklCheckInDeadlineHour ?? rules?.checkInDeadlineHour, 23);
-  const checkInDeadlineM = num(rules?.pklCheckInDeadlineMinute ?? rules?.checkInDeadlineMinute, 59);
 
   const getGeo = useCallback(async (): Promise<GeoPos | null> => {
     setGeoLoading(true);

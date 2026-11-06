@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+﻿import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { validate } from '../utils/validate.js';
@@ -166,7 +166,7 @@ export async function pklRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: row, message: 'Lokasi PKL ditambahkan.' });
   });
 
-  // Update PKL location — admin atau guru pembimbing lokasi tersebut
+  // Update PKL location â€” admin atau guru pembimbing lokasi tersebut
   app.put('/pkl/locations/:id', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const scope = await getPklScope(request.user!.id);
@@ -180,7 +180,7 @@ export async function pklRoutes(app: FastifyInstance) {
     }
     const body = validate(locationSchema.partial(), request.body);
     const { startDate, endDate, workDays, schedule, ...rest } = body;
-    // Guru non-admin hanya boleh update field schedule — field lain hanya admin
+    // Guru non-admin hanya boleh update field schedule â€” field lain hanya admin
     const updateData: Record<string, unknown> = {};
     if (scope.isAdmin) {
       Object.assign(updateData, rest);
@@ -219,7 +219,7 @@ export async function pklRoutes(app: FastifyInstance) {
         where: { pklLocationId: body.pklLocationId, supervisorId: scope.teacherId, isActive: true },
       });
       // Guru juga boleh assign jika lokasi belum punya siswa tapi admin sudah set dia sebagai supervisor
-      // via field lain — karena di awal lokasi masih kosong, cek via existing supervisor mapping
+      // via field lain â€” karena di awal lokasi masih kosong, cek via existing supervisor mapping
       // Fallback: cek apakah ada penugasan (active) dari guru ini ke lokasi ini
       if (!isSupervisorOfLocation) {
         // Coba cek apakah guru adalah satu-satunya supervisor yang pernah di-set admin
@@ -329,7 +329,7 @@ export async function pklRoutes(app: FastifyInstance) {
 
   // ===== PKL ATTENDANCE =====
 
-  // Absen PKL (check-in / check-out) — siswa atau guru pembimbing
+  // Absen PKL (check-in / check-out) â€” siswa atau guru pembimbing
   app.post('/pkl/attendance', { preHandler: app.requirePermission(PERMISSION_KEYS.pklAttendance) }, async (request, reply) => {
     const body = validate(z.object({
       type: z.enum(['CHECK_IN', 'CHECK_OUT']).default('CHECK_IN'),
@@ -373,7 +373,7 @@ export async function pklRoutes(app: FastifyInstance) {
         && locLng >= -180 && locLng <= 180;
       if (dbCoordsValid) {
         const dist = haversineMeters(body.latitude, body.longitude, locLat!, locLng!);
-        // Kompensasi akurasi GPS: siswa di dalam gedung sering dapat fix ±50-100m
+        // Kompensasi akurasi GPS: siswa di dalam gedung sering dapat fix Â±50-100m
         const accuracyAllowance = 150;
         locationVerified = dist <= (location.radiusMeter + accuracyAllowance);
       }
@@ -382,7 +382,7 @@ export async function pklRoutes(app: FastifyInstance) {
     const today = todayStart();
     const todayKey = dateKey(); // HARUS pakai dateKey() WIB, bukan today.toISOString() yang menghasilkan tanggal UTC (H-1)
 
-    // ===== Jadwal PKL: per-lokasi (location.schedule) → global PKL → jam sekolah =====
+    // ===== Jadwal PKL: per-lokasi (location.schedule) â†’ global PKL â†’ jam sekolah =====
     const rules = await getAttendanceRules();
     const locSched = (location as any).schedule as {
       lateAfterHour?: number; lateAfterMinute?: number;
@@ -392,11 +392,11 @@ export async function pklRoutes(app: FastifyInstance) {
     } | null ?? null;
     const nowMinutes = localMinutesOf(new Date());
 
-    // Helper: ambil nilai jam dari locSched → pklGlobal → sekolah
-    // Prioritas: jadwal per-lokasi → PKL global → jadwal sekolah.
+    // Helper: ambil nilai jam dari locSched â†’ pklGlobal â†’ sekolah
+    // Prioritas: jadwal per-lokasi â†’ PKL global â†’ jadwal sekolah.
     // PENTING: jika locSched aktif (tidak null), jadwal lokasi sepenuhnya override PKL global.
-    // Field yang tidak diisi di jadwal lokasi → noConstraintVal (tidak dibatasi),
-    // BUKAN fallback ke PKL global — ini mencegah PKL global menimpa jadwal lokasi.
+    // Field yang tidak diisi di jadwal lokasi â†’ noConstraintVal (tidak dibatasi),
+    // BUKAN fallback ke PKL global â€” ini mencegah PKL global menimpa jadwal lokasi.
     const pickTime = (
       locVal: number | undefined,
       pklVal: number | null,
@@ -404,15 +404,15 @@ export async function pklRoutes(app: FastifyInstance) {
       noConstraintVal = schoolVal, // nilai jika tidak dibatasi (mis. 23 untuk jam, 59 untuk menit)
     ): number => {
       if (locSched !== null) {
-        // Lokasi punya jadwal khusus — field yang diisi dipakai, field yang tidak diisi = no constraint
+        // Lokasi punya jadwal khusus â€” field yang diisi dipakai, field yang tidak diisi = no constraint
         return locVal !== undefined ? locVal : noConstraintVal;
       }
-      // Tidak ada jadwal per-lokasi → PKL global → jadwal sekolah
+      // Tidak ada jadwal per-lokasi â†’ PKL global â†’ jadwal sekolah
       if (pklVal !== null) return pklVal;
       return schoolVal;
     };
 
-    // lateAfterHour/Minute — batas terlambat:
+    // lateAfterHour/Minute â€” batas terlambat:
     //   jika locSched aktif & tidak di-set: default 23:59 (tidak pernah terlambat)
     //   jika tidak ada locSched & pklGlobal null: fallback ke jam sekolah
     const lateH = pickTime(locSched?.lateAfterHour, rules.pklLateAfterHour, rules.lateAfterHour, 23);
@@ -433,7 +433,7 @@ export async function pklRoutes(app: FastifyInstance) {
         return reply.send({ success: true, message: 'Sudah absen PKL hari ini.', data: { id: existing.id, alreadyExists: true } });
       }
 
-      // Batas akhir absen datang PKL — setelah jam ini perlu koreksi petugas
+      // Batas akhir absen datang PKL â€” setelah jam ini perlu koreksi petugas
       const deadlineMinutes = inDeadlineH * 60 + inDeadlineM;
       if (deadlineMinutes < 23 * 60 + 59 && nowMinutes > deadlineMinutes) {
         throw ApiError.badRequest(
@@ -449,7 +449,7 @@ export async function pklRoutes(app: FastifyInstance) {
       const isLate = nowDt.getTime() > lateThreshold.getTime();
       const lateMinutes = isLate ? Math.max(1, Math.round((nowDt.getTime() - lateThreshold.getTime()) / 60000)) : 0;
 
-      // GPS gagal/radius tidak cocok tetap mencatat kehadiran — status ke Lokasi terlihat
+      // GPS gagal/radius tidak cocok tetap mencatat kehadiran â€” status ke Lokasi terlihat
       // di laporan; menandai ABSENT hanya karena GPS membuat laporan rancu.
       const status = isLate ? 'LATE' : 'PRESENT';
       const att = await prisma.attendance.create({
@@ -519,7 +519,7 @@ export async function pklRoutes(app: FastifyInstance) {
         }
       }
 
-      // Absen pulang PKL baru bisa dilakukan mulai jam "Pulang Awal PKL" —
+      // Absen pulang PKL baru bisa dilakukan mulai jam "Pulang Awal PKL" â€”
       // jadwal PKL berbeda dari sekolah, jadi tidak ikut blok sekolah.
       const batasPulang = earlyH * 60 + earlyM;
       if (nowMinutes < batasPulang) {
@@ -586,7 +586,7 @@ export async function pklRoutes(app: FastifyInstance) {
     return reply.send({
       success: true,
       data: assignments.map((a) => {
-        // Baris datang & pulang adalah catatan TERPISAH (type CHECK_IN / CHECK_OUT) —
+        // Baris datang & pulang adalah catatan TERPISAH (type CHECK_IN / CHECK_OUT) â€”
         // jangan membaca attendance[0] saja karena bisa jadi baris CHECK_OUT sehingga
         // siswa yang sudah absen datang salah tampil "Belum absen".
         const atts = a.student?.attendance ?? [];
@@ -671,7 +671,7 @@ export async function pklRoutes(app: FastifyInstance) {
     const todayParts = dateKey().split('-').map(Number);
     const todayDate = new Date(Date.UTC(todayParts[0], todayParts[1] - 1, todayParts[2]));
 
-    // Tentukan pklStart dari PklLocation → PklAssignment → awal bulan
+    // Tentukan pklStart dari PklLocation â†’ PklAssignment â†’ awal bulan
     let pklStart: Date | null = null;
     if (assignments.length > 0) {
       const locDates = assignments
@@ -706,7 +706,7 @@ export async function pklRoutes(app: FastifyInstance) {
           const hasData = atts.length > 0;
           const presentCount = atts.filter((at) => at.status === 'PRESENT' || at.status === 'LATE').length;
 
-          // Hitung activeSchoolDays dari tanggal pertama absen siswa — sama seperti laporan bulanan admin
+          // Hitung activeSchoolDays dari tanggal pertama absen siswa â€” sama seperti laporan bulanan admin
           let activeSchoolDays = schoolDays;
           if (hasData) {
             const firstDateRaw = atts[0].date;
@@ -756,7 +756,7 @@ export async function pklRoutes(app: FastifyInstance) {
     });
   });
 
-  // ===== LIST PKL STUDENTS — scoped by role =====
+  // ===== LIST PKL STUDENTS â€” scoped by role =====
   app.get('/pkl/students', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
     const { search } = request.query as { search?: string };
     const scope = await getPklScope(request.user!.id);
@@ -771,9 +771,9 @@ export async function pklRoutes(app: FastifyInstance) {
         { student: { nis: { contains: search, mode: 'insensitive' } } },
       ];
     }
-    // Kolom date adalah @db.Date — tersimpan sebagai UTC midnight H-1 (WIB H = UTC H-1).
+    // Kolom date adalah @db.Date â€” tersimpan sebagai UTC midnight H-1 (WIB H = UTC H-1).
     // todayStart() menghasilkan 2026-10-06T00:00:00+07:00 = 2026-10-05T17:00:00Z,
-    // sedangkan tanggal 6 Oktober tersimpan sebagai 2026-10-05T00:00:00Z — tidak sama.
+    // sedangkan tanggal 6 Oktober tersimpan sebagai 2026-10-05T00:00:00Z â€” tidak sama.
     // Gunakan Date.UTC(yy, mm-1, dd-1) seperti yang dipakai di /pkl/report/daily.
     const [yy, mm, dd] = dateKey().split('-').map(Number);
     const todayDate = new Date(Date.UTC(yy, mm - 1, dd - 1));
@@ -830,7 +830,7 @@ export async function pklRoutes(app: FastifyInstance) {
     });
   });
 
-  // ===== ASSIGNMENT SISWA (self) — untuk halaman absen manual PKL dari HP siswa =====
+  // ===== ASSIGNMENT SISWA (self) â€” untuk halaman absen manual PKL dari HP siswa =====
   // Berbeda dari GET /pkl/students yang butuh pklRead (admin/guru).
   // Endpoint ini memakai pklAttendance yang sudah dimiliki STUDENT.
   app.get('/pkl/my-assignment', { preHandler: app.requirePermission(PERMISSION_KEYS.pklAttendance) }, async (request, reply) => {
@@ -857,7 +857,7 @@ export async function pklRoutes(app: FastifyInstance) {
             },
           },
         },
-        pklLocation: { select: { id: true, name: true, city: true, latitude: true, longitude: true, radiusMeter: true } },
+        pklLocation: { select: { id: true, name: true, city: true, latitude: true, longitude: true, radiusMeter: true, schedule: true } },
         supervisor: { include: { user: { select: { fullName: true } } } },
       },
       orderBy: { createdAt: 'desc' },
@@ -881,6 +881,7 @@ export async function pklRoutes(app: FastifyInstance) {
           locationCity: r.pklLocation.city,
           latitude: r.pklLocation.latitude,
           longitude: r.pklLocation.longitude,
+          schedule: (r.pklLocation as any).schedule ?? null,
           radiusMeter: r.pklLocation.radiusMeter,
           supervisorId: r.supervisorId,
           supervisorName: r.supervisor?.user?.fullName ?? null,
@@ -897,13 +898,13 @@ export async function pklRoutes(app: FastifyInstance) {
 
   // ===== LAPORAN PKL =====
 
-  // Laporan PKL harian — scoped by supervisor
+  // Laporan PKL harian â€” scoped by supervisor
   app.get('/pkl/report/daily', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
     const { date, locationId, classId } = request.query as { date?: string; locationId?: string; classId?: string };
     // Kolom @db.Date menyimpan tanggal UTC = tanggal lokal MINUS satu hari (lihat
-    // localDateKeyOfStoredDate di lib/time.js — startOfLocalDay(14 Sep WIB) ter-truncate
+    // localDateKeyOfStoredDate di lib/time.js â€” startOfLocalDay(14 Sep WIB) ter-truncate
     // jadi 13 Sep UTC). Filter harus memakai nilai tersimpan itu, sementara label laporan
-    // menampilkan tanggal lokal yang diminta (dulu label memakai toISOString → tampil H-1).
+    // menampilkan tanggal lokal yang diminta (dulu label memakai toISOString â†’ tampil H-1).
     const dateStr = date || dateKey();
     const [yy, mm, dd] = dateStr.split('-').map(Number);
     const dateOnly = new Date(Date.UTC(yy, mm - 1, dd - 1));
@@ -938,7 +939,7 @@ export async function pklRoutes(app: FastifyInstance) {
           { student: { user: { fullName: 'asc' } } },
         ],
     });
-    // jadi harus diambil lewat query kedua lalu dipasangkan per siswa — tanpa ini kolom
+    // jadi harus diambil lewat query kedua lalu dipasangkan per siswa â€” tanpa ini kolom
     // Pulang di laporan selalu kosong walau siswa sudah absen pulang.
     const outs = await prisma.attendance.findMany({
       where: { type: 'CHECK_OUT', date: dateOnly, studentId: { in: assignments.map((a) => a.studentId) } },
@@ -1010,7 +1011,7 @@ export async function pklRoutes(app: FastifyInstance) {
     });
   });
 
-  // Laporan PKL bulanan — scoped by supervisor
+  // Laporan PKL bulanan â€” scoped by supervisor
   app.get('/pkl/report/monthly', { preHandler: app.requirePermission(PERMISSION_KEYS.pklRead) }, async (request, reply) => {
     const { month, locationId, classId, startDate: startDateParam } = request.query as { month?: string; locationId?: string; classId?: string; startDate?: string };
     const monthKey = month || currentMonthKey();
@@ -1048,7 +1049,7 @@ export async function pklRoutes(app: FastifyInstance) {
         ],
     });
 
-    // Tanggal mulai PKL — dari query param bila admin isi manual,
+    // Tanggal mulai PKL â€” dari query param bila admin isi manual,
     // fallback ke startDate dari PklLocation, fallback ke startDate assignment, fallback ke awal bulan.
     let pklStart: Date | null = null;
     if (startDateParam) {
@@ -1075,7 +1076,7 @@ export async function pklRoutes(app: FastifyInstance) {
     // Kumpulkan workDays dari semua lokasi yang terlibat.
     // getUTCDay() mengembalikan 0=Min,1=Sen,...,6=Sab
     // workDays di DB: [1=Sen,2=Sel,3=Rab,4=Kam,5=Jum,6=Sab,7=Min]
-    // Konversi: getUTCDay → workDay: 0→7, 1→1, ..., 6→6
+    // Konversi: getUTCDay â†’ workDay: 0â†’7, 1â†’1, ..., 6â†’6
     const allWorkDays = new Set<number>();
     assignments.forEach((a) => {
       const wd: number[] = Array.isArray((a.pklLocation as any).workDays)
@@ -1089,7 +1090,7 @@ export async function pklRoutes(app: FastifyInstance) {
     /** Apakah tanggal termasuk hari kerja berdasarkan workDays */
     const isWorkDay = (date: Date): boolean => {
       const utcDay = date.getUTCDay(); // 0=Min,1=Sen,...,6=Sab
-      const wdNum = utcDay === 0 ? 7 : utcDay; // konversi: 0→7
+      const wdNum = utcDay === 0 ? 7 : utcDay; // konversi: 0â†’7
       return allWorkDays.has(wdNum);
     };
 
@@ -1110,7 +1111,7 @@ export async function pklRoutes(app: FastifyInstance) {
       if (isWorkDay(dayDate)) elapsedSchoolDays++;
     }
 
-    // Hitung durasi total PKL (hari kerja) dari pklStart sampai HARI INI — lintas bulan.
+    // Hitung durasi total PKL (hari kerja) dari pklStart sampai HARI INI â€” lintas bulan.
     // Ini dipakai banner frontend "Durasi s.d. sekarang: X hari kerja".
     let totalPklWorkdays = 0;
     if (pklStart) {
@@ -1136,7 +1137,7 @@ export async function pklRoutes(app: FastifyInstance) {
 
           // Hitung absen hanya dari hari SETELAH catatan pertama siswa di bulan ini.
           // Ini mencegah siswa dihukum absen untuk hari sebelum mereka mulai absen digital.
-          // Contoh: bulan Sep ada 13 hari kerja, siswa pertama kali absen tgl 17 →
+          // Contoh: bulan Sep ada 13 hari kerja, siswa pertama kali absen tgl 17 â†’
           //   activeSchoolDays = 1 (hanya tgl 17), absent = 1 - 1 = 0
           let activeSchoolDays = elapsedSchoolDays;
           if (hasData) {
@@ -1171,7 +1172,7 @@ export async function pklRoutes(app: FastifyInstance) {
             className: a.student?.class?.name ?? null,
             locationName: a.pklLocation.name,
             supervisorName: a.supervisor?.user?.fullName ?? null,
-            // Prioritas: startDate dari Assignment → fallback ke startDate PklLocation
+            // Prioritas: startDate dari Assignment â†’ fallback ke startDate PklLocation
             startDate: a.startDate
               ? a.startDate.toISOString().slice(0, 10)
               : ((a.pklLocation as any).startDate ? new Date((a.pklLocation as any).startDate).toISOString().slice(0, 10) : null),
@@ -1266,7 +1267,7 @@ export async function pklRoutes(app: FastifyInstance) {
       }
     }
 
-    // Batch create — 1 query untuk semua yang belum ada
+    // Batch create â€” 1 query untuk semua yang belum ada
     if (toCreate.length > 0) {
       await prisma.attendance.createMany({
         data: toCreate.map((student) => ({
@@ -1285,10 +1286,10 @@ export async function pklRoutes(app: FastifyInstance) {
       });
     }
 
-    // Update yang sudah ada — masih per-baris karena checkIn berbeda tiap siswa
+    // Update yang sudah ada â€” masih per-baris karena checkIn berbeda tiap siswa
     // tapi jumlahnya jauh lebih kecil (hanya yang duplicate)
     for (const row of toUpdate) {
-      // lateMinutes: PRESENT/non-LATE → 0; LATE → pertahankan existing (tidak recalculate)
+      // lateMinutes: PRESENT/non-LATE â†’ 0; LATE â†’ pertahankan existing (tidak recalculate)
       // Guru yang ingin set LATE dengan menit yang benar bisa input via catatan
       const lateMinutesNew = body.status === 'LATE' ? (row.existingLateMinutes ?? 0) : 0;
       await prisma.attendance.update({
@@ -1433,7 +1434,7 @@ export async function pklRoutes(app: FastifyInstance) {
   });
 
   // ===== REKAP ABSENSI HARIAN PKL =====
-  // Monitor: grid tanggal × siswa, N hari terakhir (default 7, max 30).
+  // Monitor: grid tanggal Ã— siswa, N hari terakhir (default 7, max 30).
   // Permission: pkl:attendance (TEACHER / ADMIN / MONITOR_PKL)
   app.get('/pkl/daily-recap', { preHandler: app.requirePermission(PERMISSION_KEYS.pklAttendance) }, async (request, reply) => {
     const { days, month } = request.query as { days?: string; month?: string };
@@ -1467,7 +1468,7 @@ export async function pklRoutes(app: FastifyInstance) {
     const todayStr = dateKey();
 
     if (month && /^\d{4}-\d{2}$/.test(month)) {
-      // Mode bulan: semua hari di bulan tsb, ascending (01 → akhir bulan)
+      // Mode bulan: semua hari di bulan tsb, ascending (01 â†’ akhir bulan)
       // Tidak melewati hari ini (bulan berjalan hanya sampai hari ini)
       const [my, mm] = month.split('-').map(Number);
       const daysInMonth = new Date(Date.UTC(my, mm, 0)).getUTCDate(); // last day of month
@@ -1516,11 +1517,11 @@ export async function pklRoutes(app: FastifyInstance) {
       select: { studentId: true, date: true, status: true },
     });
 
-    // Index: studentId → (dateStr WIB "YYYY-MM-DD" → status)
+    // Index: studentId â†’ (dateStr WIB "YYYY-MM-DD" â†’ status)
     // Sistem menyimpan @db.Date sebagai tanggal UTC = tanggal WIB MINUS 1 hari
-    // (startOfLocalDay("2026-10-06") = 2026-10-05T17:00:00Z → PostgreSQL DATE = 2026-10-05).
+    // (startOfLocalDay("2026-10-06") = 2026-10-05T17:00:00Z â†’ PostgreSQL DATE = 2026-10-05).
     // Prisma mengembalikan kolom DATE sebagai 2026-10-05T00:00:00.000Z (midnight UTC).
-    // Untuk mendapat kembali tanggal WIB yang benar: +24 jam → 2026-10-06T00:00:00Z → slice.
+    // Untuk mendapat kembali tanggal WIB yang benar: +24 jam â†’ 2026-10-06T00:00:00Z â†’ slice.
     const attIndex = new Map<string, Map<string, string>>();
     for (const att of attendances) {
       if (!att.studentId) continue;
@@ -1540,7 +1541,7 @@ export async function pklRoutes(app: FastifyInstance) {
       select: { studentId: true, startDate: true, endDate: true },
     });
 
-    // Index: studentId → list of {startDate, endDate}
+    // Index: studentId â†’ list of {startDate, endDate}
     const leaveIndex = new Map<string, Array<{ startDate: Date; endDate: Date }>>();
     for (const lv of leaves) {
       if (!lv.studentId) continue;
@@ -1570,14 +1571,14 @@ export async function pklRoutes(app: FastifyInstance) {
       for (let i = 0; i < dateStrings.length; i++) {
         const dateStr = dateStrings[i];
 
-        // (1) Cek record absensi — index pakai dateStr WIB (bukan ISO UTC)
+        // (1) Cek record absensi â€” index pakai dateStr WIB (bukan ISO UTC)
         const attStatus = attMap?.get(dateStr);
         if (attStatus) {
           attendance[dateStr] = statusMap[attStatus] ?? 'tidak_hadir';
           continue;
         }
 
-        // (2) Cek izin yang overlap — konversi leave dates dengan +24h (pola sama dengan att.date)
+        // (2) Cek izin yang overlap â€” konversi leave dates dengan +24h (pola sama dengan att.date)
         const hasLeave = studentLeaves.some((lv) => {
           const lvStart = new Date(lv.startDate.getTime() + 24 * 3600_000).toISOString().slice(0, 10);
           const lvEnd   = new Date(lv.endDate.getTime()   + 24 * 3600_000).toISOString().slice(0, 10);
@@ -1588,7 +1589,7 @@ export async function pklRoutes(app: FastifyInstance) {
           continue;
         }
 
-        // (3) Cek hari Minggu — gunakan dateStr WIB bukan startOfLocalDay
+        // (3) Cek hari Minggu â€” gunakan dateStr WIB bukan startOfLocalDay
         const [ry, rm, rd] = dateStr.split('-').map(Number);
         const datePlain = new Date(Date.UTC(ry, rm - 1, rd));
         if (datePlain.getUTCDay() === 0) {

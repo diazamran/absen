@@ -26,6 +26,7 @@ interface PklAssignment {
   radiusMeter: number;
   supervisorName: string | null;
   className: string | null;
+  schedule: Record<string, number> | null;
   allowManualAttendance?: boolean;
   todayAttendance?: {
     checkIn: string | null;
@@ -121,22 +122,33 @@ export default function PklAbsent() {
   }, []);
 
   // Kalkulasi canCheckIn / canCheckOut dari jadwal PKL (per-lokasi → PKL global → sekolah)
-  // Sama persis dengan pola FaceScan.tsx. nowTick memicu re-kalkulasi tiap 30 detik.
+  // Konsisten dengan logika backend pickTime di pkl.ts dan attendance.ts
   void nowTick;
   const num = (v: unknown, d: number) => (typeof v === 'number' ? v : d);
   const nowMin = nowMinutesWIB();
 
+  const locSched = assignment?.schedule ?? null;
+  const pickTimeUI = (
+    locVal: number | undefined,
+    pklVal: unknown,
+    schoolVal: unknown,
+    noConstraintVal: number,
+  ): number => {
+    if (locSched !== null) return locVal !== undefined ? locVal : noConstraintVal;
+    if (typeof pklVal === 'number') return pklVal;
+    if (typeof schoolVal === 'number') return schoolVal;
+    return noConstraintVal;
+  };
+
   const isPklStudent = true; // halaman ini khusus siswa PKL
-  const canCheckIn = rules
-    ? nowMin <= (num(isPklStudent && (rules.pklCheckInDeadlineHour != null) ? rules.pklCheckInDeadlineHour : rules.checkInDeadlineHour, 23) * 60 +
-        num(isPklStudent && (rules.pklCheckInDeadlineHour != null) ? rules.pklCheckInDeadlineMinute : rules.checkInDeadlineMinute, 59))
-    : true;
-  const earlyH = num(isPklStudent && (rules?.pklEarlyLeaveBeforeHour != null) ? rules.pklEarlyLeaveBeforeHour : (rules?.earlyLeaveBeforeHour ?? rules?.checkOutAfterHour), 15);
-  const earlyM = num(isPklStudent && (rules?.pklEarlyLeaveBeforeHour != null) ? rules.pklEarlyLeaveBeforeMinute : (rules?.earlyLeaveBeforeMinute ?? rules?.checkOutAfterMinute), 0);
+  const checkInDeadlineH = rules ? pickTimeUI(locSched?.checkInDeadlineHour, rules.pklCheckInDeadlineHour, rules.checkInDeadlineHour, 23) : 23;
+  const checkInDeadlineM = rules ? pickTimeUI(locSched?.checkInDeadlineMinute, rules.pklCheckInDeadlineMinute, rules.checkInDeadlineMinute, 59) : 59;
+  const earlyH = rules ? pickTimeUI(locSched?.earlyLeaveBeforeHour, rules.pklEarlyLeaveBeforeHour, rules.earlyLeaveBeforeHour ?? rules.checkOutAfterHour, 15) : 15;
+  const earlyM = rules ? pickTimeUI(locSched?.earlyLeaveBeforeMinute, rules.pklEarlyLeaveBeforeMinute, rules.earlyLeaveBeforeMinute ?? rules.checkOutAfterMinute, 0) : 0;
+
+  const canCheckIn = rules ? nowMin <= (checkInDeadlineH * 60 + checkInDeadlineM) : true;
   const canCheckOut = rules ? nowMin >= earlyH * 60 + earlyM : true;
   const pad2 = (n: number) => String(n).padStart(2, '0');
-  const checkInDeadlineH = num(isPklStudent && (rules?.pklCheckInDeadlineHour != null) ? rules.pklCheckInDeadlineHour : rules?.checkInDeadlineHour, 23);
-  const checkInDeadlineM = num(isPklStudent && (rules?.pklCheckInDeadlineHour != null) ? rules.pklCheckInDeadlineMinute : rules?.checkInDeadlineMinute, 59);
 
   // Auto-switch tab jika waktu berubah dan tab aktif tidak lagi tersedia
   useEffect(() => {
