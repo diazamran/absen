@@ -626,7 +626,7 @@ export async function sdmsRoutes(app: FastifyInstance) {
 
     // Recent webhook events (last 20)
     const recentWebhooks = await prisma.auditLog.findMany({
-      where: { action: { in: ['SDMS_MANUAL_SYNC', 'SDMS_SETTINGS_UPDATED'] } },
+      where: { action: { in: ['SDMS_MANUAL_SYNC', 'SDMS_SETTINGS_UPDATED', 'SDMS_DEACTIVATE_UNSYNCED'] } },
       orderBy: { createdAt: 'desc' },
       take: 20,
       select: {
@@ -830,5 +830,102 @@ export async function sdmsRoutes(app: FastifyInstance) {
     } catch (error) {
       throw ApiError.badRequest('SYNC_FAILED', `Gagal sinkronisasi: ${error}`);
     }
+  });
+
+  // GET /sdms/unsynced — siswa/guru isActive=true tapi sdmsManaged=false
+  app.get('/sdms/unsynced', { preHandler: app.requirePermission(PERMISSION_KEYS.settingsManage) }, async (_request, reply) => {
+    const students = await prisma.student.findMany({
+      where: { isActive: true, sdmsManaged: false },
+      select: {
+        id: true,
+        userId: true,
+        nis: true,
+        isActive: true,
+        sdmsManaged: true,
+        createdAt: true,
+        user: { select: { fullName: true } },
+        class: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const teachers = await prisma.teacher.findMany({
+      where: { isActive: true, sdmsManaged: false },
+      select: {
+        id: true,
+        userId: true,
+        nip: true,
+        isActive: true,
+        sdmsManaged: true,
+        createdAt: true,
+        user: { select: { fullName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return reply.send({
+      success: true,
+      data: {
+        students: students.map((s) => ({
+          id: s.id,
+          userId: s.userId,
+          nis: s.nis,
+          fullName: s.user.fullName,
+          className: s.class?.name ?? null,
+          createdAt: s.createdAt,
+        })),
+        teachers: teachers.map((t) => ({
+          id: t.id,
+          userId: t.userId,
+          nip: t.nip,
+          fullName: t.user.fullName,
+          createdAt: t.createdAt,
+        })),
+      },
+    });
+  });
+
+  // POST /sdms/deactivate — nonaktifkan siswa/guru tidak tersinkron
+  app.post('/sdms/deactivate', { preHandler: app.requirePermission(PERMISSION_KEYS.settingsManage) }, async (request, reply) => {
+    const body = validate(
+      z.object({
+        type: z.enum(['student', 'teacher']),
+        ids: z.array(z.string()).min(1),
+      }),
+      request.body,
+    );
+
+    const { type, ids } = body;
+
+    if (type === 'student') {
+      for (const id of ids) {
+        const student = await prisma.student.findUnique({ where: { id }, select: { userId: true } });
+        if (!student) continue;
+        await prisma.student.update({ where: { id }, data: { isActive: false } });
+        await prisma.user.update({ where: { id: student.userId }, data: { isActive: false } });
+      }
+    } else {
+      for (const id of ids) {
+        const teacher = await prisma.teacher.findUnique({ where: { id }, select: { userId: true } });
+        if (!teacher) continue;
+        await prisma.teacher.update({ where: { id }, data: { isActive: false } });
+        await prisma.user.update({ where: { id: teacher.userId }, data: { isActive: false } });
+      }
+    }
+
+    await audit({
+      userId: request.user!.id,
+      action: 'SDMS_DEACTIVATE_UNSYNCED',
+      entity: type === 'student' ? 'Student' : 'Teacher',
+      newValue: { type, ids, count: ids.length },
+      request,
+    });
+
+    const label = type === 'student' ? 'siswa' : 'guru';
+    return reply.send({
+      success: true,
+      message: `${ids.length} ${label} dinonaktifkan.`,
+      data: { deactivated: ids.length },
+    });
   });
 }

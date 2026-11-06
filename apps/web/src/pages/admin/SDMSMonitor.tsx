@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../../lib/toast';
@@ -7,12 +7,32 @@ import { PageHeader } from '../../components/AppShell';
 import {
   Wifi, WifiOff, RefreshCw, Activity, Users, GraduationCap,
   BookOpen, Clock, AlertTriangle, CheckCircle2, Loader2,
-  Server, Zap, History, ArrowRight,
+  Server, Zap, History, ArrowRight, UserX, AlertCircle,
 } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
+
+interface UnsyncedStudent {
+  id: string;
+  userId: string;
+  nis: string;
+  fullName: string;
+  className: string | null;
+  createdAt: string;
+}
+interface UnsyncedTeacher {
+  id: string;
+  userId: string;
+  nip: string;
+  fullName: string;
+  createdAt: string;
+}
+interface UnsyncedData {
+  students: UnsyncedStudent[];
+  teachers: UnsyncedTeacher[];
+}
 
 interface MonitorData {
   connection: {
@@ -104,6 +124,53 @@ export default function SDMSMonitor() {
   const sync = data?.lastSync;
   const local = data?.local;
   const events = data?.recentEvents ?? [];
+
+  const [unsyncedTab, setUnsyncedTab] = useState<'student' | 'teacher'>('student');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmDeactivateAll, setConfirmDeactivateAll] = useState(false);
+
+  const { data: unsyncedData, isLoading: unsyncedLoading, refetch: refetchUnsynced } = useQuery<UnsyncedData>({
+    queryKey: ['sdms-unsynced'],
+    queryFn: () => api<{ data: UnsyncedData }>('/sdms/unsynced').then((r) => r.data),
+  });
+
+  const deactivateMutation = useMutation({
+    mutationFn: (vars: { type: 'student' | 'teacher'; ids: string[] }) =>
+      api<{ success: boolean; message: string; data: { deactivated: number } }>('/sdms/deactivate', {
+        method: 'POST',
+        body: vars,
+      }),
+    onSuccess: (r) => {
+      toast('success', r.message);
+      setSelectedIds(new Set());
+      setConfirmDeactivateAll(false);
+      refetchUnsynced();
+      qc.invalidateQueries({ queryKey: ['sdms-monitor'] });
+    },
+    onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Gagal menonaktifkan'),
+  });
+
+  const currentList = unsyncedTab === 'student'
+    ? (unsyncedData?.students ?? [])
+    : (unsyncedData?.teachers ?? []);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === currentList.length && currentList.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(currentList.map((x) => x.id)));
+    }
+  };
+
+  useEffect(() => { setSelectedIds(new Set()); }, [unsyncedTab]);
 
   return (
     <div>
@@ -290,10 +357,16 @@ export default function SDMSMonitor() {
                           <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                             ev.action === 'SDMS_MANUAL_SYNC'
                               ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
+                              : ev.action === 'SDMS_DEACTIVATE_UNSYNCED'
+                              ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
                               : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400'
                           }`}>
-                            {ev.action === 'SDMS_MANUAL_SYNC' ? <RefreshCw className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
-                            {ev.action === 'SDMS_MANUAL_SYNC' ? 'Sync Manual' : 'Settings Update'}
+                            {ev.action === 'SDMS_MANUAL_SYNC' ? <RefreshCw className="h-3 w-3" />
+                              : ev.action === 'SDMS_DEACTIVATE_UNSYNCED' ? <UserX className="h-3 w-3" />
+                              : <CheckCircle2 className="h-3 w-3" />}
+                            {ev.action === 'SDMS_MANUAL_SYNC' ? 'Sync Manual'
+                              : ev.action === 'SDMS_DEACTIVATE_UNSYNCED' ? 'Nonaktifkan'
+                              : 'Settings Update'}
                           </span>
                         </td>
                         <td className="py-2.5 pr-4 text-xs font-medium text-ink">{ev.user}</td>
@@ -305,6 +378,8 @@ export default function SDMSMonitor() {
                                 <span className="ml-2 text-red-500">⚠ {((ev.details as Record<string, unknown>).errors as string[]).length} error</span>
                               )}
                             </span>
+                          ) : ev.action === 'SDMS_DEACTIVATE_UNSYNCED' && ev.details && typeof ev.details === 'object' ? (
+                            <span>{String((ev.details as Record<string, unknown>).count ?? 0)} {String((ev.details as Record<string, unknown>).type ?? '')} dinonaktifkan</span>
                           ) : (
                             <span className="text-muted">—</span>
                           )}
@@ -314,6 +389,154 @@ export default function SDMSMonitor() {
                   </tbody>
                 </table>
               </div>
+            )}
+          </Card>
+
+          {/* ── Data Tidak Tersinkron ── */}
+          <Card className="lg:col-span-2">
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-amber-500" />
+                <h3 className="font-bold text-ink">Data Tidak Tersinkron SDMS</h3>
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+                  Hanya akun bukan dari SDMS
+                </span>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => refetchUnsynced()} disabled={unsyncedLoading}>
+                <RefreshCw className={`h-3.5 w-3.5 ${unsyncedLoading ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
+
+            <p className="mb-4 text-sm text-muted">
+              Siswa dan guru yang aktif di sistem Absen tapi <strong>tidak dikelola oleh SDMS</strong> (mungkin sudah keluar, pindah, atau dibuat manual). Periksa sebelum menonaktifkan.
+            </p>
+
+            {/* Tab Siswa / Guru */}
+            <div className="mb-4 flex gap-2 border-b border-line dark:border-slate-700">
+              {(['student', 'teacher'] as const).map((tab) => {
+                const count = tab === 'student'
+                  ? (unsyncedData?.students.length ?? 0)
+                  : (unsyncedData?.teachers.length ?? 0);
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setUnsyncedTab(tab)}
+                    className={`flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-semibold transition ${
+                      unsyncedTab === tab
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-muted hover:text-ink'
+                    }`}
+                  >
+                    {tab === 'student' ? <GraduationCap className="h-4 w-4" /> : <Users className="h-4 w-4" />}
+                    {tab === 'student' ? 'Siswa' : 'Guru'}
+                    {count > 0 && (
+                      <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-bold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {unsyncedLoading ? (
+              <Skeleton className="h-32 w-full" />
+            ) : currentList.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-8 text-center">
+                <CheckCircle2 className="h-10 w-10 text-emerald-400" />
+                <p className="font-semibold text-ink">Semua {unsyncedTab === 'student' ? 'siswa' : 'guru'} aktif tersinkron dengan SDMS</p>
+              </div>
+            ) : (
+              <>
+                {/* Toolbar aksi */}
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-muted">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size === currentList.length && currentList.length > 0}
+                      onChange={toggleAll}
+                      className="accent-primary"
+                    />
+                    Pilih semua ({currentList.length})
+                  </label>
+                  <div className="ml-auto flex gap-2">
+                    {selectedIds.size > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (!confirm(`Nonaktifkan ${selectedIds.size} ${unsyncedTab === 'student' ? 'siswa' : 'guru'} terpilih?`)) return;
+                          deactivateMutation.mutate({ type: unsyncedTab, ids: Array.from(selectedIds) });
+                        }}
+                        disabled={deactivateMutation.isPending}
+                        className="border-red-300 text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400"
+                      >
+                        {deactivateMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserX className="h-3.5 w-3.5" />}
+                        Nonaktifkan Terpilih ({selectedIds.size})
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (!confirm(`Nonaktifkan SEMUA ${currentList.length} ${unsyncedTab === 'student' ? 'siswa' : 'guru'} yang tidak tersinkron?\n\nTindakan ini tidak bisa dibatalkan.`)) return;
+                        deactivateMutation.mutate({ type: unsyncedTab, ids: currentList.map((x) => x.id) });
+                      }}
+                      disabled={deactivateMutation.isPending || currentList.length === 0}
+                      className="border-red-400 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-700 dark:bg-red-950/30 dark:text-red-400"
+                    >
+                      {deactivateMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                      Nonaktifkan Semua
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Tabel */}
+                <div className="overflow-x-auto rounded-xl border border-line dark:border-slate-700">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 dark:bg-slate-800/50">
+                      <tr className="text-left text-xs font-semibold text-muted">
+                        <th className="px-3 py-2.5 w-8"></th>
+                        <th className="px-3 py-2.5">Nama</th>
+                        <th className="px-3 py-2.5">{unsyncedTab === 'student' ? 'NIS' : 'NIP'}</th>
+                        {unsyncedTab === 'student' && <th className="px-3 py-2.5">Kelas</th>}
+                        <th className="px-3 py-2.5">Dibuat</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {currentList.map((item, i) => (
+                        <tr
+                          key={item.id}
+                          onClick={() => toggleSelect(item.id)}
+                          className={`cursor-pointer border-t border-line transition dark:border-slate-700 ${
+                            selectedIds.has(item.id)
+                              ? 'bg-red-50 dark:bg-red-950/20'
+                              : i % 2 === 0 ? '' : 'bg-slate-50/50 dark:bg-slate-800/20'
+                          } hover:bg-amber-50/50 dark:hover:bg-amber-950/10`}
+                        >
+                          <td className="px-3 py-2.5">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(item.id)}
+                              onChange={() => toggleSelect(item.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="accent-red-500"
+                            />
+                          </td>
+                          <td className="px-3 py-2.5 font-medium text-ink">{item.fullName}</td>
+                          <td className="px-3 py-2.5 font-mono text-xs text-muted">
+                            {'nis' in item ? item.nis : ('nip' in item ? (item as UnsyncedTeacher).nip ?? '-' : '-')}
+                          </td>
+                          {unsyncedTab === 'student' && (
+                            <td className="px-3 py-2.5 text-muted">{'className' in item ? (item as UnsyncedStudent).className ?? '-' : '-'}</td>
+                          )}
+                          <td className="px-3 py-2.5 text-xs text-muted whitespace-nowrap">{fmtDate(item.createdAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </Card>
         </div>
