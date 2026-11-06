@@ -184,6 +184,7 @@ model Student {
   cardUidHash     String? @unique
   faceRegistered  Boolean  @default(false)
   allowManualAttendance Boolean @default(false) // HP rusak/tidak support — izinkan absen manual
+  sdmsManaged   Boolean  @default(false) // true = dibuat/dikelola oleh sync SDMS (bukan manual)
   isActive        Boolean  @default(true)
   classId         String?
   majorId         String?
@@ -209,6 +210,7 @@ model Student {
   @@index([nis])
   @@index([classId])
   @@index([isActive])
+  @@index([sdmsManaged])
 }
 
 model Parent {
@@ -246,6 +248,7 @@ model Teacher {
   position  String?
   subjectId String?
   isPiket   Boolean  @default(false) // guru piket: menjaga gerbang, HP bisa dipakai absen siswa
+  sdmsManaged Boolean @default(false) // true = dibuat/dikelola oleh sync SDMS (bukan manual)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

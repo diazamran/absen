@@ -1,6 +1,7 @@
 import { buildApp } from './app.js';
 import { initRealtime } from './realtime/emitter.js';
 import { config } from './config.js';
+import { scheduleDailySDMSSync } from './jobs/sdms-sync.js';
 
 async function main() {
   const app = await buildApp();
@@ -16,6 +17,9 @@ async function main() {
   console.log(`✅ ${config.appName} API berjalan di http://localhost:${port}`);
   // eslint-disable-next-line no-console
   console.log(`   Realtime (Socket.IO) aktif di /socket.io`);
+
+  // ===== Cron: Sinkronisasi SDMS harian jam 01:00 WIB =====
+  scheduleDailySDMSSync(app.log, port);
 }
 
 main().catch((e) => {

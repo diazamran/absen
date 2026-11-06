@@ -214,6 +214,7 @@ async function upsertSiswa(payload: Record<string, unknown>) {
   const nisn = payload.nisn as string;
   const nama = payload.nama as string;
   const status = payload.status as string;
+  const isActive = status === 'Aktif';
 
   // Map gender from SDMS payload
   const rawGender = (payload.jenisKelamin || payload.gender || payload.sex || payload.jenis_kelamin || '') as string;
@@ -237,9 +238,11 @@ async function upsertSiswa(payload: Record<string, unknown>) {
 
   if (existing) {
     const updateData: Record<string, unknown> = {
-      isActive: status === 'Aktif',
+      isActive,
       gender,
-      user: { update: { fullName: nama } },
+      sdmsManaged: true,
+      // Sinkronkan User.isActive agar login juga ikut diblokir/diaktifkan
+      user: { update: { fullName: nama, isActive } },
     };
     if (classId) updateData.class = { connect: { id: classId } };
     if (majorId) updateData.major = { connect: { id: majorId } };
@@ -268,7 +271,8 @@ async function upsertSiswa(payload: Record<string, unknown>) {
       gender,
       classId,
       majorId,
-      isActive: status === 'Aktif',
+      isActive,
+      sdmsManaged: true,
     },
   });
 
@@ -279,14 +283,19 @@ async function upsertSiswa(payload: Record<string, unknown>) {
 async function upsertGuru(payload: Record<string, unknown>) {
   const nip = payload.nip as string;
   const nama = payload.nama as string;
+  // SDMS mungkin tidak selalu kirim field status untuk guru — default aktif jika tidak ada
+  const status = payload.status as string | undefined;
+  const isActive = !status || status === 'Aktif';
 
   const existing = await prisma.teacher.findFirst({ where: { nip } });
   if (existing) {
     await prisma.teacher.update({
       where: { id: existing.id },
       data: {
-        isActive: true,
-        user: { update: { fullName: nama } }
+        isActive,
+        sdmsManaged: true,
+        // Sinkronkan User.isActive agar login juga ikut diblokir/diaktifkan
+        user: { update: { fullName: nama, isActive } },
       }
     });
     return { action: 'updated', id: existing.id };
@@ -310,7 +319,8 @@ async function upsertGuru(payload: Record<string, unknown>) {
       id: teacherId,
       userId,
       nip,
-      isActive: true,
+      isActive,
+      sdmsManaged: true,
     },
   });
 
@@ -403,6 +413,8 @@ export async function sdmsRoutes(app: FastifyInstance) {
             const student = await prisma.student.findFirst({ where: { nis: payload.nisn as string } });
             if (student) {
               await prisma.student.update({ where: { id: student.id }, data: { isActive: false } });
+              // Nonaktifkan User agar login juga diblokir
+              await prisma.user.update({ where: { id: student.userId }, data: { isActive: false } });
             }
           }
           break;
@@ -415,6 +427,8 @@ export async function sdmsRoutes(app: FastifyInstance) {
             const teacher = await prisma.teacher.findFirst({ where: { nip: payload.nip as string } });
             if (teacher) {
               await prisma.teacher.update({ where: { id: teacher.id }, data: { isActive: false } });
+              // Nonaktifkan User agar login juga diblokir
+              await prisma.user.update({ where: { id: teacher.userId }, data: { isActive: false } });
             }
           }
           break;
@@ -686,6 +700,7 @@ export async function sdmsRoutes(app: FastifyInstance) {
       // 1. Sync GURU dulu (agar wali kelas bisa di-resolve)
       let page = 1;
       let hasMore = true;
+      const syncedNipList: string[] = [];
       while (hasMore) {
         const guruRes = await fetch(`${baseUrl}/guru?limit=500&page=${page}`, { headers });
         if (guruRes.ok) {
@@ -694,6 +709,7 @@ export async function sdmsRoutes(app: FastifyInstance) {
           for (const g of data) {
             try {
               await upsertGuru(g);
+              if (g.nip) syncedNipList.push(g.nip as string);
               (results.teachers as number)++;
             } catch (e) {
               (results.errors as string[]).push(`Guru ${g.nip}: ${e}`);
@@ -726,6 +742,7 @@ export async function sdmsRoutes(app: FastifyInstance) {
       // 3. Sync SISWA (setelah kelas & guru ada)
       page = 1;
       hasMore = true;
+      const syncedNisnList: string[] = [];
       while (hasMore) {
         const siswaRes = await fetch(`${baseUrl}/siswa?limit=500&page=${page}`, { headers });
         if (siswaRes.ok) {
@@ -734,6 +751,7 @@ export async function sdmsRoutes(app: FastifyInstance) {
           for (const s of data) {
             try {
               await upsertSiswa(s);
+              if (s.nisn) syncedNisnList.push(s.nisn as string);
               (results.students as number)++;
             } catch (e) {
               (results.errors as string[]).push(`Siswa ${s.nisn}: ${e}`);
@@ -745,6 +763,52 @@ export async function sdmsRoutes(app: FastifyInstance) {
           hasMore = false;
         }
       }
+
+      // 4. Deaktivasi siswa SDMS-managed yang tidak ada di SDMS lagi
+      let deactivatedStudents = 0;
+      if (syncedNisnList.length > 0) {
+        const toDeactivateStudents = await prisma.student.findMany({
+          where: {
+            sdmsManaged: true,
+            isActive: true,
+            nis: { notIn: syncedNisnList },
+          },
+          select: { id: true, userId: true, nis: true },
+        });
+        for (const s of toDeactivateStudents) {
+          try {
+            await prisma.student.update({ where: { id: s.id }, data: { isActive: false } });
+            await prisma.user.update({ where: { id: s.userId }, data: { isActive: false } });
+            deactivatedStudents++;
+          } catch (e) {
+            (results.errors as string[]).push(`Deaktivasi siswa ${s.nis}: ${e}`);
+          }
+        }
+      }
+      (results as Record<string, unknown>).deactivatedStudents = deactivatedStudents;
+
+      // 5. Deaktivasi guru SDMS-managed yang tidak ada di SDMS lagi
+      let deactivatedTeachers = 0;
+      if (syncedNipList.length > 0) {
+        const toDeactivateTeachers = await prisma.teacher.findMany({
+          where: {
+            sdmsManaged: true,
+            isActive: true,
+            nip: { notIn: syncedNipList },
+          },
+          select: { id: true, userId: true, nip: true },
+        });
+        for (const t of toDeactivateTeachers) {
+          try {
+            await prisma.teacher.update({ where: { id: t.id }, data: { isActive: false } });
+            await prisma.user.update({ where: { id: t.userId }, data: { isActive: false } });
+            deactivatedTeachers++;
+          } catch (e) {
+            (results.errors as string[]).push(`Deaktivasi guru NIP ${t.nip}: ${e}`);
+          }
+        }
+      }
+      (results as Record<string, unknown>).deactivatedTeachers = deactivatedTeachers;
 
       const syncData = { lastPull: new Date().toISOString(), results };
       const syncJson = JSON.parse(JSON.stringify(syncData));
