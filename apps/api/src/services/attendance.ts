@@ -168,7 +168,7 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
           class: { select: { name: true } },
           pklAssignments: {
             where: { isActive: true },
-            include: { pklLocation: { select: { name: true, latitude: true, longitude: true, radiusMeter: true } } },
+            include: { pklLocation: { select: { name: true, latitude: true, longitude: true, radiusMeter: true, schedule: true } } },
             take: 1,
           },
         },
@@ -189,22 +189,50 @@ export async function recordAttendance(input: RecordAttendanceInput): Promise<{
   const nowMinutes = localMinutesOf(now);
 
   // ===== Jadwal khusus PKL =====
-  const lateRule =
-    isPklStudent && rules.pklLateAfterHour !== null
-      ? { h: rules.pklLateAfterHour, m: rules.pklLateAfterMinute ?? 0 }
-      : { h: rules.lateAfterHour, m: rules.lateAfterMinute };
-  const checkInDeadlineRule =
-    isPklStudent && rules.pklCheckInDeadlineHour !== null
-      ? { h: rules.pklCheckInDeadlineHour, m: rules.pklCheckInDeadlineMinute ?? 0 }
-      : { h: rules.checkInDeadlineHour, m: rules.checkInDeadlineMinute };
-  const earlyLeaveRule =
-    isPklStudent && rules.pklEarlyLeaveBeforeHour !== null
-      ? { h: rules.pklEarlyLeaveBeforeHour, m: rules.pklEarlyLeaveBeforeMinute ?? 0 }
-      : { h: rules.earlyLeaveBeforeHour, m: rules.earlyLeaveBeforeMinute };
-  const checkOutAfterRule =
-    isPklStudent && rules.pklCheckOutAfterHour !== null
-      ? { h: rules.pklCheckOutAfterHour, m: rules.pklCheckOutAfterMinute ?? 0 }
-      : { h: rules.checkOutAfterHour, m: rules.checkOutAfterMinute };
+  // Prioritas: jadwal per-lokasi DUDI → PKL global → jadwal sekolah
+  // Jika locSched aktif (tidak null), field yang diisi dipakai, field yang tidak diisi = no constraint
+  // (bukan fallback ke PKL global — mencegah PKL global menimpa jadwal lokasi).
+  const locSched = isPklStudent
+    ? ((target.student?.pklAssignments?.[0]?.pklLocation as any)?.schedule as {
+        lateAfterHour?: number; lateAfterMinute?: number;
+        checkInDeadlineHour?: number; checkInDeadlineMinute?: number;
+        checkOutAfterHour?: number; checkOutAfterMinute?: number;
+        earlyLeaveBeforeHour?: number; earlyLeaveBeforeMinute?: number;
+      } | null ?? null)
+    : null;
+
+  // Helper: locSched → PKL global → sekolah
+  // noConstraintVal: nilai fallback jika locSched aktif tapi field tidak diisi (misal 23/59 = tidak dibatasi)
+  const pickTime = (
+    locVal: number | undefined,
+    pklVal: number | null,
+    schoolVal: number,
+    noConstraintVal = schoolVal,
+  ): number => {
+    if (locSched !== null) return locVal !== undefined ? locVal : noConstraintVal;
+    if (pklVal !== null) return pklVal;
+    return schoolVal;
+  };
+
+  const lateRule = isPklStudent ? {
+    h: pickTime(locSched?.lateAfterHour, rules.pklLateAfterHour, rules.lateAfterHour, 23),
+    m: pickTime(locSched?.lateAfterMinute, rules.pklLateAfterMinute, rules.lateAfterMinute, 59),
+  } : { h: rules.lateAfterHour, m: rules.lateAfterMinute };
+
+  const checkInDeadlineRule = isPklStudent ? {
+    h: pickTime(locSched?.checkInDeadlineHour, rules.pklCheckInDeadlineHour, rules.checkInDeadlineHour, 23),
+    m: pickTime(locSched?.checkInDeadlineMinute, rules.pklCheckInDeadlineMinute, rules.checkInDeadlineMinute, 59),
+  } : { h: rules.checkInDeadlineHour, m: rules.checkInDeadlineMinute };
+
+  const earlyLeaveRule = isPklStudent ? {
+    h: pickTime(locSched?.earlyLeaveBeforeHour, rules.pklEarlyLeaveBeforeHour, rules.earlyLeaveBeforeHour),
+    m: pickTime(locSched?.earlyLeaveBeforeMinute, rules.pklEarlyLeaveBeforeMinute, rules.earlyLeaveBeforeMinute),
+  } : { h: rules.earlyLeaveBeforeHour, m: rules.earlyLeaveBeforeMinute };
+
+  const checkOutAfterRule = isPklStudent ? {
+    h: pickTime(locSched?.checkOutAfterHour, rules.pklCheckOutAfterHour, rules.checkOutAfterHour),
+    m: pickTime(locSched?.checkOutAfterMinute, rules.pklCheckOutAfterMinute, rules.checkOutAfterMinute),
+  } : { h: rules.checkOutAfterHour, m: rules.checkOutAfterMinute };
 
   // ===== Blokir CHECK_IN setelah batas akhir datang =====
   if (type === 'CHECK_IN') {
