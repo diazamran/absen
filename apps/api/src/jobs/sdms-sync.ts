@@ -1,28 +1,24 @@
 /**
  * Cron job harian — sinkronisasi SDMS otomatis.
  *
- * Berjalan setiap hari jam 01:00 WIB (18:00 UTC).
- * Memanggil logika yang sama dengan POST /api/sdms/sync termasuk
- * deaktivasi siswa/guru yang tidak ada lagi di SDMS.
+ * Berjalan setiap hari jam 01:00 WIB (18:00 UTC hari sebelumnya).
+ * Memanggil endpoint POST /api/sdms/sync via HTTP lokal menggunakan
+ * access token admin yang dibuat langsung (tanpa refresh token di DB).
  *
- * Tidak menggunakan library eksternal — pakai setTimeout rekursif
- * agar tidak perlu install node-cron.
+ * Tidak menggunakan library eksternal — pakai setTimeout rekursif.
  */
 
 import type { FastifyBaseLogger } from 'fastify';
 import { prisma } from '../lib/prisma.js';
-
-// Import fungsi internal dari sdms.ts tidak mungkin langsung (fungsi private),
-// jadi kita panggil via HTTP internal ke diri sendiri, atau duplikasi logikanya.
-// Untuk kesederhanaan dan keandalan, kita panggil endpoint /api/sdms/sync
-// via fetch ke server sendiri menggunakan URL lokal.
+import { signToken } from '../lib/crypto.js';
+import { config } from '../config.js';
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let isSyncing = false;
 
 /**
  * Hitung milidetik sampai jam target berikutnya (WIB).
- * targetHourWIB: 1 = 01:00 WIB = 18:00 UTC hari sebelumnya
+ * targetHourWIB: 1 = 01:00 WIB
  */
 function msUntilNextSync(targetHourWIB = 1): number {
   const now = new Date();
@@ -38,7 +34,7 @@ function msUntilNextSync(targetHourWIB = 1): number {
     nextSync.setUTCDate(nextSync.getUTCDate() + 1);
   }
 
-  // Konversi balik ke UTC untuk selisih
+  // Konversi balik ke UTC untuk selisih waktu
   const nextSyncUTC = nextSync.getTime() - wibOffset;
   return nextSyncUTC - now.getTime();
 }
@@ -52,30 +48,38 @@ async function runSDMSSync(log: FastifyBaseLogger, appPort: number): Promise<voi
   log.info('[SDMS Cron] Memulai sinkronisasi otomatis harian...');
 
   try {
-    // Ambil admin user pertama untuk dijadikan actor audit log
+    // Ambil admin pertama untuk dijadikan actor pada audit log sync
     const adminUser = await prisma.user.findFirst({
       where: { role: { key: { in: ['SUPER_ADMIN', 'ADMIN'] } }, isActive: true },
-      select: { id: true },
+      include: { role: true },
     });
 
     if (!adminUser) {
-      log.warn('[SDMS Cron] Tidak ada admin aktif untuk menjalankan sync — dilewati.');
+      log.warn('[SDMS Cron] Tidak ada admin aktif — sync dilewati.');
       return;
     }
 
-    // Panggil endpoint sync via HTTP lokal (pakai token admin internal)
-    // Ini memastikan seluruh logika sync (termasuk deaktivasi) berjalan identik
-    // dengan saat admin klik manual — tidak ada duplikasi kode.
-    const { issueTokens } = await import('../services/auth.js');
-    const tokens = await issueTokens(adminUser.id, {});
-    const accessToken = tokens.accessToken;
+    // Buat access token langsung (tanpa menyimpan refresh token di DB)
+    // agar cron bisa memanggil endpoint sync via HTTP lokal.
+    // TTL 1 jam cukup untuk proses sync.
+    const accessToken = signToken(
+      {
+        sub: adminUser.id,
+        roleKey: adminUser.role.key,
+        roles: [adminUser.role.key, ...((adminUser.additionalRoles as string[]) || [])],
+      },
+      config.jwtSecret,
+      3600,
+    );
 
+    // Panggil endpoint sync via HTTP lokal — logika sync (upsert + deaktivasi)
+    // identik dengan saat admin klik manual, tidak ada duplikasi kode.
     const res = await fetch(`http://127.0.0.1:${appPort}/api/sdms/sync`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'X-Cron-Job': 'daily-sdms-sync', // header marker untuk audit
+        'X-Cron-Job': 'daily-sdms-sync',
       },
       signal: AbortSignal.timeout(300_000), // timeout 5 menit
     });
@@ -101,13 +105,13 @@ async function runSDMSSync(log: FastifyBaseLogger, appPort: number): Promise<voi
 
 /**
  * Mulai scheduler cron harian.
- * Dipanggil satu kali saat server startup dari app.ts.
+ * Dipanggil satu kali saat server startup dari server.ts.
  */
 export function scheduleDailySDMSSync(log: FastifyBaseLogger, appPort: number): void {
   const scheduleNext = () => {
     const delay = msUntilNextSync(1); // 01:00 WIB
     const nextDate = new Date(Date.now() + delay);
-    log.info(`[SDMS Cron] Sync berikutnya dijadwalkan: ${nextDate.toISOString()} (${Math.round(delay / 60000)} menit lagi)`);
+    log.info(`[SDMS Cron] Sync berikutnya: ${nextDate.toISOString()} (${Math.round(delay / 60000)} menit lagi)`);
 
     syncTimer = setTimeout(async () => {
       await runSDMSSync(log, appPort);
