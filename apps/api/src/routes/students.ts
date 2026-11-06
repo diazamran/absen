@@ -42,11 +42,12 @@ const studentUpdateSchema = z.object({
 
 export async function studentRoutes(app: FastifyInstance) {
   app.get('/students', { preHandler: app.requirePermission(PERMISSION_KEYS.studentsRead) }, async (request, reply) => {
-    const q = request.query as { search?: string; classId?: string; majorId?: string; page?: string; pageSize?: string; faceOnly?: string; cardOnly?: string; isActive?: string };
+    const q = request.query as { search?: string; classId?: string; majorId?: string; page?: string; pageSize?: string; faceOnly?: string; cardOnly?: string; isActive?: string; notInSdms?: string };
     const page = Math.max(1, Number(q.page) || 1);
     const pageSize = Math.min(200, Math.max(1, Number(q.pageSize) || 20));
     const where = {
       isActive: q.cardOnly === 'true' || q.isActive === 'true' ? true : undefined,
+      ...(q.notInSdms === 'true' ? { sdmsManaged: false, isActive: true } : {}),
       ...(q.classId ? { classId: q.classId } : {}),
       ...(q.majorId ? { majorId: q.majorId } : {}),
       ...(q.search
@@ -92,6 +93,7 @@ export async function studentRoutes(app: FastifyInstance) {
         allowManualAttendance: s.allowManualAttendance,
         hasCard: !!s.cardUidHash,
         isActive: s.user?.isActive ?? false,
+        sdmsManaged: s.sdmsManaged,
         parents: s.parentLinks.map((l) => ({ id: l.parent.id, name: l.parent.name, phone: l.parent.phone, relation: l.relation })),
       })),
       meta: { total, page, pageSize, pages: Math.ceil(total / pageSize) },

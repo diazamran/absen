@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 interface StudentRow {
   id: string; userId: string; nis: string; fullName: string; className: string | null; classId: string | null; majorName: string | null;
   faceRegistered: boolean; hasCard: boolean; isActive: boolean; allowManualAttendance?: boolean; gender: string; birthDate?: string | null;
+  sdmsManaged: boolean;
   parents?: { id: string; name: string; phone: string }[];
 }
 
@@ -19,6 +20,7 @@ export default function Students() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [classId, setClassId] = useState('');
+  const [notInSdms, setNotInSdms] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<StudentRow | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -26,10 +28,10 @@ export default function Students() {
   const [perPage, setPerPage] = useState(25);
 
   const { data: studentsRes } = useQuery({
-    queryKey: ['students', search, classId, page, perPage],
+    queryKey: ['students', search, classId, notInSdms, page, perPage],
     queryFn: () =>
       api<{ success: boolean; data: StudentRow[]; meta: { total: number; page: number; pageSize: number; pages: number } }>(
-        `/students?search=${encodeURIComponent(search)}&classId=${classId}&page=${page}&pageSize=${perPage}`
+        `/students?search=${encodeURIComponent(search)}&classId=${classId}&page=${page}&pageSize=${perPage}${notInSdms ? '&notInSdms=true' : ''}`
       ),
   });
   const students = studentsRes?.data;
@@ -52,7 +54,7 @@ export default function Students() {
     queryFn: () => api<{ success: boolean; data: string[] }>(`/students/all-ids?search=${encodeURIComponent(search)}&classId=${classId}`).then((r) => r.data),
   });
   // Reset page when search/filter changes
-  useEffect(() => { setPage(1); }, [search, classId]);
+  useEffect(() => { setPage(1); }, [search, classId, notInSdms]);
 
   const total = meta?.total || 0;
   const totalPages = meta?.pages || 1;
@@ -151,6 +153,16 @@ export default function Students() {
           <option value="">Semua kelas</option>
           {classes?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </Select>
+        <button
+          onClick={() => setNotInSdms((v) => !v)}
+          className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+            notInSdms
+              ? 'border-amber-400 bg-amber-50 text-amber-700 dark:border-amber-600 dark:bg-amber-950/30 dark:text-amber-400'
+              : 'border-line bg-card text-muted hover:border-amber-300 hover:text-amber-600'
+          }`}
+        >
+          {notInSdms ? '⚠️' : '🔍'} Tidak di SDMS {notInSdms && <span className="rounded-full bg-amber-200 px-1.5 text-xs text-amber-800 dark:bg-amber-700 dark:text-amber-100">{total}</span>}
+        </button>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={doExport}>
             <Download className="h-4 w-4" /> Export
@@ -276,6 +288,7 @@ export default function Students() {
                     <div className="flex flex-wrap gap-1">
                       {s.faceRegistered ? <Badge status="PRESENT" label="Wajah" /> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-muted dark:bg-slate-700">No wajah</span>}
                       {s.allowManualAttendance && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">✋ Manual PKL</span>}
+                      {!s.sdmsManaged && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">⚠ Bukan SDMS</span>}
                       {!s.isActive && <Badge status="BLOCKED" label="Nonaktif" />}
                     </div>
                   </td>
