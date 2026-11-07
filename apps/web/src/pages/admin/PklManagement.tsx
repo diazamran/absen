@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { MapPin, Plus, Trash2, Edit, Users, Search, Loader2, X, ChevronDown, Building2, GraduationCap, Download, Upload, Clock3, FileDown } from 'lucide-react';
+import { MapPin, Plus, Trash2, Edit, Users, Search, Loader2, ChevronDown, Building2, GraduationCap, Download, Upload, Clock3, FileDown } from 'lucide-react';
 import { api, ApiError, getToken } from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { useAuth } from '../../lib/auth';
-import { Button, Card, Input, Badge, EmptyState, Skeleton } from '../../lib/ui';
+import { Button, Card, Input, Badge, EmptyState, Skeleton, Modal } from '../../lib/ui';
 import { PageHeader } from '../../components/AppShell';
 import { Segmented } from '../../lib/ui';
 
@@ -826,60 +826,51 @@ export default function PklManagement() {
       {/* ===== TAB LOKASI ===== */}
       {tab === 'locations' && (
         <>
-          {/* Add Location Form (admin only) */}
+          {/* Add Location Form (admin only) — Modal */}
           {showForm === 'add-location' && (
-            <Card className="mb-4">
-              <p className="mb-3 font-bold text-ink">Tambah Lokasi PKL</p>
+            <Modal open title="Tambah Lokasi PKL" onClose={() => setShowForm(null)} wide>
               <LocationForm onClose={() => setShowForm(null)} />
-            </Card>
+            </Modal>
           )}
 
-          {/* Edit Location Form (admin only) */}
+          {/* Edit Location Form (admin only) — Modal */}
           {editLocation && (
-            <Card className="mb-4">
-              <p className="mb-3 font-bold text-ink">Edit Lokasi PKL</p>
+            <Modal open title="Edit Lokasi PKL" onClose={() => setEditLocation(null)} wide>
               <LocationForm initial={editLocation} onClose={() => setEditLocation(null)} />
-            </Card>
+            </Modal>
           )}
 
-          {/* Schedule Form (admin atau guru pembimbing lokasi) */}
+          {/* Schedule Form — Modal */}
           {scheduleFor && (
-            <Card className="mb-4">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="font-bold text-ink flex items-center gap-2">
-                  <Clock3 className="h-4 w-4 text-primary" />
-                  Jadwal PKL — {scheduleFor.name}
-                </p>
-                <button onClick={() => setScheduleFor(null)} className="rounded p-1 text-muted hover:bg-slate-100">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+            <Modal
+              open
+              title={`Jadwal PKL — ${scheduleFor.name}`}
+              onClose={() => setScheduleFor(null)}
+              wide
+            >
               <ScheduleForm
                 locationId={scheduleFor.id}
                 locationName={scheduleFor.name}
                 initialSchedule={scheduleFor.schedule}
                 onClose={() => setScheduleFor(null)}
               />
-            </Card>
+            </Modal>
           )}
 
-          {/* Assignment Form */}
+          {/* Assignment Form — Modal */}
           {assignTo && (
-            <Card className="mb-4">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="font-bold text-ink">
-                  Tambah Siswa ke {locations?.find((l) => l.id === assignTo)?.name ?? 'Lokasi PKL'}
-                </p>
-                <button onClick={() => setAssignTo(null)} className="rounded p-1 text-muted hover:bg-slate-100">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+            <Modal
+              open
+              title={`Tambah Siswa — ${locations?.find((l) => l.id === assignTo)?.name ?? 'Lokasi PKL'}`}
+              onClose={() => setAssignTo(null)}
+              wide
+            >
               <AssignmentForm
                 locationId={assignTo}
                 canSetSupervisor={isPklAdmin}
                 onClose={() => setAssignTo(null)}
               />
-            </Card>
+            </Modal>
           )}
 
           {/* Search */}
@@ -1122,23 +1113,20 @@ export default function PklManagement() {
                 })}
             </div>
           )}
-          {/* Assignment form juga bisa muncul di tab penugasan */}
+          {/* Assignment form juga bisa muncul di tab penugasan — Modal */}
           {assignTo && (
-            <Card className="mt-4">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="font-bold text-ink">
-                  Tambah Siswa ke {locations?.find((l) => l.id === assignTo)?.name ?? 'Lokasi PKL'}
-                </p>
-                <button onClick={() => setAssignTo(null)} className="rounded p-1 text-muted hover:bg-slate-100">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+            <Modal
+              open
+              title={`Tambah Siswa — ${locations?.find((l) => l.id === assignTo)?.name ?? 'Lokasi PKL'}`}
+              onClose={() => setAssignTo(null)}
+              wide
+            >
               <AssignmentForm
                 locationId={assignTo}
                 canSetSupervisor={isPklAdmin}
                 onClose={() => setAssignTo(null)}
               />
-            </Card>
+            </Modal>
           )}
         </>
       )}
